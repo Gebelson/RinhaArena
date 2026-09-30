@@ -7,6 +7,7 @@
 
 import { LEVELS, DEFAULT_LEVEL, newProceduralSeed } from '../content/levels/index.js';
 import { createRoom, listRooms } from '../net/rooms.js';
+import { HATS, SKINS } from '../content/cosmetics.js';
 
 export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayLab, onClickSound }) {
   const el = document.createElement('div');
@@ -34,7 +35,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     procedural: {
       id: 'procedural',
       name: 'Procedural',
-      img: null,
+      img: './assets/maps/procedural.png',
       desc: 'Arena cósmica gerada dinamicamente com geometria imprevisível.',
     },
   };
@@ -45,39 +46,24 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     { id: 'ffa', label: '⚔️ Todos contra Todos', sub: 'Cada um por si - 10 eliminações para vencer.' },
   ];
 
+  const REFERENCE_SKINS = [
+    '#f6cbb2', // 1: peach
+    '#e2aa6c', // 2: tan
+    '#be7a44', // 3: caramel
+    '#8a4e23', // 4: brown
+    '#fbe6cb', // 5: cream
+    '#a6e8cb', // 6: mint
+    '#bdaee6', // 7: lavender
+  ];
+
+  if (!profile.hat) profile.hat = 'crown';
+  if (!profile.skin) profile.skin = REFERENCE_SKINS[6];
+
   let selectedMode = 'ctf';
   let selectedLevel = DEFAULT_LEVEL in MAP_DATA ? DEFAULT_LEVEL : 'foundry';
 
   el.innerHTML = `
     <div class="lobby-root">
-      <!-- Background Ambient Vignette Overlay -->
-      <div class="lobby-bg-overlay"></div>
-
-      <!-- Top Right Floating Shortcuts -->
-      <div class="lobby-top-bar">
-        <button class="top-util-btn btn-settings" title="Configurações e Áudio">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        </button>
-        <button class="top-util-btn btn-stats" title="Estatísticas">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="20" x2="18" y2="10"></line>
-            <line x1="12" y1="20" x2="12" y2="4"></line>
-            <line x1="6" y1="20" x2="6" y2="14"></line>
-          </svg>
-        </button>
-        <button class="top-util-btn btn-community" title="Salas Multiplayer">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-            <circle cx="9" cy="7" r="4"></circle>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-          </svg>
-        </button>
-      </div>
-
       <!-- Main 3-Zone Desktop Layout -->
       <div class="lobby-grid">
         <!-- 1. PAINEL LATERAL ESQUERDO: PERSONALIZAÇÃO -->
@@ -85,7 +71,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
           <!-- Top Header -->
           <div class="panel-header">
             <div class="header-crown">
-              <svg width="32" height="26" viewBox="0 0 24 24" fill="url(#crownGold)">
+              <svg width="34" height="28" viewBox="0 0 24 24" fill="url(#crownGold)">
                 <defs>
                   <linearGradient id="crownGold" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stop-color="#ffd54f" />
@@ -110,6 +96,28 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
                 <circle cx="12" cy="7" r="4"/>
               </svg>
               <input class="name-input" maxlength="12" placeholder="Player" value="${profile.name || 'Player'}" />
+            </div>
+          </div>
+
+          <!-- HAT -->
+          <div class="field-block">
+            <label class="field-label">HAT</label>
+            <div class="hat-row">
+              ${HATS.map((h, i) => `
+                <button class="hat-btn ${profile.hat === h.id ? 'sel' : ''}" data-hat="${h.id}" title="${h.name}">
+                  <img src="./assets/ui/hat_${i}.png" alt="${h.name}" class="hat-img" />
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- SKIN -->
+          <div class="field-block">
+            <label class="field-label">SKIN</label>
+            <div class="skin-row">
+              ${REFERENCE_SKINS.map((c) => `
+                <button class="skin-btn ${profile.skin === c ? 'sel' : ''}" data-skin="${c}" style="background-color: ${c};" title="Skin"></button>
+              `).join('')}
             </div>
           </div>
 
@@ -142,7 +150,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
             <div class="arena-grid">
               <!-- Foundry Court -->
               <div class="arena-card sel" data-level="foundry">
-                <div class="arena-thumb" style="background-image: url('./assets/maps/foundry.png');"></div>
+                <div class="arena-thumb" style="background-image: url('./assets/maps/card_foundry.png');"></div>
                 <div class="arena-label">
                   <span class="arena-pin">📍</span>
                   <span class="arena-name">Foundry Court</span>
@@ -150,7 +158,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
               </div>
               <!-- The Dojo -->
               <div class="arena-card" data-level="dojo">
-                <div class="arena-thumb" style="background-image: url('./assets/maps/dojo.png');"></div>
+                <div class="arena-thumb" style="background-image: url('./assets/maps/card_dojo.png');"></div>
                 <div class="arena-label">
                   <span class="arena-pin">📍</span>
                   <span class="arena-name">The Dojo</span>
@@ -158,17 +166,15 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
               </div>
               <!-- Skyhaven -->
               <div class="arena-card" data-level="skyhaven">
-                <div class="arena-thumb" style="background-image: url('./assets/maps/skyhaven.png');"></div>
+                <div class="arena-thumb" style="background-image: url('./assets/maps/card_skyhaven.png');"></div>
                 <div class="arena-label">
                   <span class="arena-pin">📍</span>
                   <span class="arena-name">Skyhaven</span>
                 </div>
               </div>
-              <!-- Procedural (Stylized ? with CSS) -->
+              <!-- Procedural -->
               <div class="arena-card" data-level="procedural">
-                <div class="arena-thumb arena-thumb-procedural">
-                  <span class="procedural-qmark">?</span>
-                </div>
+                <div class="arena-thumb" style="background-image: url('./assets/maps/card_procedural.png');"></div>
                 <div class="arena-label">
                   <span class="arena-pin">🎲</span>
                   <span class="arena-name">Procedural</span>
@@ -199,17 +205,13 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
         <main class="lobby-center-col">
           <!-- Hero Logo (Floating directly over background) -->
           <div class="lobby-logo-container">
-            <img src="./assets/logo.png" alt="BLAST ARENA — GRAB THE FLAG" class="lobby-logo-img" />
+            <img src="./assets/logo.png" alt="RINHA ARENA — PEGA BANDEIRA" class="lobby-logo-img" />
           </div>
 
           <!-- Big Map Showcase Card -->
           <div class="big-map-card">
             <div class="big-map-preview">
               <div class="big-map-img" style="background-image: url('./assets/maps/foundry.png');"></div>
-              <div class="big-map-procedural-view hidden">
-                <div class="big-qmark-glow">?</div>
-                <div class="procedural-tag">LAYOUT DINÂMICO & ALEATÓRIO</div>
-              </div>
             </div>
             <div class="big-map-footer">
               <div class="big-map-info">
@@ -221,10 +223,10 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
                 <div class="big-map-sub">Equipes - vence quem capturar 3 bandeiras.</div>
               </div>
               <div class="big-map-thumbs-col">
-                <div class="map-mini-thumb sel" data-level="foundry" title="Foundry Court" style="background-image: url('./assets/maps/foundry.png');"></div>
-                <div class="map-mini-thumb" data-level="dojo" title="The Dojo" style="background-image: url('./assets/maps/dojo.png');"></div>
-                <div class="map-mini-thumb" data-level="skyhaven" title="Skyhaven" style="background-image: url('./assets/maps/skyhaven.png');"></div>
-                <div class="map-mini-thumb map-mini-procedural" data-level="procedural" title="Procedural">?</div>
+                <div class="map-mini-thumb sel" data-level="foundry" title="Foundry Court" style="background-image: url('./assets/maps/mini_foundry.png');"></div>
+                <div class="map-mini-thumb" data-level="dojo" title="The Dojo" style="background-image: url('./assets/maps/mini_dojo.png');"></div>
+                <div class="map-mini-thumb" data-level="skyhaven" title="Skyhaven" style="background-image: url('./assets/maps/mini_skyhaven.png');"></div>
+                <div class="map-mini-thumb" data-level="procedural" title="Procedural" style="background-image: url('./assets/maps/mini_procedural.png');"></div>
               </div>
             </div>
           </div>
@@ -242,20 +244,16 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
           <!-- JOGAR ONLINE -->
           <div class="action-card action-card-online">
             <div class="action-card-header">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="2" y1="12" x2="22" y2="12"></line>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-              </svg>
+              <span class="online-globe">🌐</span>
               <span>JOGAR ONLINE</span>
             </div>
             <div class="online-btn-row">
               <button class="btn-action-blue btn-lobby">
-                <span class="btn-sym">👥</span>
+                <img src="./assets/ui/icon_ver_salas.png" class="btn-icon-img" alt="Salas" />
                 <span>VER SALAS ONLINE</span>
               </button>
               <button class="btn-action-gold btn-custom-create">
-                <span class="btn-sym">➕</span>
+                <img src="./assets/ui/icon_criar_sala.png" class="btn-icon-img" alt="Criar" />
                 <span>CRIAR SALA</span>
               </button>
             </div>
@@ -264,19 +262,16 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
           <!-- PHYSICS LAB -->
           <div class="action-card action-card-lab">
             <div class="action-card-header lab-header">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M10 2v7.31L4.69 18.25A2 2 0 0 0 6.41 21h11.18a2 2 0 0 0 1.72-2.75L14 9.31V2"></path>
-                <line x1="8.5" y1="2" x2="15.5" y2="2"></line>
-              </svg>
+              <span class="lab-beaker">🧪</span>
               <span>PHYSICS LAB</span>
             </div>
             <div class="lab-btn-row">
               <button class="lab-btn btn-duel">
-                <span class="lab-sym">🤖</span>
+                <img src="./assets/ui/icon_live_bot.png" class="btn-icon-img" alt="Live Bot" />
                 <span>live bot</span>
               </button>
               <button class="lab-btn btn-doll">
-                <span class="lab-sym">🎯</span>
+                <img src="./assets/ui/icon_training_doll.png" class="btn-icon-img" alt="Training Doll" />
                 <span>training doll</span>
               </button>
             </div>
@@ -285,7 +280,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
           <!-- COMO JOGAR -->
           <button class="btn-how-to-play">
             <div class="htp-left">
-              <span class="htp-icon">❓</span>
+              <span class="htp-icon">?</span>
               <span class="htp-text">Como Jogar / How to play</span>
             </div>
             <span class="htp-arrow">›</span>
@@ -301,13 +296,14 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
 
   // ------------------------------------------------------------ Element queries
   const nameInput = el.querySelector('.name-input');
+  const hatBtns = el.querySelectorAll('.hat-btn');
+  const skinBtns = el.querySelectorAll('.skin-btn');
   const modeBtns = el.querySelectorAll('.mode-btn');
   const arenaCards = el.querySelectorAll('.arena-card');
   const ffBtns = el.querySelectorAll('.ff-btn');
   const miniThumbs = el.querySelectorAll('.map-mini-thumb');
 
   const bigMapImg = el.querySelector('.big-map-img');
-  const bigMapProceduralView = el.querySelector('.big-map-procedural-view');
   const bigMapName = el.querySelector('.big-map-name');
   const bigMapDesc = el.querySelector('.big-map-desc');
   const bigMapSub = el.querySelector('.big-map-sub');
@@ -318,10 +314,6 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const btnDuel = el.querySelector('.btn-duel');
   const btnDoll = el.querySelector('.btn-doll');
   const btnHowToPlay = el.querySelector('.btn-how-to-play');
-
-  const btnSettings = el.querySelector('.btn-settings');
-  const btnStats = el.querySelector('.btn-stats');
-  const btnCommunity = el.querySelector('.btn-community');
   const errBox = el.querySelector('.menu-err');
 
   // ------------------------------------------------------------ Reactive State
@@ -329,34 +321,33 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     const meta = MAP_DATA[selectedLevel] || MAP_DATA.foundry;
     const mode = MODES.find((m) => m.id === selectedMode) || MODES[0];
 
-    // 1. Left arena cards active class
+    // 1. Hat and Skin selection active class
+    hatBtns.forEach((btn) => {
+      btn.classList.toggle('sel', btn.dataset.hat === profile.hat);
+    });
+    skinBtns.forEach((btn) => {
+      btn.classList.toggle('sel', btn.dataset.skin === profile.skin);
+    });
+
+    // 2. Left arena cards active class
     arenaCards.forEach((card) => {
       card.classList.toggle('sel', card.dataset.level === selectedLevel);
     });
 
-    // 2. Mini thumbnails active class
+    // 3. Mini thumbnails active class
     miniThumbs.forEach((thumb) => {
       thumb.classList.toggle('sel', thumb.dataset.level === selectedLevel);
     });
 
-    // 3. Mode buttons active class
+    // 4. Mode buttons active class
     modeBtns.forEach((btn) => {
       btn.classList.toggle('sel', btn.dataset.mode === selectedMode);
     });
 
-    // 4. Update Big Map Card
-    if (selectedLevel === 'procedural') {
-      bigMapImg.classList.add('hidden');
-      bigMapProceduralView.classList.remove('hidden');
-      bigMapName.textContent = 'Procedural';
-      bigMapDesc.textContent = meta.desc;
-    } else {
-      bigMapImg.classList.remove('hidden');
-      bigMapProceduralView.classList.add('hidden');
-      bigMapImg.style.backgroundImage = `url('${meta.img}')`;
-      bigMapName.textContent = meta.name;
-      bigMapDesc.textContent = meta.desc;
-    }
+    // 5. Update Big Map Card
+    bigMapImg.style.backgroundImage = `url('${meta.img}')`;
+    bigMapName.textContent = meta.name;
+    bigMapDesc.textContent = meta.desc;
     bigMapSub.textContent = mode.sub;
   }
 
@@ -366,6 +357,26 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   nameInput.addEventListener('input', () => {
     profile.name = nameInput.value.trim() || 'Player';
     profile.save();
+  });
+
+  // Hat Selection
+  hatBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      profile.hat = btn.dataset.hat;
+      profile.save();
+      onClickSound?.();
+      syncUI();
+    });
+  });
+
+  // Skin Selection
+  skinBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      profile.skin = btn.dataset.skin;
+      profile.save();
+      onClickSound?.();
+      syncUI();
+    });
   });
 
   // Mode Selection
@@ -437,11 +448,6 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   // Online Multiplayer Modals
   btnLobby.addEventListener('click', () => openLobbyModal());
   btnCustomCreate.addEventListener('click', () => openCustomCreateModal());
-
-  // Top Shortcuts
-  btnSettings.addEventListener('click', () => openSettingsModal());
-  btnStats.addEventListener('click', () => openStatsModal());
-  btnCommunity.addEventListener('click', () => openLobbyModal());
 
   // How to play modal
   btnHowToPlay.addEventListener('click', () => openHowToPlayModal());
