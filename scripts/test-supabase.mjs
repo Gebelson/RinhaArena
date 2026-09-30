@@ -62,6 +62,9 @@ const guestView = guest.view();
 if (!guestView?.players.some((player) => player.id === guest.myId)) {
   throw new Error('guest did not receive an authoritative snapshot containing its player');
 }
+if (host.drainEvents().length === 0) {
+  throw new Error('host did not retain local gameplay events after broadcasting snapshots');
+}
 guest.dispose();
 host.dispose();
 await touchRoom(code, created.hostToken, 0);

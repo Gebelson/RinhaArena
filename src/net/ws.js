@@ -87,6 +87,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
     let touchTimer = null;
     const snaps = [];
     const eventQ = [];
+    const hostEventQ = [];
     const clientPlayers = new Map();
 
     const fail = (error) => {
@@ -173,7 +174,9 @@ export async function connectOnline({ room, password, team, profile, host: reque
         snapAccumulator += dt;
         if (snapAccumulator >= SNAPSHOT_INTERVAL) {
           snapAccumulator %= SNAPSHOT_INTERVAL;
-          channel.send('snap', { state: packState(hostGame.sim.state), events: hostGame.drainEvents() });
+          const events = hostGame.drainEvents();
+          if (events.length) hostEventQ.push(...events);
+          channel.send('snap', { state: packState(hostGame.sim.state), events });
         }
       },
       view() {
@@ -192,7 +195,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
         return latest;
       },
       drainEvents() {
-        if (requestedHost) return hostGame?.drainEvents() ?? [];
+        if (requestedHost) return hostEventQ.splice(0, hostEventQ.length);
         return eventQ.splice(0, eventQ.length);
       },
       dispose() {
