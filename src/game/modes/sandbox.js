@@ -53,9 +53,10 @@ function createDollBrain(id) {
       if (!me || me.state !== 'alive' || sim.state.phase !== 'play') return ZERO;
       if (!this.post) this.post = { x: me.x, z: me.z }; // first spawn = post
       const d = Math.hypot(this.post.x - me.x, this.post.z - me.z);
-      if (d > 1.2) {
+      if (d > 0.35) {
         const dir = norm2(this.post.x - me.x, this.post.z - me.z);
-        return { ...ZERO, mx: dir.x * 0.5, mz: dir.z * 0.5 }; // deliberate walk
+        const pace = clamp(d * 0.2, 0.18, 0.55);
+        return { ...ZERO, mx: dir.x * pace, mz: dir.z * pace }; // slow down near the post
       }
       return ZERO;
     },

@@ -8,6 +8,7 @@
     "start": "node server/server.js",
     "test": "node test_combat_redesign.js",
     "test:cloud": "node scripts/test-supabase.mjs",
+    "test:prediction": "node test_multiplayer_prediction.mjs",
     "smoke": "node scripts/smoke.js",
     "vendor": "node scripts/vendor.js",
     "tune": "node scripts/tune.js"
