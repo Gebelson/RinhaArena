@@ -21,7 +21,7 @@ export const CONFIG = {
     sleepSpeed: 0.15, // below this a resting body is put to sleep
     materials: {
       // characters: heavy, barely bouncy, grippy when limp (KO slides stop)
-      player: { mass: 4.0, radius: 0.55, restitution: 0.12, bounceMin: 6, friction: 0.7, wallFriction: 0, linDamp: 0.002 },
+      player: { mass: 4.0, radius: 0.72, restitution: 0.12, bounceMin: 6, friction: 0.7, wallFriction: 0, linDamp: 0.002 },
       // bombs: light props — punches send them flying (Δv = J/m); modest
       // bounce, they thud and roll rather than ricochet
       bomb: { mass: 0.35, radius: 0.32, restitution: 0.35, bounceMin: 2.5, friction: 0.5, wallFriction: 0.3, linDamp: 0.004 },
@@ -42,7 +42,7 @@ export const CONFIG = {
   // wide turns at speed; releasing the stick coasts to a skidding stop; and
   // the ball has no traction mid-air — jumps commit you to the arc.
   player: {
-    radius: 0.55,
+    radius: 0.72,
     walkSpeed: 2.3, // BombSquad walk (7.68 ball-ω × 0.3 r)
     runSpeed: 6.8, // BombSquad full run ((7.68+15) × 0.3)
     gearSpeed: 2.1, // smoothed speed at which the run gear is fully engaged
@@ -54,9 +54,14 @@ export const CONFIG = {
     hp: 100, // = BombSquad 1000 hp (÷10); NO regen — damage is permanent
     respawnTime: 5, // BombSquad teams default (2-player team, Normal)
     invulnTime: 1.0, // spawn invincibility (spaz.py: exactly 1.0s)
-    grabRange: 1.7,
+    grabRange: 1.9,
     jumpVel: 6.5, // apex ≈ 1.05 with g=-20 (BombSquad hop height)
     jumpCooldown: 0.25, // spaz.py _jump_cooldown = 250ms
+    dashSpeed: 16.5, // m/s impulse during dash
+    dashDuration: 0.18, // s time duration of impulse
+    dashCooldown: 1.6, // s cooldown before next dash
+    dashWallStunDuration: 0.45, // s duration of stun (atordoamento) when dashing into a wall
+    dashWallMaxDamage: 12, // hp max impact damage when dashing into a wall
     // Knockout — BombSquad's "unconscious ragdoll" state. A single hit above
     // minDamage knocks you out cold; you wake with your remaining hp.
     // spaz_node.cc: units = nodeDmg·0.02−20 (our hp scale: dmg·0.909−20),
@@ -93,8 +98,8 @@ export const CONFIG = {
     swingTime: 0.3, // fist collider alive ~35 steps
     windowStart: 0.04, // swing age when the fist becomes live
     windowEnd: 0.22, // ...and when it retracts
-    range: 0.85, // fist collider center, in front of the player
-    fistRadius: 0.25, // BombSquad punch body: sphere r=0.25
+    range: 1.05, // fist collider center, in front of the player
+    fistRadius: 0.28, // BombSquad punch body: sphere r=0.28
     dmgBase: 4, // standing jab (≈40/1000 in BombSquad terms)
     dmgPerSpeed: 5.5, // + per m/s of 3D body speed (run 6.8 → ~41)
     dmgCap: 60, // gloveless ceiling
@@ -111,7 +116,7 @@ export const CONFIG = {
   // A held player is a passenger (zero steering) but can punch the grabber
   // and grab back. ANY damage makes you drop whatever you hold.
   grab: {
-    playerRange: 1.45,
+    playerRange: 1.65,
   },
 
   // The universal throw (BombSquad: bomb button AND pickup button both hurl
@@ -133,31 +138,23 @@ export const CONFIG = {
   bomb: {
     fuse: 3.0, // BombSquad: exactly 3.0s, and it burns WHILE HELD
     perPlayer: 1, // BombSquad bomb_count: one live bomb until yours explodes
-    blastRadius: 2.5, // BombSquad 2.0 + reach allowance for our fatter bodies
+    blastRadius: 3.2, // Generous blast radius for high-impact combat
     maxDamage: 100, // point-blank = lethal; linear falloff to ZERO at the edge
-    // Blast Δv is mass-normalized (rigid_body.cc scales force by mass):
-    // the SAME blast kick for players, bombs and flags — with the vertical
-    // component exaggerated (fy ×2), so blasts pop things up and out.
-    blastDvXZ: 7.5, // horizontal Δv at the epicenter
-    blastDvY: 9.5, // vertical Δv at the epicenter
+    // Blast Δv is mass-normalized: launches players and bodies far through the air
+    blastDvXZ: 19.5, // horizontal Δv at the epicenter (strong knockback)
+    blastDvY: 11.0, // vertical Δv at the epicenter (lofty pop into air arc)
     chainFuseMin: 0.1, // bombs caught in a blast detonate after a random
     chainFuseMax: 0.2, // 0.1–0.2s (bomb.py). Punches shove but don't trigger.
     // aim-distance → throw-power mapping for the UI (cursor/drag distance)
     aimRangeMin: 2,
     aimRangeMax: 12,
-    // Per-kind blast tables (bomb.py Blast: radius 2.0 base with per-type
-    // multipliers ice ×1.2 / impact ×0.7 / land_mine ×0.7; magnitude 2000
-    // base with ice ×0.5 / land_mine ×2.5). Radii carry our +0.5 body-reach
-    // allowance; dmg/dv multipliers scale maxDamage and blastDv* above.
-    // 'curse' is the 5s-countdown self-destruct (blast_radius 3.0, normal
-    // magnitude). Ice blasts also FREEZE everyone they reach.
     kinds: {
-      normal: { radius: 2.5, dmgMult: 1, dvMult: 1 },
-      sticky: { radius: 2.5, dmgMult: 1, dvMult: 1 },
-      impact: { radius: 1.9, dmgMult: 1, dvMult: 1 },
-      ice: { radius: 2.9, dmgMult: 0.5, dvMult: 0.5, freezes: true },
-      mine: { radius: 1.9, dmgMult: 2.5, dvMult: 2.5 },
-      curse: { radius: 3.5, dmgMult: 1, dvMult: 1 },
+      normal: { radius: 3.2, dmgMult: 1, dvMult: 1 },
+      sticky: { radius: 3.2, dmgMult: 1, dvMult: 1 },
+      impact: { radius: 2.6, dmgMult: 1, dvMult: 1.15 },
+      ice: { radius: 3.8, dmgMult: 0.5, dvMult: 0.5, freezes: true },
+      mine: { radius: 2.7, dmgMult: 2.5, dvMult: 1.8 },
+      curse: { radius: 4.2, dmgMult: 1, dvMult: 1.3 },
     },
     impactFuse: 20, // impact bombs: no real fuse, a long fallback (bomb.py 20s)
     impactArm: 0.2, // ...armed 200ms after being pulled; then ANY contact detonates
@@ -181,12 +178,11 @@ export const CONFIG = {
     // get_default_powerup_distribution() weights; a curse box is always
     // followed by a med-pack (powerupbox.py's little act of mercy)
     distribution: [
-      ['triple', 3], ['ice', 3], ['gloves', 3], ['impact', 3],
-      ['mines', 2], ['sticky', 3], ['shield', 2], ['health', 1], ['curse', 1],
+      ['bomb', 5], ['triple', 2], ['ice', 2], ['gloves', 2], ['impact', 2],
+      ['mines', 2], ['sticky', 2], ['shield', 2], ['health', 1], ['curse', 1],
     ],
-    // boxing gloves: faster AND harder punches (spazfactory.py:
-    // cooldown 400→300ms, punch_power_scale 1.2→1.4)
-    gloves: { cooldown: 0.3, powerScale: 1.4 / 1.2 },
+    // boxing gloves: insta-nocaute (One Punch KO), faster cooldown and massive launch
+    gloves: { cooldown: 0.3, powerScale: 2.5, instantKO: true, damage: 100, launchDv: 24, liftDv: 9 },
     // energy shield: absorbs hits (damage AND knockback) until it breaks.
     // BombSquad 650 shield hp, spillover 500 (÷10 on our scale): only the
     // damage beyond hp+spillover in the breaking hit reaches the player.
@@ -215,6 +211,8 @@ export const CONFIG = {
     killsToWin: 5, // Death Match: kill threshold per player (× largest team size)
     countdown: 3,
     overTime: 7, // victory screen duration before auto-rematch
+    friendlyFire: false, // Fogo amigo: false = aliados não se agarram, não se socam e bombas aliadas não afetam o time
+    ffaKillsToWin: 10, // Frags to win in FFA
   },
 
   world: {
@@ -226,6 +224,11 @@ export const CONFIG = {
 export const TEAMS = {
   red: { name: 'RED', color: '#ff5347', dark: '#a02620', glow: '#ff8a6e' },
   blue: { name: 'BLUE', color: '#3f8cff', dark: '#1f3f92', glow: '#7ab6ff' },
+  green: { name: 'GREEN', color: '#2ecc71', dark: '#1b7d43', glow: '#62e89d' },
+  yellow: { name: 'YELLOW', color: '#f1c40f', dark: '#967a07', glow: '#ffe066' },
+  purple: { name: 'PURPLE', color: '#9b59b6', dark: '#5b2f6e', glow: '#c387db' },
+  orange: { name: 'ORANGE', color: '#e67e22', dark: '#944b0c', glow: '#f39c12' },
+  free: { name: 'SOLO', color: '#ffffff', dark: '#777788', glow: '#eeddff' },
 };
 
 export const otherTeam = (t) => (t === 'red' ? 'blue' : 'red');

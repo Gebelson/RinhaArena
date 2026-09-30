@@ -5,16 +5,39 @@
 export function createSfx() {
   let ctx = null;
   let master = null;
-  let muted = localStorage.getItem('blast.muted') === '1';
+  let muted = typeof localStorage !== 'undefined' && localStorage.getItem('blast.muted') === '1';
+  let yeetBuffer = null;
+  let yeetLoading = false;
+
+  function loadYeet() {
+    if (yeetBuffer || yeetLoading || !ctx) return;
+    yeetLoading = true;
+    fetch('./audio/yeet_scream.mp3')
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((buf) => ctx.decodeAudioData(buf))
+      .then((decoded) => {
+        yeetBuffer = decoded;
+      })
+      .catch(() => {
+        yeetLoading = false;
+      });
+  }
 
   function ensure() {
     if (!ctx) {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
-      master = ctx.createGain();
-      master.gain.value = muted ? 0 : 0.5;
-      master.connect(ctx.destination);
+      const AudioCtx = typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext) : null;
+      if (AudioCtx) {
+        ctx = new AudioCtx();
+        master = ctx.createGain();
+        master.gain.value = muted ? 0 : 0.5;
+        master.connect(ctx.destination);
+      }
     }
-    if (ctx.state === 'suspended') ctx.resume();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    if (ctx) loadYeet();
     return ctx;
   }
 
@@ -80,12 +103,49 @@ export function createSfx() {
     hurt() { osc('sine', 160, 90, 0.12, 0.3); noise(0.06, 'lowpass', 500, 200, 0.2); },
     punch(v = 1) { noise(0.09, 'bandpass', 900, 2800, 0.16 * v); }, // whoosh
     punchHit(v = 1) {
-      noise(0.07, 'lowpass', 700, 200, 0.35 * v); // thwack
-      osc('sine', 140, 80, 0.1, 0.3 * v);
+      noise(0.08, 'lowpass', 780, 180, 0.38 * v); // thwack
+      osc('sine', 160, 70, 0.12, 0.35 * v); // heavy body impact
+      osc('triangle', 340, 130, 0.08, 0.22 * v); // slap/crack
     },
     jump() { osc('triangle', 320, 520, 0.09, 0.1); },
+    dash(v = 1) {
+      noise(0.16, 'bandpass', 700, 3200, 0.28 * v);
+      osc('sine', 360, 140, 0.14, 0.22 * v);
+    },
     grabPlayer() { osc('triangle', 420, 300, 0.12, 0.22); },
-    playerThrow(v = 1) { noise(0.22, 'bandpass', 400, 1800, 0.24 * v); },
+    playerThrow(v = 1) {
+      noise(0.28, 'bandpass', 350, 2400, 0.35 * v);
+      osc('triangle', 340, 160, 0.22, 0.28 * v);
+
+      if (!ctx || !yeetBuffer) return;
+      try {
+        const src = ctx.createBufferSource();
+        src.buffer = yeetBuffer;
+        // Subtle pitch variance around the custom cartoon pitch
+        src.playbackRate.value = 1.0 + (Math.random() - 0.5) * 0.06;
+
+        const g = ctx.createGain();
+        const t0 = ctx.currentTime;
+        const dur = yeetBuffer.duration || 2.6;
+
+        // "mais baixo" - comfortable, balanced cartoon scream level
+        const initialGain = Math.max(0.015, Math.min(0.4, 0.35 * v));
+
+        // "que vá diminuindo com a distância":
+        // Volume fades smoothly as the character flies through the air into the distance
+        g.gain.setValueAtTime(initialGain, t0);
+        g.gain.setValueAtTime(initialGain, t0 + 0.3); // sustain opening yell
+        g.gain.exponentialRampToValueAtTime(Math.max(0.0005, initialGain * 0.07), t0 + dur - 0.25);
+        g.gain.linearRampToValueAtTime(0.00001, t0 + dur);
+
+        src.connect(g);
+        g.connect(master);
+        src.start(t0);
+        src.stop(t0 + dur + 0.1);
+      } catch {
+        /* audio failsafe */
+      }
+    },
     spawn() { osc('triangle', 600, 900, 0.1, 0.12); },
     tick() { osc('square', 700, 700, 0.07, 0.14); },
     go() { osc('square', 1040, 1040, 0.18, 0.16); },

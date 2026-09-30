@@ -20,7 +20,7 @@ import { integrateBody, collideBodies, blastKick, applyImpulse, invMass } from '
 import { CONFIG } from '../../core/config.js';
 import { clamp, norm2 } from '../../core/math.js';
 
-const ZERO = { mx: 0, mz: 0, ax: 0, az: 0, ad: 7, run: 1, throw: false, grab: false, punch: false, jump: false };
+const ZERO = { mx: 0, mz: 0, ax: 0, az: 0, ad: 7, run: 1, throw: false, grab: false, punch: false, jump: false, dash: false };
 
 export function makeLabConfig() {
   const c = structuredClone(CONFIG);
@@ -85,7 +85,25 @@ function createFighterBrain(id, rng = Math.random) {
       const dx = target.x - me.x;
       const dz = target.z - me.z;
       const d = Math.hypot(dx, dz);
-      const to = norm2(dx, dz);
+      let to = norm2(dx, dz);
+
+      // seek nearby powerup boxes (especially bombs) when not holding one
+      const boxes = sim.state.powerups ?? [];
+      let boxTarget = null;
+      if (!me.heldBomb && boxes.length) {
+        let bestDist = 10;
+        for (const box of boxes) {
+          if (box.kind === 'curse') continue;
+          const bd = Math.hypot(box.x - me.x, box.z - me.z);
+          if (bd < bestDist) {
+            bestDist = bd;
+            boxTarget = box;
+          }
+        }
+      }
+      if (boxTarget && (this.bombCool <= 0 || d > 3.5)) {
+        to = norm2(boxTarget.x - me.x, boxTarget.z - me.z);
+      }
 
       // holding someone: carry them a beat, then hurl them (toward the
       // open east rim if we're facing it — hazard throws are the point)
@@ -117,6 +135,7 @@ function createFighterBrain(id, rng = Math.random) {
           input.az = Math.cos(a);
           input.ad = Math.hypot(px - me.x, pz - me.z);
           input.throw = true;
+          this.bombCool = 3 + rng() * 3;
         }
         return input;
       }
@@ -164,10 +183,9 @@ function createFighterBrain(id, rng = Math.random) {
         this.grabCool = 6 + rng() * 5;
         return input;
       }
-      // pull out a bomb at range (thrown next think once it's in hand)
-      if (this.bombCool <= 0 && d > 3 && d < 12) {
-        input.throw = true;
-        this.bombCool = 1.4 + rng() * 1.6;
+      // dash to close in when chasing target
+      if (me.dashCd <= 0 && d > 3.5 && d < 9 && rng() < 0.12) {
+        input.dash = true;
       }
       return input;
     },
@@ -299,23 +317,14 @@ function makeSandbox(variant) {
 
     onKO() { /* drop handled via breakGrabs -> dropCarried */ },
 
+    // flags are completely unaffected by bomb explosions (neither home nor dropped flags move)
     onExplosion(sim, x, z, radius) {
-      const cfg = sim.config.bomb;
-      for (const f of Object.values(sim.state.flags)) {
-        if (f.st === 'carry') continue;
-        blastKick(f, x, z, radius, cfg.blastDvXZ, cfg.blastDvY * 0.7);
-      }
+      // Flags are immune to bomb explosions
     },
 
+    // flags are completely unaffected by punches (punches do not impart impulse)
     onPunchObject(sim, fx, fz, radius, dir, vFist, invFist) {
-      const e = sim.config.punch.restitution;
-      for (const f of Object.values(sim.state.flags)) {
-        if (f.st === 'carry' || f.pcd > 0) continue;
-        if (Math.hypot(f.x - fx, f.z - fz) > radius + 0.2) continue;
-        f.pcd = 0.35;
-        const j = ((1 + e) * vFist) / (invFist + invMass(sim.mats.flag));
-        applyImpulse(f, sim.mats.flag, dir.x * j, dir.z * j, j * 0.2);
-      }
+      // Flags are immune to punches
     },
 
     // lab panel's "reset scene": bombs gone, flags home, bots back at their

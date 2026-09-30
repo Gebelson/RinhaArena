@@ -13,13 +13,18 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
       <div class="mid">
         <div class="timer">3:00</div>
         <div class="flag-ind"><span class="fi fi-red">⚑</span><span class="fi fi-blue">⚑</span></div>
+        <div class="ffa-hud hidden"><span class="ffa-lead">⚔️ FFA</span></div>
       </div>
       <div class="score score-blue">0</div>
     </div>
     <div class="feed"></div>
     <div class="center"></div>
     <div class="respawn hidden"></div>
-    <div class="hpwrap"><div class="hpbar"></div></div>
+    <div class="bottom-hud">
+      <div class="gloves-hud hidden"><span class="gloves-text">🥊 INSTA-NOCAUTE (20s)</span></div>
+      <div class="dash-hud"><div class="dash-fill"></div><span class="dash-text">⚡ DASH [Shift]</span></div>
+      <div class="hpwrap"><div class="hpbar"></div></div>
+    </div>
     <div class="hud-corner">
       <button class="hud-btn btn-mute">${muted ? '🔇' : '🔊'}</button>
       <button class="hud-btn btn-exit">✕</button>
@@ -38,8 +43,15 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
   const center = q('.center');
   const respawn = q('.respawn');
   const hpbar = q('.hpbar');
+  const glovesHud = q('.gloves-hud');
+  const glovesText = q('.gloves-text');
+  const dashHud = q('.dash-hud');
+  const dashFill = q('.dash-fill');
+  const dashText = q('.dash-text');
   const connecting = q('.connecting');
   const overPanel = q('.overlay-over');
+  const ffaHud = q('.ffa-hud');
+  const ffaLead = q('.ffa-lead');
 
   q('.btn-exit').addEventListener('click', onExit);
   q('.btn-mute').addEventListener('click', (e) => {
@@ -70,8 +82,34 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
 
   return {
     update(view, myId) {
-      scoreRed.textContent = view.scores.red;
-      scoreBlue.textContent = view.scores.blue;
+      const isFfa = view.modeId === 'ffa' || !!view.ffaScores;
+      if (isFfa) {
+        scoreRed.style.display = 'none';
+        scoreBlue.style.display = 'none';
+        flagInd.style.display = 'none';
+        if (ffaHud) ffaHud.classList.remove('hidden');
+        const myScore = (view.ffaScores && view.ffaScores[myId]) || 0;
+        let leaderName = '';
+        let leaderScore = -1;
+        if (view.ffaScores) {
+          for (const [id, sc] of Object.entries(view.ffaScores)) {
+            if (sc > leaderScore) {
+              leaderScore = sc;
+              const lp = view.players.find((p) => p.id === id);
+              leaderName = lp ? lp.name : 'Bot';
+            }
+          }
+        }
+        if (ffaLead) {
+          ffaLead.innerHTML = `⚔️ Frags: <b>${myScore}</b>${leaderName ? ` · Líder: ${leaderName} (${leaderScore})` : ''}`;
+        }
+      } else {
+        scoreRed.style.display = '';
+        scoreBlue.style.display = '';
+        if (ffaHud) ffaHud.classList.add('hidden');
+        scoreRed.textContent = view.scores.red;
+        scoreBlue.textContent = view.scores.blue;
+      }
 
       if (view.phase === 'countdown') {
         const n = Math.max(1, Math.ceil(view.countdown));
@@ -108,6 +146,30 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
       if (me) {
         hpbar.style.width = `${Math.max(0, me.hp)}%`;
         hpbar.classList.toggle('low', me.hp < 35);
+        if (dashFill && dashText) {
+          const cd = me.dashCd || 0;
+          if (cd <= 0) {
+            dashFill.style.width = '100%';
+            dashFill.classList.remove('recharge');
+            dashText.textContent = '⚡ DASH [Shift]';
+            dashHud.classList.add('ready');
+          } else {
+            const pct = Math.max(0, Math.min(100, (1 - cd / 1.6) * 100));
+            dashFill.style.width = `${pct}%`;
+            dashFill.classList.add('recharge');
+            dashText.textContent = `⚡ DASH (${cd.toFixed(1)}s)`;
+            dashHud.classList.remove('ready');
+          }
+        }
+        if (glovesHud) {
+          const gT = me.glovesT ?? 0;
+          if (gT > 0) {
+            glovesHud.classList.remove('hidden');
+            glovesText.textContent = `🥊 INSTA-NOCAUTE (${gT.toFixed(1)}s)`;
+          } else {
+            glovesHud.classList.add('hidden');
+          }
+        }
         if (me.state === 'ko' && view.phase !== 'over') {
           respawn.classList.remove('hidden');
           respawn.innerHTML = `💥 KNOCKED OUT<span>back in ${Math.max(1, Math.ceil(me.respawn))}…</span>`;
@@ -122,13 +184,23 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
         if (!overShown) {
           overShown = true;
           const w = view.winner;
-          const title = w === 'draw'
-            ? 'DRAW!'
-            : `<span style="color:${TEAMS[w].color}">${TEAMS[w].name}</span> WINS!`;
+          let title = '';
+          let scoreText = '';
+          if (isFfa) {
+            const winnerP = view.players.find((p) => p.id === w);
+            title = winnerP ? `🏆 <span style="color:#ffd460">${winnerP.name}</span> VENCEU!` : 'EMPATE!';
+            const winFrags = (winnerP && view.ffaScores) ? (view.ffaScores[winnerP.id] ?? 0) : 0;
+            scoreText = `${winFrags} FRAGS`;
+          } else {
+            title = w === 'draw'
+              ? 'DRAW!'
+              : `<span style="color:${TEAMS[w]?.color ?? '#fff'}">${TEAMS[w]?.name ?? w}</span> WINS!`;
+            scoreText = `${view.scores.red} — ${view.scores.blue}`;
+          }
           overPanel.innerHTML = `
             <div class="over-card">
               <div class="over-title">${title}</div>
-              <div class="over-score">${view.scores.red} — ${view.scores.blue}</div>
+              <div class="over-score">${scoreText}</div>
               <div class="over-next"></div>
             </div>`;
           overPanel.classList.remove('hidden');
@@ -181,7 +253,7 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
             if (fragged.has(ev.id)) break;
             pushFeed(
               ev.cause === 'fall' ? `🕳️ ${name(ev)} fell into the void`
-              : ev.cause === 'punch' ? `👊 ${name(ev)} got knocked out`
+              : ev.cause === 'punch' ? `🥊 ${name(ev)} levou INSTA-NOCAUTE!`
               : ev.cause === 'shatter' ? `🧊 ${name(ev)} was shattered`
               : ev.cause === 'curse' ? `💀 the curse claimed ${name(ev)}`
               : `💥 ${name(ev)} was blown up`,

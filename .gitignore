@@ -1,6 +1,25 @@
 # Dependencies (three.js is vendored into vendor/ via npm run vendor)
 node_modules/
 
+# Standalone build copy & test artifacts
+BlastArena-Capivaras/
+check_snout.mjs
+test_edge.png
+map_*.png
+lobby_*.png
+map-overview.html
+assets/test_*.png
+assets/maps/test_*.png
+.vercel/
+models/capivara.glb
+models/capivara.gltf
+models/capivara.png
+models/capivara_rigged.glb
+models/capivara_pbr_blue.glb
+models/capivara_pbr_rigged.glb
+models/Capivara 2.png
+audio/goofy_scream_raw.mp3
+
 # Environment & secrets
 .env
 .env.*

@@ -11,7 +11,7 @@
 
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -34,18 +34,112 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.mp3': 'audio/mpeg',
   '.webmanifest': 'application/manifest+json',
+  '.gltf': 'model/gltf+json',
+  '.glb': 'model/gltf-binary',
 };
 
 // ------------------------------------------------------------ static files
 const server = createServer(async (req, res) => {
+  if (req.method === 'GET' && req.url.startsWith('/api/rooms')) {
+    const list = [];
+    for (const [code, r] of rooms) {
+      const modeId = r.host?.modeId || r.modeId || 'ctf';
+      const levelId = r.host?.levelId || r.levelId || 'skyhaven';
+      const teamLimits = r.teamLimits || (modeId === 'ffa' ? { ffa: 6 } : { red: 2, blue: 2 });
+      const maxPlayers = modeId === 'ffa' ? (teamLimits.ffa || 6) : ((teamLimits.red || 2) + (teamLimits.blue || 2));
+      const humanCount = r.clients.size;
+      list.push({
+        code: r.code,
+        name: r.name || `Sala ${r.code}`,
+        modeId,
+        levelId,
+        isPrivate: !!r.isPrivate,
+        playersCount: humanCount,
+        maxPlayers,
+        teamLimits,
+        respawnTime: r.respawnTime ?? 5,
+        friendlyFire: !!r.friendlyFire,
+      });
+    }
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' });
+    res.end(JSON.stringify(list));
+    return;
+  }
+  if (req.method === 'POST' && req.url.startsWith('/api/rooms')) {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        let code = (data.code || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 12);
+        if (!code) {
+          code = Math.random().toString(36).substring(2, 8);
+        }
+        const modeId = data.modeId || 'ctf';
+        const levelId = data.levelId || 'skyhaven';
+        const redSize = Math.max(1, Math.min(5, Number(data.redSize) || 2));
+        const blueSize = Math.max(1, Math.min(5, Number(data.blueSize) || 2));
+        const ffaSize = Math.max(2, Math.min(10, Number(data.ffaSize) || 6));
+        const teamLimits = modeId === 'ffa' ? { ffa: ffaSize } : { red: redSize, blue: blueSize };
+        const respawnTime = Math.max(1, Math.min(8, Number(data.respawnTime) || 5));
+        const friendlyFire = !!data.friendlyFire;
+        const name = (data.name || '').trim().slice(0, 24) || `Sala ${code}`;
+        const password = data.password ? String(data.password).slice(0, 20) : null;
+
+        const room = getRoom(code, {
+          levelId,
+          modeId,
+          teamLimits,
+          respawnTime,
+          friendlyFire,
+          name,
+          password,
+        });
+
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          ok: true,
+          code: room.code,
+          name: room.name,
+          isPrivate: room.isPrivate,
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: err.message }));
+      }
+    });
+    return;
+  }
   try {
     let urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (urlPath === '/') urlPath = '/index.html';
     const filePath = path.join(ROOT, urlPath);
     if (!filePath.startsWith(ROOT)) throw new Error('traversal');
+    const ext = path.extname(filePath);
+    const contentType = MIME[ext] ?? 'application/octet-stream';
     const data = await readFile(filePath);
+
+    // Support HTTP Range requests (crucial for smooth audio streaming and seeking)
+    const range = req.headers.range;
+    if (range && ext === '.mp3') {
+      const total = data.length;
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
+      const chunk = data.subarray(start, end + 1);
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${total}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunk.length,
+        'Content-Type': contentType,
+      });
+      res.end(chunk);
+      return;
+    }
+
     res.writeHead(200, {
-      'content-type': MIME[path.extname(filePath)] ?? 'application/octet-stream',
+      'content-type': contentType,
+      'accept-ranges': 'bytes',
       'cache-control': 'no-cache',
     });
     res.end(data);
@@ -116,14 +210,38 @@ function parseFrames(conn, onText, onClose) {
 // ------------------------------------------------------------------- rooms
 const rooms = new Map();
 
-function getRoom(code) {
+function getRoom(code, options = {}) {
   let room = rooms.get(code);
   if (room) return room;
 
-  const host = new GameHost();
+  if (typeof options === 'string') {
+    options = { levelId: options };
+  } else if (!options || typeof options !== 'object') {
+    options = {};
+  }
+
+  const reqLevel = options.levelId;
+  const modeId = options.modeId || 'ctf';
+  const teamLimits = options.teamLimits || null;
+  const respawnTime = options.respawnTime != null ? options.respawnTime : null;
+  const friendlyFire = options.friendlyFire != null ? options.friendlyFire : null;
+
+  const host = new GameHost({
+    levelId: reqLevel || 'skyhaven',
+    modeId,
+    teamLimits,
+    respawnTime,
+    friendlyFire,
+  });
   host.fillBots();
   room = {
     code,
+    name: options.name || `Sala ${code}`,
+    password: options.password ? String(options.password) : null,
+    isPrivate: !!options.password,
+    teamLimits: host.teamLimits,
+    respawnTime: host.config.player.respawnTime,
+    friendlyFire: host.config.rules.friendlyFire,
     host,
     clients: new Set(),
     emptySince: Date.now(),
@@ -151,7 +269,7 @@ function getRoom(code) {
   }, 1000 / CONFIG.snapshotRate);
 
   rooms.set(code, room);
-  console.log(`[room ${code}] created`);
+  console.log(`[room ${code}] created (${modeId}, ${host.levelId})`);
   return room;
 }
 
@@ -208,10 +326,32 @@ server.on('upgrade', (req, socket) => {
       let msg;
       try { msg = JSON.parse(text); } catch { return; }
       if (msg.t === 'join' && !conn.playerId) {
-        const room = getRoom(roomCode);
+        const reqLevel = url.searchParams.get('level');
+        const room = getRoom(roomCode, reqLevel);
+        const pass = msg.password || url.searchParams.get('password');
+        if (room.isPrivate && room.password && room.password !== pass) {
+          socket.write(encodeFrame(JSON.stringify({
+            t: 'error',
+            reason: 'Senha incorreta!',
+          })));
+          return close();
+        }
+
+        const maxCap = room.host.modeId === 'ffa'
+          ? (room.host.teamLimits?.ffa ?? 6)
+          : ((room.host.teamLimits?.red ?? 2) + (room.host.teamLimits?.blue ?? 2));
+        if (room.clients.size >= maxCap) {
+          socket.write(encodeFrame(JSON.stringify({
+            t: 'error',
+            reason: 'A sala está cheia!',
+          })));
+          return close();
+        }
+
         conn.room = room;
         conn.playerId = room.host.addHuman({
           name: String(msg.name ?? 'Player').slice(0, 12),
+          team: msg.team || url.searchParams.get('team') || null,
           cos: {
             hat: String(msg.cos?.hat ?? 'none').slice(0, 16),
             skin: String(msg.cos?.skin ?? '#ffd29c').slice(0, 9),
@@ -223,6 +363,7 @@ server.on('upgrade', (req, socket) => {
           id: conn.playerId,
           levelId: room.host.levelId,
           modeId: room.host.modeId,
+          teamLimits: room.host.teamLimits,
         })));
         console.log(`[room ${room.code}] ${conn.playerId} joined as "${msg.name}" (${room.clients.size} humans)`);
       } else if (msg.t === 'input' && conn.room && conn.playerId) {
@@ -230,7 +371,8 @@ server.on('upgrade', (req, socket) => {
         conn.room.host.setInput(conn.playerId, {
           mx: +i.mx || 0, mz: +i.mz || 0,
           ax: +i.ax || 0, az: +i.az || 0, ad: +i.ad || 7,
-          throw: !!i.throw, grab: !!i.grab, aiming: !!i.aiming,
+          punch: !!i.punch, grab: !!i.grab, dash: !!i.dash, jump: !!i.jump,
+          throw: !!i.throw, aiming: !!i.aiming,
         });
       }
     }, close);

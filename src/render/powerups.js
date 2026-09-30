@@ -9,6 +9,7 @@ import { CONFIG } from '../core/config.js';
 
 // per-kind styling: shell color + icon glyph (drawn to a canvas sprite)
 const KINDS = {
+  bomb: { color: '#e0a83c', icon: '💣' },
   triple: { color: '#e0a83c', icon: '💣' },
   ice: { color: '#7fd4f2', icon: '❄️' },
   gloves: { color: '#e04f3f', icon: '🥊' },

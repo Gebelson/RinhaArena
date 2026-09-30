@@ -27,7 +27,7 @@ function blockedAhead(level, me, dir, probe) {
   const pz = me.z + dir.z * probe;
   for (const box of level.solids) {
     if (box.h < 0.5) continue;
-    if (circlePushOut(px, pz, 0.55, box)) return true;
+    if (circlePushOut(px, pz, 0.72, box)) return true;
   }
   return false;
 }
@@ -143,7 +143,7 @@ export function createBotBrain(id, rng = Math.random) {
       const ahead = { x: clamp(me.x + dir.x * 2, -hw, hw), z: clamp(me.z + dir.z * 2, -hd, hd) };
       dir = norm2(ahead.x - me.x, ahead.z - me.z);
 
-      const input = { mx: dir.x, mz: dir.z, ax: 0, az: 0, ad: 7, run: 1, throw: false, grab: false, punch: false, jump: false };
+      const input = { mx: dir.x, mz: dir.z, ax: 0, az: 0, ad: 7, run: 1, throw: false, grab: false, punch: false, jump: false, dash: false };
 
       // --- holding a lit bomb: cook it a beat, then throw at the target's
       // predicted position — and panic-throw the moment the fuse runs short
@@ -178,14 +178,9 @@ export function createBotBrain(id, rng = Math.random) {
         }
       }
 
-      // --- bombing: pull out a lit bomb when a target is in throwing range
-      // (it gets aimed and thrown on a later think, once it's in hand)
-      if (!input.punch && throwAt && !me.carryFlag && !me.heldPlayer && this.cool <= 0) {
-        const live = s.bombs.some((b) => b.owner === me.id);
-        const dd = Math.hypot(throwAt.x - me.x, throwAt.z - me.z);
-        if (!live && dd > 2.2 && dd < 13) {
-          input.throw = true;
-        }
+      // occasional dash to close distance or escape
+      if (me.dashCd <= 0 && (input.punch || (throwAt && Math.hypot(throwAt.x - me.x, throwAt.z - me.z) > 4 && Math.random() < 0.15))) {
+        input.dash = true;
       }
 
       // steal needs a deliberate grab near the enemy flag

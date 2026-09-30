@@ -1,0 +1,21 @@
+.git
+.github
+.vercel
+node_modules
+server
+scripts
+supabase
+docs
+*.md
+test_*.js
+lobby_*.png
+map-overview.html
+assets/test_*.png
+assets/maps/test_*.png
+models/capivara.glb
+models/capivara.gltf
+models/capivara.png
+models/capivara_rigged.glb
+models/capivara_pbr_blue.glb
+models/capivara_pbr_rigged.glb
+models/Capivara 2.png

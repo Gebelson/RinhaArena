@@ -219,27 +219,14 @@ export const CtfMode = {
     // sim.breakGrabs already routed the drop through dropCarried
   },
 
-  // explosions kick free flags exactly like every other body (BombSquad
-  // blasts are mass-normalized: same Δv for flags, bombs and players)
+  // flags are completely unaffected by bomb explosions (neither home nor dropped flags move)
   onExplosion(sim, x, z, radius) {
-    const cfg = sim.config.bomb;
-    for (const f of Object.values(sim.state.flags)) {
-      if (f.st === 'carry') continue;
-      blastKick(f, x, z, radius, cfg.blastDvXZ, cfg.blastDvY * 0.7);
-    }
+    // Flags are immune to bomb explosions
   },
 
-  // punches smack free flags with the fist-collider impulse formula
-  // (once per swing — the fist stays live for several ticks)
+  // flags are completely unaffected by punches (punches do not impart impulse)
   onPunchObject(sim, fx, fz, radius, dir, vFist, invFist) {
-    const e = sim.config.punch.restitution;
-    for (const f of Object.values(sim.state.flags)) {
-      if (f.st === 'carry' || f.pcd > 0) continue;
-      if (Math.hypot(f.x - fx, f.z - fz) > radius + 0.2) continue;
-      f.pcd = 0.35;
-      const j = ((1 + e) * vFist) / (invFist + invMass(sim.mats.flag));
-      applyImpulse(f, sim.mats.flag, dir.x * j, dir.z * j, j * 0.2);
-    }
+    // Flags are immune to punches
   },
 
   score(sim, c, stolenFlag) {

@@ -1,206 +1,942 @@
-// Main menu: name + character customization (hats/skins from the cosmetics
-// registry — new entries appear automatically), level card (from the level
-// registry, ready for a level-select grid later), play vs bots, and online
-// play with a room code.
+// Blast Arena — Arcade Game Lobby & Selection Menu.
+// Faithful reproduction of the competitive arcade video game UI reference:
+// - Left Panel: Personalização (Name, Modes, 2x2 Arena Grid, Friendly Fire)
+// - Center: Floating Hero Logo + Large Interactive Map Showcase Card with mini-thumbnails
+// - Right Panel: Giant Play vs Bots CTA, Online Play (Lobby & Create), Physics Lab, How to Play
+// - Top-Right: Quick utility buttons (Settings/Audio, Stats, Lobby)
 
-import { HATS, SKINS } from '../content/cosmetics.js';
-import { LEVELS, DEFAULT_LEVEL } from '../content/levels/index.js';
+import { LEVELS, DEFAULT_LEVEL, newProceduralSeed } from '../content/levels/index.js';
+import { createRoom, listRooms } from '../net/rooms.js';
 
 export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayLab, onClickSound }) {
   const el = document.createElement('div');
   el.className = 'menu';
-  const level = LEVELS[DEFAULT_LEVEL];
+
+  const MAP_DATA = {
+    foundry: {
+      id: 'foundry',
+      name: 'Foundry Court',
+      img: './assets/maps/foundry.png',
+      desc: 'A floating forge platform. Three lanes, one flag, long falls.',
+    },
+    dojo: {
+      id: 'dojo',
+      name: 'The Dojo',
+      img: './assets/maps/dojo.png',
+      desc: 'A tranquil temple arena with cherry blossoms and walled perimeter.',
+    },
+    skyhaven: {
+      id: 'skyhaven',
+      name: 'Skyhaven',
+      img: './assets/maps/skyhaven.png',
+      desc: 'Floating islands connected by bridges high in the clouds.',
+    },
+    procedural: {
+      id: 'procedural',
+      name: 'Procedural',
+      img: null,
+      desc: 'Arena cósmica gerada dinamicamente com geometria imprevisível.',
+    },
+  };
+
+  const MODES = [
+    { id: 'ctf', label: '🚩 Capture the Flag', sub: 'Equipes - vence quem capturar 3 bandeiras.' },
+    { id: 'deathmatch', label: '💀 Death Match', sub: 'Equipes - eliminações vencem a partida.' },
+    { id: 'ffa', label: '⚔️ Todos contra Todos', sub: 'Cada um por si - 10 eliminações para vencer.' },
+  ];
+
+  let selectedMode = 'ctf';
+  let selectedLevel = DEFAULT_LEVEL in MAP_DATA ? DEFAULT_LEVEL : 'foundry';
 
   el.innerHTML = `
-    <div class="menu-card">
-      <h1 class="title">BLAST<span>ARENA</span></h1>
-      <div class="subtitle">GRAB THE FLAG</div>
+    <div class="lobby-root">
+      <!-- Background Ambient Vignette Overlay -->
+      <div class="lobby-bg-overlay"></div>
 
-      <label class="field">
-        <span>NAME</span>
-        <input class="name-input" maxlength="12" placeholder="Player" />
-      </label>
-
-      <div class="field"><span>HAT</span><div class="hat-row"></div></div>
-      <div class="field"><span>SKIN</span><div class="skin-row"></div></div>
-      <div class="field"><span>MODE</span><div class="mode-row"></div></div>
-      <div class="field"><span>ARENA</span><div class="level-row"></div></div>
-
-      <div class="level-card">
-        <div class="level-name">📍 ${level.name}</div>
-        <div class="level-desc"></div>
+      <!-- Top Right Floating Shortcuts -->
+      <div class="lobby-top-bar">
+        <button class="top-util-btn btn-settings" title="Configurações e Áudio">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+        <button class="top-util-btn btn-stats" title="Estatísticas">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+        </button>
+        <button class="top-util-btn btn-community" title="Salas Multiplayer">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+        </button>
       </div>
 
-      <button class="play-btn">▶&nbsp; PLAY VS BOTS</button>
+      <!-- Main 3-Zone Desktop Layout -->
+      <div class="lobby-grid">
+        <!-- 1. PAINEL LATERAL ESQUERDO: PERSONALIZAÇÃO -->
+        <aside class="lobby-left-panel">
+          <!-- Top Header -->
+          <div class="panel-header">
+            <div class="header-crown">
+              <svg width="32" height="26" viewBox="0 0 24 24" fill="url(#crownGold)">
+                <defs>
+                  <linearGradient id="crownGold" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#ffd54f" />
+                    <stop offset="100%" stop-color="#ff8f00" />
+                  </linearGradient>
+                </defs>
+                <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/>
+              </svg>
+            </div>
+            <div class="header-text">
+              <h2 class="panel-title">PERSONALIZAÇÃO</h2>
+              <span class="panel-subtitle">DEIXE SEU PERSONAGEM COM A SUA CARA</span>
+            </div>
+          </div>
 
-      <div class="online-row">
-        <input class="room-input" maxlength="12" placeholder="room code" value="main" />
-        <button class="online-btn">🌐 PLAY ONLINE</button>
-      </div>
-      <div class="lab-row">
-        <span class="lab-label">🧪 PHYSICS LAB</span>
-        <button class="lab-mode-btn btn-duel">🤖 live bot</button>
-        <button class="lab-mode-btn btn-doll">🎯 training doll</button>
-      </div>
-      <div class="menu-err hidden"></div>
+          <!-- Player Name -->
+          <div class="field-block">
+            <label class="field-label">NOME DO JOGADOR</label>
+            <div class="name-input-wrapper">
+              <svg class="input-user-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7e92b3" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <input class="name-input" maxlength="12" placeholder="Player" value="${profile.name || 'Player'}" />
+            </div>
+          </div>
 
-      <details class="help">
-        <summary>How to play</summary>
-        <div class="help-cols">
-          <div><b>⌨️ Keyboard</b><br>WASD / arrows — move · mouse — aim<br>Left click — throw (bomb, or whatever you hold)<br>Right click / F — punch (fists alternate)<br>E — grab: steal flag, pick up live bombs, hoist players overhead · press again to toss<br>Space — jump</div>
-          <div><b>📱 Touch</b><br>Left side — joystick<br>💣 tap quick-throw · drag to aim<br>👊 punch · ✋ grab · ⬆️ jump</div>
-        </div>
-        <div class="help-rules">Steal the enemy flag and carry (or throw!) it to your base — but you can only score while your own flag is home. Touch your dropped flag to return it. Momentum is everything: running jump-punches hit like a truck, and everything you throw inherits your speed. Grabbed someone? They ride overhead until you toss (grab) or hurl (throw) them — but they can punch your hp down, or grab you back into a ground grapple where movement is a two-player tug-of-war. Mind the open edges.</div>
-      </details>
+          <!-- Modo de Jogo -->
+          <div class="field-block">
+            <label class="field-label">
+              <span class="field-icon">🎮</span> MODO DE JOGO
+            </label>
+            <div class="mode-grid">
+              <button class="mode-btn mode-ctf sel" data-mode="ctf">
+                <span class="mode-icon">🚩</span>
+                <span class="mode-text">Capture the Flag</span>
+              </button>
+              <button class="mode-btn mode-dm" data-mode="deathmatch">
+                <span class="mode-icon">💀</span>
+                <span class="mode-text">Death Match</span>
+              </button>
+              <button class="mode-btn mode-ffa mode-btn-full" data-mode="ffa">
+                <span class="mode-icon">⚔️</span>
+                <span class="mode-text">Todos contra Todos</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Arena 2x2 Grid -->
+          <div class="field-block">
+            <label class="field-label">
+              <span class="field-icon">📍</span> ARENA
+            </label>
+            <div class="arena-grid">
+              <!-- Foundry Court -->
+              <div class="arena-card sel" data-level="foundry">
+                <div class="arena-thumb" style="background-image: url('./assets/maps/foundry.png');"></div>
+                <div class="arena-label">
+                  <span class="arena-pin">📍</span>
+                  <span class="arena-name">Foundry Court</span>
+                </div>
+              </div>
+              <!-- The Dojo -->
+              <div class="arena-card" data-level="dojo">
+                <div class="arena-thumb" style="background-image: url('./assets/maps/dojo.png');"></div>
+                <div class="arena-label">
+                  <span class="arena-pin">📍</span>
+                  <span class="arena-name">The Dojo</span>
+                </div>
+              </div>
+              <!-- Skyhaven -->
+              <div class="arena-card" data-level="skyhaven">
+                <div class="arena-thumb" style="background-image: url('./assets/maps/skyhaven.png');"></div>
+                <div class="arena-label">
+                  <span class="arena-pin">📍</span>
+                  <span class="arena-name">Skyhaven</span>
+                </div>
+              </div>
+              <!-- Procedural (Stylized ? with CSS) -->
+              <div class="arena-card" data-level="procedural">
+                <div class="arena-thumb arena-thumb-procedural">
+                  <span class="procedural-qmark">?</span>
+                </div>
+                <div class="arena-label">
+                  <span class="arena-pin">🎲</span>
+                  <span class="arena-name">Procedural</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Fogo Amigo -->
+          <div class="field-block">
+            <label class="field-label">
+              <span class="field-icon">🛡️</span> FOGO AMIGO
+            </label>
+            <div class="ff-grid">
+              <button class="ff-btn ff-off ${profile.friendlyFire ? '' : 'sel'}" data-ff="false">
+                <span class="ff-icon">🛡️</span>
+                <span>Desativado</span>
+              </button>
+              <button class="ff-btn ff-on ${profile.friendlyFire ? 'sel' : ''}" data-ff="true">
+                <span class="ff-icon">🔥</span>
+                <span>Ativado</span>
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <!-- 2. ÁREA CENTRAL: LOGO SUPERIOR + GRANDE CARD DE MAPA INFERIOR -->
+        <main class="lobby-center-col">
+          <!-- Hero Logo (Floating directly over background) -->
+          <div class="lobby-logo-container">
+            <img src="./assets/logo.png" alt="BLAST ARENA — GRAB THE FLAG" class="lobby-logo-img" />
+          </div>
+
+          <!-- Big Map Showcase Card -->
+          <div class="big-map-card">
+            <div class="big-map-preview">
+              <div class="big-map-img" style="background-image: url('./assets/maps/foundry.png');"></div>
+              <div class="big-map-procedural-view hidden">
+                <div class="big-qmark-glow">?</div>
+                <div class="procedural-tag">LAYOUT DINÂMICO & ALEATÓRIO</div>
+              </div>
+            </div>
+            <div class="big-map-footer">
+              <div class="big-map-info">
+                <div class="big-map-title">
+                  <span class="big-pin">📍</span>
+                  <span class="big-map-name">Foundry Court</span>
+                </div>
+                <div class="big-map-desc">A floating forge platform. Three lanes, one flag, long falls.</div>
+                <div class="big-map-sub">Equipes - vence quem capturar 3 bandeiras.</div>
+              </div>
+              <div class="big-map-thumbs-col">
+                <div class="map-mini-thumb sel" data-level="foundry" title="Foundry Court" style="background-image: url('./assets/maps/foundry.png');"></div>
+                <div class="map-mini-thumb" data-level="dojo" title="The Dojo" style="background-image: url('./assets/maps/dojo.png');"></div>
+                <div class="map-mini-thumb" data-level="skyhaven" title="Skyhaven" style="background-image: url('./assets/maps/skyhaven.png');"></div>
+                <div class="map-mini-thumb map-mini-procedural" data-level="procedural" title="Procedural">?</div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <!-- 3. PAINEL DE AÇÕES À DIREITA -->
+        <aside class="lobby-right-col">
+          <!-- ENORME BOTÃO PLAY VS BOTS -->
+          <button class="play-btn-huge">
+            <span class="play-arrow">▶</span>
+            <span class="play-text">PLAY VS BOTS</span>
+            <span class="play-chevrons">»</span>
+          </button>
+
+          <!-- JOGAR ONLINE -->
+          <div class="action-card action-card-online">
+            <div class="action-card-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+              <span>JOGAR ONLINE</span>
+            </div>
+            <div class="online-btn-row">
+              <button class="btn-action-blue btn-lobby">
+                <span class="btn-sym">👥</span>
+                <span>VER SALAS ONLINE</span>
+              </button>
+              <button class="btn-action-gold btn-custom-create">
+                <span class="btn-sym">➕</span>
+                <span>CRIAR SALA</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- PHYSICS LAB -->
+          <div class="action-card action-card-lab">
+            <div class="action-card-header lab-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 2v7.31L4.69 18.25A2 2 0 0 0 6.41 21h11.18a2 2 0 0 0 1.72-2.75L14 9.31V2"></path>
+                <line x1="8.5" y1="2" x2="15.5" y2="2"></line>
+              </svg>
+              <span>PHYSICS LAB</span>
+            </div>
+            <div class="lab-btn-row">
+              <button class="lab-btn btn-duel">
+                <span class="lab-sym">🤖</span>
+                <span>live bot</span>
+              </button>
+              <button class="lab-btn btn-doll">
+                <span class="lab-sym">🎯</span>
+                <span>training doll</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- COMO JOGAR -->
+          <button class="btn-how-to-play">
+            <div class="htp-left">
+              <span class="htp-icon">❓</span>
+              <span class="htp-text">Como Jogar / How to play</span>
+            </div>
+            <span class="htp-arrow">›</span>
+          </button>
+
+          <!-- Error Feedback Container -->
+          <div class="menu-err hidden"></div>
+        </aside>
+      </div>
     </div>
   `;
   uiRoot.appendChild(el);
 
+  // ------------------------------------------------------------ Element queries
   const nameInput = el.querySelector('.name-input');
-  const hatRow = el.querySelector('.hat-row');
-  const skinRow = el.querySelector('.skin-row');
-  const modeRow = el.querySelector('.mode-row');
-  const levelRow = el.querySelector('.level-row');
-  const levelName = el.querySelector('.level-name');
-  const levelDesc = el.querySelector('.level-desc');
-  const err = el.querySelector('.menu-err');
+  const modeBtns = el.querySelectorAll('.mode-btn');
+  const arenaCards = el.querySelectorAll('.arena-card');
+  const ffBtns = el.querySelectorAll('.ff-btn');
+  const miniThumbs = el.querySelectorAll('.map-mini-thumb');
 
-  const MODES = [
-    { id: 'ctf', label: '🚩 Capture the Flag', desc: '2v2 · first to 3 captures' },
-    { id: 'deathmatch', label: '💀 Death Match', desc: '2v2 · frag to win' },
-  ];
-  let selectedMode = 'ctf';
-  let selectedLevel = DEFAULT_LEVEL;
+  const bigMapImg = el.querySelector('.big-map-img');
+  const bigMapProceduralView = el.querySelector('.big-map-procedural-view');
+  const bigMapName = el.querySelector('.big-map-name');
+  const bigMapDesc = el.querySelector('.big-map-desc');
+  const bigMapSub = el.querySelector('.big-map-sub');
 
-  modeRow.style.display = 'flex';
-  modeRow.style.gap = '8px';
-  modeRow.style.flexWrap = 'wrap';
-  levelRow.style.display = 'flex';
-  levelRow.style.gap = '8px';
-  levelRow.style.flexWrap = 'wrap';
+  const btnPlayBots = el.querySelector('.play-btn-huge');
+  const btnLobby = el.querySelector('.btn-lobby');
+  const btnCustomCreate = el.querySelector('.btn-custom-create');
+  const btnDuel = el.querySelector('.btn-duel');
+  const btnDoll = el.querySelector('.btn-doll');
+  const btnHowToPlay = el.querySelector('.btn-how-to-play');
 
-  function updateLevelDesc() {
-    const mode = MODES.find((m) => m.id === selectedMode) ?? MODES[0];
-    const lvl = LEVELS[selectedLevel] ?? level;
-    levelName.textContent = `📍 ${lvl.name}`;
-    levelDesc.textContent = `${lvl.description} · ${mode.desc}`;
-  }
+  const btnSettings = el.querySelector('.btn-settings');
+  const btnStats = el.querySelector('.btn-stats');
+  const btnCommunity = el.querySelector('.btn-community');
+  const errBox = el.querySelector('.menu-err');
 
-  function renderModeRow() {
-    modeRow.innerHTML = '';
-    for (const mode of MODES) {
-      const b = document.createElement('button');
-      b.className = `chip ${selectedMode === mode.id ? 'sel' : ''}`;
-      b.textContent = mode.label;
-      b.style.width = 'auto';
-      b.style.height = 'auto';
-      b.style.fontSize = '13px';
-      b.style.padding = '10px 14px';
-      b.style.whiteSpace = 'nowrap';
-      b.addEventListener('click', () => {
-        if (selectedMode === mode.id) return;
-        selectedMode = mode.id;
-        onClickSound?.();
-        renderModeRow();
-        updateLevelDesc();
-      });
-      modeRow.appendChild(b);
+  // ------------------------------------------------------------ Reactive State
+  function syncUI() {
+    const meta = MAP_DATA[selectedLevel] || MAP_DATA.foundry;
+    const mode = MODES.find((m) => m.id === selectedMode) || MODES[0];
+
+    // 1. Left arena cards active class
+    arenaCards.forEach((card) => {
+      card.classList.toggle('sel', card.dataset.level === selectedLevel);
+    });
+
+    // 2. Mini thumbnails active class
+    miniThumbs.forEach((thumb) => {
+      thumb.classList.toggle('sel', thumb.dataset.level === selectedLevel);
+    });
+
+    // 3. Mode buttons active class
+    modeBtns.forEach((btn) => {
+      btn.classList.toggle('sel', btn.dataset.mode === selectedMode);
+    });
+
+    // 4. Update Big Map Card
+    if (selectedLevel === 'procedural') {
+      bigMapImg.classList.add('hidden');
+      bigMapProceduralView.classList.remove('hidden');
+      bigMapName.textContent = 'Procedural';
+      bigMapDesc.textContent = meta.desc;
+    } else {
+      bigMapImg.classList.remove('hidden');
+      bigMapProceduralView.classList.add('hidden');
+      bigMapImg.style.backgroundImage = `url('${meta.img}')`;
+      bigMapName.textContent = meta.name;
+      bigMapDesc.textContent = meta.desc;
     }
+    bigMapSub.textContent = mode.sub;
   }
-  renderModeRow();
 
-  function renderLevelRow() {
-    levelRow.innerHTML = '';
-    for (const lvl of Object.values(LEVELS)) {
-      const b = document.createElement('button');
-      b.className = `chip ${selectedLevel === lvl.id ? 'sel' : ''}`;
-      b.textContent = `📍 ${lvl.name}`;
-      b.style.width = 'auto';
-      b.style.height = 'auto';
-      b.style.fontSize = '13px';
-      b.style.padding = '10px 14px';
-      b.style.whiteSpace = 'nowrap';
-      b.addEventListener('click', () => {
-        if (selectedLevel === lvl.id) return;
-        selectedLevel = lvl.id;
-        onClickSound?.();
-        renderLevelRow();
-        updateLevelDesc();
-      });
-      levelRow.appendChild(b);
-    }
-  }
-  renderLevelRow();
-  updateLevelDesc();
-
-  nameInput.value = profile.name;
+  // ------------------------------------------------------------ Event listeners
+  // Name input
+  nameInput.value = profile.name || 'Player';
   nameInput.addEventListener('input', () => {
     profile.name = nameInput.value.trim() || 'Player';
     profile.save();
   });
 
-  function renderPickers() {
-    hatRow.innerHTML = '';
-    for (const hat of HATS) {
-      const b = document.createElement('button');
-      b.className = `chip ${profile.cos.hat === hat.id ? 'sel' : ''}`;
-      b.textContent = hat.icon;
-      b.title = hat.name;
-      b.addEventListener('click', () => {
-        profile.cos.hat = hat.id;
-        profile.save();
-        onClickSound?.();
-        renderPickers();
-      });
-      hatRow.appendChild(b);
-    }
-    skinRow.innerHTML = '';
-    for (const skin of SKINS) {
-      const b = document.createElement('button');
-      b.className = `chip swatch ${profile.cos.skin === skin ? 'sel' : ''}`;
-      b.style.background = skin;
-      b.addEventListener('click', () => {
-        profile.cos.skin = skin;
-        profile.save();
-        onClickSound?.();
-        renderPickers();
-      });
-      skinRow.appendChild(b);
-    }
-  }
-  renderPickers();
-
-  el.querySelector('.play-btn').addEventListener('click', () => {
-    onClickSound?.();
-    onPlayLocal(selectedMode, selectedLevel);
+  // Mode Selection
+  modeBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.mode;
+      if (selectedMode === mode) return;
+      selectedMode = mode;
+      onClickSound?.();
+      syncUI();
+    });
   });
-  el.querySelector('.btn-duel').addEventListener('click', () => {
+
+  // Arena Grid Selection
+  arenaCards.forEach((card) => {
+    card.addEventListener('click', () => {
+      const lvl = card.dataset.level;
+      if (selectedLevel === lvl) return;
+      selectedLevel = lvl;
+      onClickSound?.();
+      syncUI();
+    });
+  });
+
+  // Mini-thumbnail Selection
+  miniThumbs.forEach((thumb) => {
+    thumb.addEventListener('click', () => {
+      const lvl = thumb.dataset.level;
+      if (selectedLevel === lvl) return;
+      selectedLevel = lvl;
+      onClickSound?.();
+      syncUI();
+    });
+  });
+
+  // Friendly Fire Buttons
+  ffBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const val = btn.dataset.ff === 'true';
+      if ((profile.friendlyFire ?? false) === val) return;
+      profile.friendlyFire = val;
+      profile.save();
+      onClickSound?.();
+      ffBtns.forEach((b) => b.classList.toggle('sel', (b.dataset.ff === 'true') === val));
+    });
+  });
+
+  // Huge Play vs Bots CTA
+  btnPlayBots.addEventListener('click', () => {
+    onClickSound?.();
+    let lvlId = selectedLevel;
+    if (selectedLevel === 'procedural') {
+      lvlId = LEVELS.procedural.seedId;
+      newProceduralSeed();
+    }
+    onPlayLocal(selectedMode, lvlId);
+  });
+
+  // Physics Lab
+  btnDuel.addEventListener('click', () => {
     onClickSound?.();
     onPlayLab('duel');
   });
-  el.querySelector('.btn-doll').addEventListener('click', () => {
+  btnDoll.addEventListener('click', () => {
     onClickSound?.();
     onPlayLab('doll');
   });
-  const onlineBtn = el.querySelector('.online-btn');
-  onlineBtn.addEventListener('click', async () => {
+
+  // Online Multiplayer Modals
+  btnLobby.addEventListener('click', () => openLobbyModal());
+  btnCustomCreate.addEventListener('click', () => openCustomCreateModal());
+
+  // Top Shortcuts
+  btnSettings.addEventListener('click', () => openSettingsModal());
+  btnStats.addEventListener('click', () => openStatsModal());
+  btnCommunity.addEventListener('click', () => openLobbyModal());
+
+  // How to play modal
+  btnHowToPlay.addEventListener('click', () => openHowToPlayModal());
+
+  // Initial Sync
+  syncUI();
+
+  // ------------------------------------------------------------ Modals
+  function openHowToPlayModal() {
     onClickSound?.();
-    err.classList.add('hidden');
-    onlineBtn.disabled = true;
-    onlineBtn.textContent = '⏳ connecting…';
-    try {
-      await onPlayOnline(el.querySelector('.room-input').value.trim() || 'main');
-    } catch (e) {
-      err.textContent = '⚠️ Could not reach the game server. Online play needs the bundled server — run `npm start` and open the game from there.';
-      err.classList.remove('hidden');
-    } finally {
-      onlineBtn.disabled = false;
-      onlineBtn.textContent = '🌐 PLAY ONLINE';
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-title">📖 COMO JOGAR / HOW TO PLAY</div>
+          <button class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="help-cols" style="display:flex; gap:16px;">
+            <div style="flex:1; background:rgba(255,255,255,0.03); padding:14px; border-radius:12px; border:1px solid rgba(140,170,255,0.15);">
+              <div style="font-weight:800; font-size:15px; color:#ffd460; margin-bottom:8px;">⌨️ Teclado & Mouse</div>
+              <div style="font-size:13px; line-height:1.6; color:#bcd0f7;">
+                <b>WASD / Setas:</b> Mover capivara<br>
+                <b>Mouse:</b> Mirar / Direção<br>
+                <b>Botão Esquerdo (LMB):</b> Bater / Socar (ou arremessar objeto/jogador segurado)<br>
+                <b>Botão Direito (RMB) / E:</b> Agarrar adversário ou bandeira (press novamente p/ lançar)<br>
+                <b>Shift:</b> Dash rápido (arrancada com cooldown)<br>
+                <b>Espaço:</b> Pular<br>
+                <div style="margin-top:6px; color:#ffd460;">📦 <i>Bombas: passe por cima das caixas amarelas de itens na arena!</i></div>
+              </div>
+            </div>
+            <div style="flex:1; background:rgba(255,255,255,0.03); padding:14px; border-radius:12px; border:1px solid rgba(140,170,255,0.15);">
+              <div style="font-weight:800; font-size:15px; color:#ffd460; margin-bottom:8px;">📱 Controles Touch</div>
+              <div style="font-size:13px; line-height:1.6; color:#bcd0f7;">
+                <b>Lado Esquerdo:</b> Joystick virtual analógico<br>
+                <b>👊 Botão Soco:</b> Bater / Socar / Lançar<br>
+                <b>✋ Botão Agarrar:</b> Agarrar jogador ou bandeira<br>
+                <b>⚡ Botão Dash:</b> Arrancada rápida<br>
+                <b>⬆️ Botão Pulo:</b> Pular no ar
+              </div>
+            </div>
+          </div>
+          <div style="background:rgba(255,212,96,0.08); border:1px solid rgba(255,212,96,0.3); border-radius:12px; padding:12px 16px; font-size:13px; color:#ffe8a3; line-height:1.5;">
+            🚩 <b>Objetivo Capture the Flag:</b> Pegue a bandeira inimiga e leve para sua base!<br>
+            💀 <b>Objetivo Death Match:</b> Elimine os adversários para pontuar para sua equipe!<br>
+            ⚔️ <b>Todos contra Todos:</b> Cada capivara por si — primeira a 10 frags vence!<br>
+            🛡️ <b>Fogo Amigo:</b> Quando desativado, aliados não se machucam nem se agarram.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-btn modal-btn-primary modal-close-btn">Entendi, Vamos Jogar!</button>
+        </div>
+      </div>
+    `;
+    uiRoot.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.querySelector('.modal-close-btn').addEventListener('click', close);
+  }
+
+  function openSettingsModal() {
+    onClickSound?.();
+    const isMuted = localStorage.getItem('blast.muted') === '1';
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-title">⚙️ CONFIGURAÇÕES & ÁUDIO</div>
+          <button class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.04); padding:14px; border-radius:12px;">
+            <div>
+              <div style="font-weight:700; color:#fff;">Sons e Efeitos Sonoros</div>
+              <div style="font-size:12px; color:#8ea6d8;">Ativar ou silenciar áudio do jogo</div>
+            </div>
+            <button class="modal-btn btn-mute-toggle" style="background:${isMuted ? 'rgba(255,83,71,0.2)' : 'rgba(74,222,128,0.2)'}; color:${isMuted ? '#ff8a6e' : '#4ade80'}; border:1px solid currentColor;">
+              ${isMuted ? '🔇 Silenciado' : '🔊 Áudio Ativado'}
+            </button>
+          </div>
+          <div style="font-size:12px; color:#8ea6d8; line-height:1.5; padding:8px 4px;">
+            💡 <i>Dica:</i> Você pode pressionar <b>M</b> a qualquer momento durante a batalha para alternar o som instantaneamente.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-btn modal-btn-secondary modal-close-btn">Fechar</button>
+        </div>
+      </div>
+    `;
+    uiRoot.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.querySelector('.modal-close-btn').addEventListener('click', close);
+    const toggleBtn = modal.querySelector('.btn-mute-toggle');
+    toggleBtn.addEventListener('click', () => {
+      const nowMuted = localStorage.getItem('blast.muted') === '1';
+      localStorage.setItem('blast.muted', nowMuted ? '0' : '1');
+      const nextMuted = !nowMuted;
+      toggleBtn.style.background = nextMuted ? 'rgba(255,83,71,0.2)' : 'rgba(74,222,128,0.2)';
+      toggleBtn.style.color = nextMuted ? '#ff8a6e' : '#4ade80';
+      toggleBtn.textContent = nextMuted ? '🔇 Silenciado' : '🔊 Áudio Ativado';
+      onClickSound?.();
+    });
+  }
+
+  function openStatsModal() {
+    onClickSound?.();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-title">📊 ESTATÍSTICAS & STATUS</div>
+          <button class="modal-close">✕</button>
+        </div>
+        <div class="modal-body" style="text-align:center; padding:30px;">
+          <div style="font-size:40px; margin-bottom:12px;">🏆</div>
+          <div style="font-weight:800; font-size:18px; color:#ffd460; margin-bottom:6px;">LOBBY COMPETITIVO ATIVO</div>
+          <div style="font-size:13px; color:#bcd0f7; max-width:380px; margin:0 auto; line-height:1.6;">
+            Bem-vindo ao <b>Blast Arena</b>! Jogue partidas locais contra bots de inteligência artificial ou dispute partidas multiplayer em tempo real criando sua própria sala.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-btn modal-btn-primary modal-close-btn">Fechar</button>
+        </div>
+      </div>
+    `;
+    uiRoot.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.querySelector('.modal-close-btn').addEventListener('click', close);
+  }
+
+  async function openLobbyModal() {
+    onClickSound?.();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-title">🌐 SALAS MULTIPLAYER</div>
+          <button class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <!-- Quick Code Join Bar -->
+          <div style="display:flex; gap:8px; background:rgba(255,255,255,0.03); padding:10px 12px; border-radius:10px; border:1px solid rgba(140,170,255,0.2);">
+            <input class="direct-room-input" maxlength="12" placeholder="Código da sala (ex: main)" style="flex:1; background:rgba(0,0,0,0.4); border:1px solid rgba(140,170,255,0.3); border-radius:8px; padding:8px 12px; color:#fff; font-size:14px; outline:none;" />
+            <button class="modal-btn modal-btn-primary btn-direct-join" style="padding:8px 16px; font-size:13px; white-space:nowrap;">Entrar</button>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+            <span style="font-size:13px; color:#8ea6d8;">Salas ativas no servidor:</span>
+            <button class="modal-btn modal-btn-secondary btn-refresh-rooms" style="padding:6px 12px; font-size:12px;">🔄 Atualizar</button>
+          </div>
+          <div class="rooms-list">
+            <div style="text-align:center; padding:30px; color:#7d90b8;">Carregando salas…</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-btn modal-btn-secondary modal-close-btn">Fechar</button>
+          <button class="modal-btn modal-btn-primary btn-lobby-create">➕ Criar Partida</button>
+        </div>
+      </div>
+    `;
+    uiRoot.appendChild(modal);
+
+    const close = () => { modal.remove(); };
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.querySelector('.modal-close-btn').addEventListener('click', close);
+    modal.querySelector('.btn-lobby-create').addEventListener('click', () => {
+      close();
+      openCustomCreateModal();
+    });
+
+    const directInput = modal.querySelector('.direct-room-input');
+    const directJoinBtn = modal.querySelector('.btn-direct-join');
+    directJoinBtn.addEventListener('click', async () => {
+      const code = directInput.value.trim();
+      if (!code) return;
+      close();
+      try {
+        await onPlayOnline(code);
+      } catch (e) {
+        errBox.textContent = '⚠️ Could not reach the game server. Online play needs the server running on port 8090/8095.';
+        errBox.classList.remove('hidden');
+      }
+    });
+
+    const roomsList = modal.querySelector('.rooms-list');
+    const refreshBtn = modal.querySelector('.btn-refresh-rooms');
+
+    async function loadRooms() {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '⏳ Carregando…';
+      try {
+        const list = await listRooms();
+        roomsList.innerHTML = '';
+        if (list.length === 0) {
+          roomsList.innerHTML = `
+            <div style="text-align:center; padding:40px 20px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px dashed rgba(140,170,255,0.2);">
+              <div style="font-size:32px; margin-bottom:8px;">🏜️</div>
+              <div style="font-weight:700; margin-bottom:4px;">Nenhuma sala aberta</div>
+              <div style="font-size:12px; color:#8ea6d8;">Crie uma partida personalizada e convide seus amigos!</div>
+            </div>
+          `;
+          return;
+        }
+
+        for (const r of list) {
+          const card = document.createElement('div');
+          card.className = 'room-card';
+          const modeName = r.modeId === 'ffa' ? '⚔️ Todos contra Todos' : (r.modeId === 'deathmatch' ? '💀 Death Match' : '🚩 Capture the Flag');
+          const lvlObj = LEVELS[r.levelId];
+          const lvlName = lvlObj?.name ?? r.levelId;
+          const teamsDesc = r.modeId === 'ffa'
+            ? `Capacidade: ${r.maxPlayers} players`
+            : `Times: 🔴 ${r.teamLimits?.red ?? 2} vs 🔵 ${r.teamLimits?.blue ?? 2}`;
+
+          card.innerHTML = `
+            <div class="room-card-head">
+              <div class="room-card-title">
+                <span>${r.name}</span>
+                ${r.isPrivate ? '<span class="badge badge-lock">🔒 Senha</span>' : '<span class="badge" style="color:#62e89d; border-color:rgba(98,232,157,0.3)">🔓 Pública</span>'}
+              </div>
+              <span class="room-card-code">${r.code}</span>
+            </div>
+            <div class="room-badges">
+              <span class="badge badge-gold">${modeName}</span>
+              <span class="badge">📍 ${lvlName}</span>
+              <span class="badge">👥 ${r.playersCount}/${r.maxPlayers} Jogadores</span>
+              <span class="badge">${teamsDesc}</span>
+              <span class="badge">⏱️ Respawn ${r.respawnTime}s</span>
+              <span class="badge">${r.friendlyFire ? '🔥 Fogo Amigo ON' : '🛡️ Fogo Amigo OFF'}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+              <div class="team-join-select" style="display:${r.modeId === 'ffa' ? 'none' : 'flex'}; gap:6px;">
+                <label style="font-size:12px; display:flex; align-items:center; gap:3px; cursor:pointer;">
+                  <input type="radio" name="team_${r.code}" value="" checked /> 🎲 Auto
+                </label>
+                <label style="font-size:12px; display:flex; align-items:center; gap:3px; cursor:pointer; color:#ff8a6e;">
+                  <input type="radio" name="team_${r.code}" value="red" /> 🔴 Red
+                </label>
+                <label style="font-size:12px; display:flex; align-items:center; gap:3px; cursor:pointer; color:#7ab6ff;">
+                  <input type="radio" name="team_${r.code}" value="blue" /> 🔵 Blue
+                </label>
+              </div>
+              <button class="modal-btn modal-btn-primary btn-join-room" style="padding:6px 14px; font-size:12px; margin-left:auto;">
+                Entrar na Partida ➔
+              </button>
+            </div>
+          `;
+
+          const joinBtn = card.querySelector('.btn-join-room');
+          joinBtn.addEventListener('click', async () => {
+            let password = undefined;
+            if (r.isPrivate) {
+              password = prompt(`A sala "${r.name}" é protegida por senha. Digite a senha:`);
+              if (password === null) return;
+            }
+            const checkedTeam = card.querySelector(`input[name="team_${r.code}"]:checked`)?.value || undefined;
+            close();
+            try {
+              await onPlayOnline({ room: r.code, password, team: checkedTeam });
+            } catch (err) {
+              errBox.textContent = 'Erro ao conectar na sala: ' + err.message;
+              errBox.classList.remove('hidden');
+            }
+          });
+
+          roomsList.appendChild(card);
+        }
+      } catch (err) {
+        roomsList.innerHTML = `<div style="text-align:center; padding:20px; color:#ff8a6e;">⚠️ Falha ao carregar salas: ${err.message}</div>`;
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '🔄 Atualizar';
+      }
     }
-  });
+
+    refreshBtn.addEventListener('click', loadRooms);
+    loadRooms();
+  }
+
+  function openCustomCreateModal() {
+    onClickSound?.();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+
+    modal.innerHTML = `
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-title">➕ CRIAR PARTIDA PERSONALIZADA</div>
+          <button class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Nome da Sala</span>
+            <input class="custom-name-input" maxlength="24" placeholder="Minha Sala Épica" value="${profile.name}'s Arena" style="width:100%; padding:10px; background:rgba(0,0,0,0.3); border:1px solid rgba(140,170,255,0.3); border-radius:8px; color:#fff;" />
+          </div>
+
+          <div style="display:flex; gap:12px;">
+            <div class="field" style="flex:1;">
+              <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Código da Sala (URL)</span>
+              <input class="custom-code-input" maxlength="12" placeholder="ex: rinha" style="width:100%; padding:10px; background:rgba(0,0,0,0.3); border:1px solid rgba(140,170,255,0.3); border-radius:8px; color:#fff;" />
+            </div>
+            <div class="field" style="flex:1;">
+              <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Senha (Opcional)</span>
+              <input type="password" class="custom-pass-input" maxlength="20" placeholder="Sem senha (pública)" style="width:100%; padding:10px; background:rgba(0,0,0,0.3); border:1px solid rgba(140,170,255,0.3); border-radius:8px; color:#fff;" />
+            </div>
+          </div>
+
+          <div class="field">
+            <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Modo de Jogo</span>
+            <div class="create-mode-chips" style="display:flex; gap:8px; margin-top:6px;">
+              <button class="chip sel chip-create-mode" data-mode="ctf" style="width:auto; height:auto; padding:8px 12px; font-size:12px;">🚩 Capture the Flag</button>
+              <button class="chip chip-create-mode" data-mode="deathmatch" style="width:auto; height:auto; padding:8px 12px; font-size:12px;">💀 Death Match</button>
+              <button class="chip chip-create-mode" data-mode="ffa" style="width:auto; height:auto; padding:8px 12px; font-size:12px;">⚔️ Todos contra Todos</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Mapa / Arena</span>
+            <div class="create-level-chips" style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
+              <button class="chip sel chip-create-level" data-level="foundry" style="width:auto; height:auto; padding:8px 12px; font-size:12px;">📍 Foundry Court</button>
+              <button class="chip chip-create-level" data-level="dojo" style="width:auto; height:auto; padding:8px 12px; font-size:12px;">📍 The Dojo</button>
+              <button class="chip chip-create-level" data-level="skyhaven" style="width:auto; height:auto; padding:8px 12px; font-size:12px;">📍 Skyhaven</button>
+              <button class="chip chip-create-level" data-level="procedural" style="width:auto; height:auto; padding:8px 12px; font-size:12px;">🎲 Procedural</button>
+            </div>
+          </div>
+
+          <!-- Teams Config (1 to 5 per team, asymmetric support) -->
+          <div class="field team-limits-section">
+            <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Jogadores por Equipe (até 5 em cada lado)</span>
+            <div class="teams-config-box" style="margin-top:6px;">
+              <div class="team-stepper-col">
+                <span style="color:#ff8a6e; font-weight:700; font-size:12px;">🔴 Time Vermelho</span>
+                <div class="stepper">
+                  <button class="stepper-btn btn-red-minus">-</button>
+                  <span class="stepper-val val-red">2</span>
+                  <button class="stepper-btn btn-red-plus">+</button>
+                </div>
+              </div>
+              <div class="team-stepper-col">
+                <span style="color:#7ab6ff; font-weight:700; font-size:12px;">🔵 Time Azul</span>
+                <div class="stepper">
+                  <button class="stepper-btn btn-blue-minus">-</button>
+                  <span class="stepper-val val-blue">2</span>
+                  <button class="stepper-btn btn-blue-plus">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="hint-text" style="margin-top:4px;">Suporta equipes assimétricas (ex: 3 vs 1, 5 vs 2).</div>
+          </div>
+
+          <!-- FFA Max Players (2 to 10) -->
+          <div class="field ffa-limits-section" style="display:none;">
+            <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Total de Capivaras no Todos contra Todos</span>
+            <div class="stepper" style="margin-top:6px;">
+              <button class="stepper-btn btn-ffa-minus">-</button>
+              <span class="stepper-val val-ffa">6</span>
+              <button class="stepper-btn btn-ffa-plus">+</button>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:16px;">
+            <div class="field" style="flex:1;">
+              <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Tempo de Respawn</span>
+              <select class="custom-respawn-select" style="width:100%; margin-top:6px; padding:8px; background:rgba(0,0,0,0.3); border:1px solid rgba(140,170,255,0.3); border-radius:8px; color:#fff;">
+                <option value="1">1 segundo (Rápido)</option>
+                <option value="2">2 segundos</option>
+                <option value="3">3 segundos</option>
+                <option value="5" selected>5 segundos (Padrão)</option>
+                <option value="8">8 segundos (Tático)</option>
+              </select>
+            </div>
+            <div class="field" style="flex:1;">
+              <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Fogo Amigo</span>
+              <select class="custom-ff-select" style="width:100%; margin-top:6px; padding:8px; background:rgba(0,0,0,0.3); border:1px solid rgba(140,170,255,0.3); border-radius:8px; color:#fff;">
+                <option value="0" ${profile.friendlyFire ? '' : 'selected'}>Desativado</option>
+                <option value="1" ${profile.friendlyFire ? 'selected' : ''}>Ativado</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-btn modal-btn-secondary modal-close-btn">Cancelar</button>
+          <button class="modal-btn modal-btn-primary btn-submit-create">🚀 CRIAR E JOGAR</button>
+        </div>
+      </div>
+    `;
+
+    uiRoot.appendChild(modal);
+
+    const close = () => modal.remove();
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.querySelector('.modal-close-btn').addEventListener('click', close);
+
+    let cMode = 'ctf';
+    let cLevel = selectedLevel || 'foundry';
+    let redCount = 2;
+    let blueCount = 2;
+    let ffaCount = 6;
+
+    const teamSection = modal.querySelector('.team-limits-section');
+    const ffaSection = modal.querySelector('.ffa-limits-section');
+
+    modal.querySelectorAll('.chip-create-mode').forEach((b) => {
+      b.addEventListener('click', () => {
+        modal.querySelectorAll('.chip-create-mode').forEach((x) => x.classList.remove('sel'));
+        b.classList.add('sel');
+        cMode = b.dataset.mode;
+        if (cMode === 'ffa') {
+          teamSection.style.display = 'none';
+          ffaSection.style.display = 'block';
+        } else {
+          teamSection.style.display = 'block';
+          ffaSection.style.display = 'none';
+        }
+      });
+    });
+
+    modal.querySelectorAll('.chip-create-level').forEach((b) => {
+      b.addEventListener('click', () => {
+        modal.querySelectorAll('.chip-create-level').forEach((x) => x.classList.remove('sel'));
+        b.classList.add('sel');
+        cLevel = b.dataset.level;
+      });
+    });
+
+    const valRed = modal.querySelector('.val-red');
+    const valBlue = modal.querySelector('.val-blue');
+    const valFfa = modal.querySelector('.val-ffa');
+
+    modal.querySelector('.btn-red-minus').addEventListener('click', () => {
+      if (redCount > 1) { redCount--; valRed.textContent = redCount; }
+    });
+    modal.querySelector('.btn-red-plus').addEventListener('click', () => {
+      if (redCount < 5) { redCount++; valRed.textContent = redCount; }
+    });
+    modal.querySelector('.btn-blue-minus').addEventListener('click', () => {
+      if (blueCount > 1) { blueCount--; valBlue.textContent = blueCount; }
+    });
+    modal.querySelector('.btn-blue-plus').addEventListener('click', () => {
+      if (blueCount < 5) { blueCount++; valBlue.textContent = blueCount; }
+    });
+    modal.querySelector('.btn-ffa-minus').addEventListener('click', () => {
+      if (ffaCount > 2) { ffaCount--; valFfa.textContent = ffaCount; }
+    });
+    modal.querySelector('.btn-ffa-plus').addEventListener('click', () => {
+      if (ffaCount < 10) { ffaCount++; valFfa.textContent = ffaCount; }
+    });
+
+    const submitBtn = modal.querySelector('.btn-submit-create');
+    submitBtn.addEventListener('click', async () => {
+      submitBtn.disabled = true;
+      submitBtn.textContent = '⏳ Criando sala…';
+      const name = modal.querySelector('.custom-name-input').value.trim() || `${profile.name}'s Arena`;
+      const code = modal.querySelector('.custom-code-input').value.trim().toLowerCase() || Math.random().toString(36).substring(2, 8);
+      const password = modal.querySelector('.custom-pass-input').value || undefined;
+      const cRespawn = Number(modal.querySelector('.custom-respawn-select').value) || 5;
+      const cFriendlyFire = modal.querySelector('.custom-ff-select').value === '1';
+
+      try {
+        const data = await createRoom({
+          name,
+          code,
+          password,
+          modeId: cMode,
+          levelId: cLevel,
+          redSize: redCount,
+          blueSize: blueCount,
+          ffaSize: ffaCount,
+          respawnTime: cRespawn,
+          friendlyFire: cFriendlyFire,
+        });
+        if (!data.ok) throw new Error(data.error || 'Erro ao criar sala');
+        close();
+        await onPlayOnline({ room: data.code, password, host: true, hostToken: data.hostToken, roomConfig: data.room });
+      } catch (err) {
+        alert('Erro ao criar sala: ' + err.message);
+        submitBtn.disabled = false;
+        submitBtn.textContent = '🚀 CRIAR E JOGAR';
+      }
+    });
+  }
 
   return {
-    show() { el.classList.remove('hidden'); },
-    hide() { el.classList.add('hidden'); },
+    show() {
+      syncUI();
+      el.classList.remove('hidden');
+    },
+    hide() {
+      el.classList.add('hidden');
+    },
   };
 }

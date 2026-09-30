@@ -24,6 +24,7 @@ export function createRenderer(canvas, { touch, theme }) {
   let offsetScale = 1;
   const target = new THREE.Vector3(0, 0, 0);
   const desired = new THREE.Vector3(0, 0, 0);
+  const lead = new THREE.Vector2(0, 0);
 
   // key light with shadows sized to the arena
   const sun = new THREE.DirectionalLight('#fff3e0', 2.0);
@@ -70,18 +71,31 @@ export function createRenderer(canvas, { touch, theme }) {
     },
 
     follow(px, pz, leadX, leadZ, dt, snap = false) {
-      desired.set(px + leadX, 0, pz + leadZ);
-      if (snap) target.copy(desired);
-      else target.lerp(desired, 1 - Math.exp(-6 * dt));
+      if (snap) {
+        lead.set(leadX, leadZ);
+        desired.set(px + leadX, 0, pz + leadZ);
+        target.copy(desired);
+      } else {
+        // Filter the velocity lead smoothly so sudden velocity snaps don't jerk the camera
+        const leadRate = 1 - Math.exp(-5 * dt);
+        lead.x += (leadX - lead.x) * leadRate;
+        lead.y += (leadZ - lead.y) * leadRate;
+        desired.set(px + lead.x, 0, pz + lead.y);
+        target.lerp(desired, 1 - Math.exp(-8 * dt));
+      }
     },
 
     render(shake = 0) {
+      const s = shake > 0.015 ? shake : 0;
+      const ox = s > 0 ? (Math.random() - 0.5) * s : 0;
+      const oy = s > 0 ? (Math.random() - 0.5) * s * 0.6 : 0;
+      const oz = s > 0 ? (Math.random() - 0.5) * s : 0;
       camera.position.set(
-        target.x + baseOffset.x * offsetScale + (Math.random() - 0.5) * shake,
-        target.y + baseOffset.y * offsetScale + (Math.random() - 0.5) * shake * 0.6,
-        target.z + baseOffset.z * offsetScale + (Math.random() - 0.5) * shake,
+        target.x + baseOffset.x * offsetScale + ox,
+        target.y + baseOffset.y * offsetScale + oy,
+        target.z + baseOffset.z * offsetScale + oz,
       );
-      camera.lookAt(target.x, target.y, target.z - 1.5);
+      camera.lookAt(target.x + ox * 0.5, target.y + oy * 0.5, target.z - 1.5 + oz * 0.5);
       renderer.render(scene, camera);
     },
 

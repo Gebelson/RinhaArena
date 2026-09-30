@@ -222,6 +222,17 @@ export class Effects {
     }));
   }
 
+  punchSparks(x, y, z) {
+    this.list.push(burstPoints(this.scene, {
+      x, y: y || 1.15, z, count: 18, color: '#ffe66d', size: 0.22,
+      speed: 4.8, lift: 2.5, life: 0.35, gravity: 5,
+    }));
+    this.list.push(burstPoints(this.scene, {
+      x, y: y || 1.15, z, count: 10, color: '#ff5436', size: 0.18,
+      speed: 3.4, lift: 1.8, life: 0.28, gravity: 4,
+    }));
+  }
+
   sparkle(x, y, z) {
     this.list.push(burstPoints(this.scene, {
       x, y: y + 1.4, z, count: 3, color: '#ffe27a', size: 0.13,

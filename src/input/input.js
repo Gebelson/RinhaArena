@@ -23,6 +23,7 @@ export function createInput({ uiRoot, isTouch }) {
   let grabPulse = 0;
   let punchPulse = 0;
   let jumpPulse = 0;
+  let dashPulse = 0;
 
   const now = () => performance.now() / 1000;
 
@@ -36,6 +37,9 @@ export function createInput({ uiRoot, isTouch }) {
     }
     if (e.code === 'KeyE') grabPulse = now() + PULSE;
     if (e.code === 'KeyF') punchPulse = now() + PULSE;
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+      dashPulse = now() + PULSE;
+    }
   };
   const onKeyUp = (e) => keys.delete(e.code);
   const onMouseMove = (e) => {
@@ -45,8 +49,13 @@ export function createInput({ uiRoot, isTouch }) {
   };
   const onMouseDown = (e) => {
     if (e.target.closest?.('.hud-btn, .menu, .touch')) return;
-    if (e.button === 0) throwPulse = now() + PULSE;
-    if (e.button === 2) punchPulse = now() + PULSE;
+    if (e.button === 0) { // LMB: bater / socar (e arremessar o que estiver segurando)
+      punchPulse = now() + PULSE;
+      throwPulse = now() + PULSE;
+    }
+    if (e.button === 2) { // RMB: agarrar adversário ou bandeira
+      grabPulse = now() + PULSE;
+    }
   };
   const onCtx = (e) => e.preventDefault();
 
@@ -75,10 +84,10 @@ export function createInput({ uiRoot, isTouch }) {
       const m = Math.hypot(mx, mz);
       if (m > 1) { mx /= m; mz /= m; }
 
-      // run value (BombSquad): keys always sprint (hold Shift to walk);
+      // run value: keys always run (Shift is now dash);
       // the touch stick walks on small deflection, runs pushed to the rim
       let run = 0;
-      if (keyboardMove) run = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 0 : 1;
+      if (keyboardMove) run = 1;
       else if (touch?.joy.active) run = clamp((m - 0.5) / 0.4, 0, 1);
 
       // aim: direction + distance. The distance maps to THROW POWER in the
@@ -128,6 +137,7 @@ export function createInput({ uiRoot, isTouch }) {
           grab: t < grabPulse,
           punch: t < punchPulse,
           jump: t < jumpPulse,
+          dash: t < dashPulse,
           aiming,
         },
         aimPoint,

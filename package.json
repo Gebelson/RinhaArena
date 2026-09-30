@@ -6,6 +6,8 @@
   "description": "Bombsquad-inspired browser CTF arena game (Three.js + zero-dependency WebSocket server)",
   "scripts": {
     "start": "node server/server.js",
+    "test": "node test_combat_redesign.js",
+    "test:cloud": "node scripts/test-supabase.mjs",
     "smoke": "node scripts/smoke.js",
     "vendor": "node scripts/vendor.js",
     "tune": "node scripts/tune.js"

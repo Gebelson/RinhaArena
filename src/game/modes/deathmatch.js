@@ -14,7 +14,7 @@ import { clamp, norm2, circlePushOut } from '../../core/math.js';
 
 const getP = (sim, id) => sim.state.players.find((p) => p.id === id);
 
-const ZERO = { mx: 0, mz: 0, ax: 0, az: 0, ad: 7, run: 1, throw: false, grab: false, punch: false, jump: false };
+const ZERO = { mx: 0, mz: 0, ax: 0, az: 0, ad: 7, run: 1, throw: false, grab: false, punch: false, jump: false, dash: false };
 
 // Unlike the Physics Lab (an obstacle-free room), Death Match plays out on
 // the real arena levels — crates, walls, pillars. A pure "walk straight at
@@ -25,7 +25,7 @@ function blockedAhead(level, me, dir, probe) {
   const pz = me.z + dir.z * probe;
   for (const box of level.solids) {
     if (box.h < 0.5) continue;
-    if (circlePushOut(px, pz, 0.55, box)) return true;
+    if (circlePushOut(px, pz, 0.72, box)) return true;
   }
   return false;
 }
@@ -61,7 +61,29 @@ function createDeathMatchBrain(id, rng = Math.random) {
         if (dd < d) { d = dd; target = p; }
       }
       if (!target) return ZERO;
-      const to = norm2(target.x - me.x, target.z - me.z);
+      let to = norm2(target.x - me.x, target.z - me.z);
+
+      // seek nearby powerups / bomb boxes
+      const boxes = sim.state.powerups ?? [];
+      let boxTarget = null;
+      if (!me.heldBomb && boxes.length) {
+        let bestDist = 12;
+        for (const box of boxes) {
+          if (box.kind === 'curse') continue;
+          const bd = Math.hypot(box.x - me.x, box.z - me.z);
+          if (bd < bestDist) {
+            bestDist = bd;
+            boxTarget = box;
+          }
+        }
+      }
+      let steerTo = to;
+      if (boxTarget && (d > 4 || this.bombCool <= 0)) {
+        steerTo = norm2(boxTarget.x - me.x, boxTarget.z - me.z);
+      }
+      if (sim.level.id === 'foundry' && Math.abs(me.x) > 13.5 && Math.abs(me.z) > 1.2) {
+        steerTo = norm2((me.x > 0 ? 12 : -12) - me.x, 0 - me.z);
+      }
 
       // holding a lit bomb: cook it briefly, then hurl it at the target's
       // predicted position — panic-throw the instant the fuse runs short or
@@ -81,18 +103,19 @@ function createDeathMatchBrain(id, rng = Math.random) {
           input.az = Math.cos(a);
           input.ad = Math.hypot(px - me.x, pz - me.z);
           input.throw = true;
+          this.bombCool = 2 + rng() * 3;
         }
         return input;
       }
 
-      // steering: close in at range, circle at punch range
+      // steering: close in aggressively, attack in punch range
       let mx, mz;
-      if (d > 2.4) {
-        mx = to.x; mz = to.z;
+      if (d > 1.3) {
+        mx = steerTo.x; mz = steerTo.z;
       } else {
-        mx = to.x * 0.25 - to.z * this.strafe;
-        mz = to.z * 0.25 + to.x * this.strafe;
-        if (rng() < 0.005) this.strafe *= -1;
+        mx = to.x * 0.7 - to.z * this.strafe * 0.4;
+        mz = to.z * 0.7 + to.x * this.strafe * 0.4;
+        if (rng() < 0.02) this.strafe *= -1;
       }
       // dodge lit bombs (imperfectly, same as match bots)
       for (const b of sim.state.bombs) {
@@ -121,16 +144,21 @@ function createDeathMatchBrain(id, rng = Math.random) {
       dir = norm2(ahead.x - me.x, ahead.z - me.z);
       const input = { ...ZERO, mx: dir.x, mz: dir.z };
 
+      // jump approach
+      if (d < 3.5 && d > 1.8 && rng() < 0.05) {
+        input.jump = true;
+      }
+
       // punch in fist range
-      if (me.punchCd <= 0 && d < 1.6 && !me.carryFlag && !me.heldPlayer && !me.heldBomb) {
+      if (me.punchCd <= 0 && d < 1.75 && !me.carryFlag && !me.heldPlayer && !me.heldBomb) {
         input.ax = to.x; input.az = to.z;
         input.punch = true;
         return input;
       }
-      // pull out a bomb at range (thrown next think once it's in hand)
-      if (this.bombCool <= 0 && d > 3 && d < 12) {
-        input.throw = true;
-        this.bombCool = 1.4 + rng() * 1.6;
+
+      // dash to close in when attacking
+      if (me.dashCd <= 0 && d > 2.0 && d < 9 && rng() < 0.2) {
+        input.dash = true;
       }
       return input;
     },

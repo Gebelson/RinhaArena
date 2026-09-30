@@ -150,15 +150,27 @@ export class World {
           break;
         }
         case 'punchHit': {
-          this.effects.poof(ev.x, ev.z, '#fff3c4');
+          this.effects.punchSparks(ev.x, 1.15, ev.z);
+          if (ev.instaKO) {
+            this.effects.poof(ev.x, ev.z, '#ff473a');
+            this.effects.confetti(ev.x, ev.z, '#ff3b30', '#ffcc00');
+          }
+          if (ev.target) {
+            const victim = this.chars.get(ev.target);
+            if (victim) victim.onPunched?.(ev);
+          }
           if (myPos) {
             const d = Math.hypot(ev.x - myPos.x, ev.z - myPos.z);
-            this.effects.addShake(Math.max(0, 0.3 - d * 0.03));
+            const intensity = ev.instaKO ? 0.75 : 0.35;
+            this.effects.addShake(Math.max(0, intensity - d * 0.03));
           }
           break;
         }
         case 'spawn':
           this.effects.poof(ev.x, ev.z);
+          break;
+        case 'dash':
+          this.effects.poof(ev.x, ev.z, '#ffffff');
           break;
         case 'ko':
           this.effects.poof(ev.x, ev.z, '#ff9d8a');

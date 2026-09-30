@@ -1,144 +1,225 @@
-// Online transport: WebSocket client. The server runs the authoritative
-// sim; we send our input at ~30Hz and render interpolated snapshots ~100ms
-// behind the newest one, which hides network jitter at LAN/regional
-// latencies. (Client-side prediction is the documented next step if
-// long-haul play ever needs it — see ARCHITECTURE.md.)
+// Cloud multiplayer transport. Supabase Realtime relays inputs and snapshots;
+// the room creator runs the authoritative GameHost in their browser.
 
 import { clamp, lerp, angleLerp } from '../core/math.js';
+import { CONFIG } from '../core/config.js';
+import { GameHost } from '../game/host.js';
+import { packState } from './protocol.js';
+import { joinRoom, touchRoom } from './rooms.js';
+import { SupabaseRealtimeChannel } from './supabase.js';
 
-const INTERP_DELAY_TICKS = 6; // sim runs 60Hz, snapshots every 3 ticks
+const INTERP_DELAY_TICKS = 8;
+const SNAPSHOT_INTERVAL = 1 / 15;
+const INPUT_INTERVAL_MS = 50;
 
 function interpPlayers(aList, bList, t) {
   const byIdA = new Map(aList.map((p) => [p.id, p]));
   return bList.map((b) => {
     const a = byIdA.get(b.id);
     if (!a || a.state !== b.state) return { ...b };
-    return {
-      ...b, // discrete fields (hp, carryFlag, state, ...) from the newer snap
-      x: lerp(a.x, b.x, t),
-      z: lerp(a.z, b.z, t),
-      y: lerp(a.y, b.y, t),
-      spd: lerp(a.spd, b.spd, t),
-      face: angleLerp(a.face, b.face, t),
-    };
+    return { ...b, x: lerp(a.x, b.x, t), z: lerp(a.z, b.z, t), y: lerp(a.y, b.y, t), spd: lerp(a.spd, b.spd, t), face: angleLerp(a.face, b.face, t) };
   });
 }
 
 function interpState(a, b, t) {
-  const out = { ...b };
-  out.players = interpPlayers(a.players, b.players, t);
-  const byIdA = new Map(a.bombs.map((x) => [x.id, x]));
-  out.bombs = b.bombs.map((bb) => {
-    const aa = byIdA.get(bb.id);
-    return aa
-      ? { ...bb, x: lerp(aa.x, bb.x, t), z: lerp(aa.z, bb.z, t), y: lerp(aa.y, bb.y, t) }
-      : { ...bb };
+  const out = { ...b, players: interpPlayers(a.players, b.players, t) };
+  const bombA = new Map(a.bombs.map((x) => [x.id, x]));
+  out.bombs = b.bombs.map((next) => {
+    const prev = bombA.get(next.id);
+    return prev ? { ...next, x: lerp(prev.x, next.x, t), z: lerp(prev.z, next.z, t), y: lerp(prev.y, next.y, t) } : { ...next };
   });
   if (a.powerups && b.powerups) {
-    const puA = new Map(a.powerups.map((x) => [x.id, x]));
-    out.powerups = b.powerups.map((u) => {
-      const aa = puA.get(u.id);
-      return aa
-        ? { ...u, x: lerp(aa.x, u.x, t), z: lerp(aa.z, u.z, t), y: lerp(aa.y, u.y, t) }
-        : { ...u };
+    const previous = new Map(a.powerups.map((x) => [x.id, x]));
+    out.powerups = b.powerups.map((next) => {
+      const prev = previous.get(next.id);
+      return prev ? { ...next, x: lerp(prev.x, next.x, t), z: lerp(prev.z, next.z, t), y: lerp(prev.y, next.y, t) } : { ...next };
     });
   }
   if (a.flags && b.flags) {
     out.flags = {};
     for (const team of Object.keys(b.flags)) {
-      const fa = a.flags[team];
-      const fb = b.flags[team];
-      out.flags[team] = fa && fa.st === fb.st
-        ? { ...fb, x: lerp(fa.x, fb.x, t), z: lerp(fa.z, fb.z, t), y: lerp(fa.y, fb.y, t) }
-        : { ...fb };
+      const prev = a.flags[team];
+      const next = b.flags[team];
+      out.flags[team] = prev && prev.st === next.st
+        ? { ...next, x: lerp(prev.x, next.x, t), z: lerp(prev.z, next.z, t), y: lerp(prev.y, next.y, t) }
+        : { ...next };
     }
   }
   return out;
 }
 
-export function connectOnline({ room, profile, onDropped }) {
+function roomOptions(room) {
+  return {
+    levelId: room.levelId,
+    modeId: room.modeId,
+    teamLimits: room.teamLimits,
+    respawnTime: room.respawnTime,
+    friendlyFire: room.friendlyFire,
+    config: {
+      ...CONFIG,
+      player: { ...CONFIG.player, respawnTime: room.respawnTime },
+      rules: { ...CONFIG.rules, friendlyFire: room.friendlyFire },
+    },
+  };
+}
+
+function maxPlayers(room) {
+  return room.modeId === 'ffa' ? room.teamLimits.ffa : room.teamLimits.red + room.teamLimits.blue;
+}
+
+export async function connectOnline({ room, password, team, profile, host: requestedHost = false, hostToken = null, roomConfig = null, onDropped }) {
+  const roomCode = String(room || 'main').trim().toLowerCase();
+  const config = roomConfig ?? await joinRoom(roomCode, password);
+  if (!config?.ok) throw new Error(config?.error || 'Sala não encontrada');
+
+  const clientId = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+  const channel = new SupabaseRealtimeChannel(`arena:${roomCode}`);
+  await channel.connect();
+
   return new Promise((resolve, reject) => {
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/ws?room=${encodeURIComponent(room)}`);
     let settled = false;
+    let closed = false;
+    let myId = null;
+    let hostGame = null;
+    let snapAccumulator = 0;
+    let lastSent = 0;
+    let welcomeTimer = null;
+    let touchTimer = null;
     const snaps = [];
     const eventQ = [];
-    let myId = null;
-    let levelId = null;
-    let lastSent = 0;
-    let latestInput = null;
-    let closed = false;
+    const clientPlayers = new Map();
 
-    const fail = (e) => {
-      if (!settled) { settled = true; reject(e); }
-    };
-    ws.onerror = () => fail(new Error('connection failed'));
-    ws.onclose = () => {
-      if (!settled) return fail(new Error('connection closed'));
-      if (!closed) onDropped?.();
-    };
-
-    ws.onmessage = (msg) => {
-      let m;
-      try { m = JSON.parse(msg.data); } catch { return; }
-      if (m.t === 'welcome') {
-        myId = m.id;
-        levelId = m.levelId;
+    const fail = (error) => {
+      if (!settled) {
         settled = true;
-        resolve(transport);
-      } else if (m.t === 'snap') {
-        snaps.push(m.s);
-        if (snaps.length > 40) snaps.shift();
-        if (m.e?.length) eventQ.push(...m.e);
+        channel.close();
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
     };
+    const sendJoin = () => channel.send('join', { clientId, name: profile.name, cos: profile.cos, team });
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ t: 'join', name: profile.name, cos: profile.cos }));
-    };
+    channel.on('disconnect', () => {
+      if (settled && !closed) onDropped?.();
+      else fail(new Error('Conexão multiplayer interrompida'));
+    });
+    channel.on('host-left', () => {
+      if (!requestedHost && !closed) onDropped?.();
+    });
+    channel.on('welcome', (message) => {
+      if (requestedHost || message?.target !== clientId || settled) return;
+      myId = message.playerId;
+      clearInterval(welcomeTimer);
+      settled = true;
+      resolve(transport);
+    });
+    channel.on('error', (message) => {
+      if (message?.target === clientId) fail(new Error(message.reason || 'Não foi possível entrar na sala'));
+    });
+    channel.on('snap', (message) => {
+      if (requestedHost || !message?.state) return;
+      snaps.push(message.state);
+      if (snaps.length > 40) snaps.shift();
+      if (message.events?.length) eventQ.push(...message.events);
+    });
+    channel.on('join', (message) => {
+      if (!requestedHost || !hostGame || !message?.clientId || message.clientId === clientId) return;
+      const existing = clientPlayers.get(message.clientId);
+      if (existing) {
+        channel.send('welcome', { target: message.clientId, playerId: existing });
+        return;
+      }
+      if (clientPlayers.size >= maxPlayers(config)) {
+        channel.send('error', { target: message.clientId, reason: 'A sala está cheia!' });
+        return;
+      }
+      const playerId = hostGame.addHuman({ name: String(message.name || 'Player').slice(0, 12), team: message.team, cos: message.cos });
+      clientPlayers.set(message.clientId, playerId);
+      channel.send('welcome', { target: message.clientId, playerId });
+      touchRoom(roomCode, hostToken, clientPlayers.size);
+    });
+    channel.on('input', (message) => {
+      if (!requestedHost || !hostGame) return;
+      const playerId = clientPlayers.get(message?.clientId);
+      if (playerId) hostGame.setInput(playerId, message.input ?? {});
+    });
+    channel.on('leave', (message) => {
+      if (!requestedHost || !hostGame) return;
+      const playerId = clientPlayers.get(message?.clientId);
+      if (!playerId) return;
+      clientPlayers.delete(message.clientId);
+      hostGame.replaceWithBot(playerId);
+      touchRoom(roomCode, hostToken, clientPlayers.size);
+    });
 
     const transport = {
-      kind: 'online',
+      kind: 'online-supabase',
       get myId() { return myId; },
-      get levelId() { return levelId; },
-
+      get levelId() { return config.levelId; },
+      get modeId() { return config.modeId; },
       setInput(input) {
-        latestInput = input;
+        if (requestedHost && hostGame) {
+          hostGame.setInput(myId, input);
+          return;
+        }
         const now = performance.now();
-        if (ws.readyState === WebSocket.OPEN && now - lastSent > 33) {
+        if (now - lastSent >= INPUT_INTERVAL_MS) {
           lastSent = now;
-          ws.send(JSON.stringify({ t: 'input', i: latestInput }));
+          channel.send('input', { clientId, input });
         }
       },
-
-      update() {}, // sim runs on the server
-
+      update(dt) {
+        if (!requestedHost || !hostGame) return;
+        hostGame.step(dt);
+        snapAccumulator += dt;
+        if (snapAccumulator >= SNAPSHOT_INTERVAL) {
+          snapAccumulator %= SNAPSHOT_INTERVAL;
+          channel.send('snap', { state: packState(hostGame.sim.state), events: hostGame.drainEvents() });
+        }
+      },
       view() {
+        if (requestedHost) return hostGame?.view() ?? null;
         if (snaps.length === 0) return null;
         if (snaps.length === 1) return snaps[0];
         const latest = snaps[snaps.length - 1];
         const target = latest.tick - INTERP_DELAY_TICKS;
-        for (let i = snaps.length - 1; i > 0; i--) {
+        for (let i = snaps.length - 1; i > 0; i -= 1) {
           if (snaps[i - 1].tick <= target) {
             const a = snaps[i - 1];
             const b = snaps[i];
-            const t = clamp((target - a.tick) / (b.tick - a.tick || 1), 0, 1);
-            return interpState(a, b, t);
+            return interpState(a, b, clamp((target - a.tick) / (b.tick - a.tick || 1), 0, 1));
           }
         }
         return latest;
       },
-
       drainEvents() {
+        if (requestedHost) return hostGame?.drainEvents() ?? [];
         return eventQ.splice(0, eventQ.length);
       },
-
       dispose() {
         closed = true;
-        try { ws.close(); } catch { /* already gone */ }
+        clearInterval(welcomeTimer);
+        clearInterval(touchTimer);
+        if (requestedHost) {
+          channel.send('host-left', { clientId });
+          touchRoom(roomCode, hostToken, 0);
+        } else channel.send('leave', { clientId });
+        channel.close();
       },
     };
 
-    setTimeout(() => fail(new Error('timeout')), 5000);
+    if (requestedHost) {
+      hostGame = new GameHost(roomOptions(config));
+      myId = hostGame.addHuman({ name: profile.name, team, cos: { ...profile.cos } });
+      clientPlayers.set(clientId, myId);
+      hostGame.fillBots();
+      touchRoom(roomCode, hostToken, 1);
+      touchTimer = setInterval(() => touchRoom(roomCode, hostToken, clientPlayers.size), 30_000);
+      settled = true;
+      resolve(transport);
+    } else {
+      sendJoin();
+      welcomeTimer = setInterval(sendJoin, 1000);
+      setTimeout(() => fail(new Error('O criador da sala não está conectado')), 10_000);
+    }
   });
 }

@@ -12,6 +12,8 @@ export function packState(st) {
     timeLeft: r2(st.timeLeft),
     overT: r2(st.overT),
     scores: st.scores,
+    ffaScores: st.ffaScores ?? null,
+    modeId: st.modeId ?? null,
     winner: st.winner,
     lab: st.lab ?? null,
     players: st.players.map((p) => ({
@@ -23,6 +25,7 @@ export function packState(st) {
       carryFlag: p.carryFlag, heldBomb: p.heldBomb,
       heldPlayer: p.heldPlayer, heldBy: p.heldBy,
       throwT: r2(p.throwT), punchT: r2(p.punchT), punchArm: p.punchArm,
+      punchedT: r2(p.punchedT),
       shieldHp: Math.round(p.shieldHp), glovesT: r2(p.glovesT),
       frozenT: r2(p.frozenT), curseT: r2(p.curseT),
       mines: p.mines, bombKind: p.bombKind,

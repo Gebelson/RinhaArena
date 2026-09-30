@@ -3,6 +3,7 @@
 // renderer + world (visuals), input, HUD and sound. Everything a match
 // creates is disposed when you exit, so menu <-> game cycles are clean.
 
+import { CONFIG } from './core/config.js';
 import { LEVELS, DEFAULT_LEVEL } from './content/levels/index.js';
 import { DEFAULT_COS } from './content/cosmetics.js';
 import { createLocalGame } from './net/local.js';
@@ -14,6 +15,7 @@ import { createHud } from './ui/hud.js';
 import { createMenu } from './ui/menu.js';
 import { createLabPanel } from './ui/labPanel.js';
 import { createSfx } from './audio/sfx.js';
+import { createBgm } from './audio/music.js';
 import { makeLabConfig } from './game/modes/sandbox.js';
 
 const isTouch = navigator.maxTouchPoints > 0
@@ -22,6 +24,11 @@ const isTouch = navigator.maxTouchPoints > 0
 const canvas = document.getElementById('game');
 const uiRoot = document.getElementById('ui');
 const sfx = createSfx();
+const bgm = createBgm();
+
+// Unlock audio context on initial user interaction so audio assets load early
+window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
+window.addEventListener('keydown', () => sfx.unlock(), { once: true });
 
 // --- profile (name + cosmetics), persisted locally
 const profile = (() => {
@@ -30,8 +37,9 @@ const profile = (() => {
   return {
     name: data.name || 'Player',
     cos: { ...DEFAULT_COS, ...data.cos },
+    friendlyFire: data.friendlyFire ?? false,
     save() {
-      localStorage.setItem('blast.profile', JSON.stringify({ name: this.name, cos: this.cos }));
+      localStorage.setItem('blast.profile', JSON.stringify({ name: this.name, cos: this.cos, friendlyFire: this.friendlyFire }));
     },
   };
 })();
@@ -40,7 +48,18 @@ let match = null;
 
 const menu = createMenu(uiRoot, profile, {
   onClickSound: () => { sfx.unlock(); sfx.play('click'); },
-  onPlayLocal: (modeId, levelId) => startMatch(createLocalGame({ profile, modeId, levelId })),
+  onPlayLocal: (modeId, levelId) => startMatch(createLocalGame({
+    profile,
+    modeId,
+    levelId,
+    config: {
+      ...CONFIG,
+      rules: {
+        ...CONFIG.rules,
+        friendlyFire: profile.friendlyFire ?? false,
+      },
+    },
+  })),
   onPlayLab: (variant) => startMatch(createLocalGame({
     profile,
     levelId: 'dojo',
@@ -48,16 +67,23 @@ const menu = createMenu(uiRoot, profile, {
     config: makeLabConfig(),
     teamSize: 1,
   })),
-  onPlayOnline: async (room) => {
+  onPlayOnline: async (opts) => {
+    const room = typeof opts === 'string' ? opts : opts?.room || 'main';
+    const password = typeof opts === 'object' ? opts?.password : null;
+    const team = typeof opts === 'object' ? opts?.team : null;
     const transport = await connectOnline({
       room,
+      password,
+      team,
+      host: typeof opts === 'object' && !!opts?.host,
+      hostToken: typeof opts === 'object' ? opts?.hostToken : null,
+      roomConfig: typeof opts === 'object' ? opts?.roomConfig : null,
       profile,
       onDropped: () => match?.exit('Connection lost'),
     });
     startMatch(transport);
   },
 });
-
 function playSfx(events, myId, myPos) {
   const spatial = (ev) => Math.max(0.15, 1 - Math.hypot(ev.x - myPos.x, ev.z - myPos.z) / 30);
   for (const ev of events) {
@@ -66,13 +92,20 @@ function playSfx(events, myId, myPos) {
       case 'throw': sfx.play('throw', spatial(ev) * 0.9); break;
       case 'bounce': sfx.play('bounce', spatial(ev) * 0.7); break;
       case 'punch': sfx.play('punch', spatial(ev)); break;
-      case 'punchHit': sfx.play('punchHit', spatial(ev)); break;
+      case 'punchHit':
+        sfx.play('punchHit', spatial(ev));
+        if (ev.instaKO) sfx.play('playerThrow', spatial(ev) * 0.9);
+        break;
       case 'impact': sfx.play('bounce', spatial(ev)); break;
       case 'knockout': sfx.play('punchHit', spatial(ev) * 0.6); break;
       case 'jump': if (ev.id === myId) sfx.play('jump'); break;
+      case 'dash': sfx.play('dash', spatial(ev)); break;
       case 'grabBomb': case 'bombOut': sfx.play('grab'); break;
       case 'grabPlayer': sfx.play('grabPlayer'); break;
-      case 'playerThrow': sfx.play('playerThrow', spatial(ev)); break;
+      case 'playerThrow':
+        sfx.play('playerThrow', spatial(ev));
+        fx.poof(ev.x, ev.z, '#e2ecfa');
+        break;
       case 'flagSteal': sfx.play('flagTaken'); break;
       case 'flagThrow': sfx.play('throw', spatial(ev)); break;
       case 'flagDrop': sfx.play('flagDrop'); break;
@@ -83,8 +116,17 @@ function playSfx(events, myId, myPos) {
       case 'hurt': if (ev.id === myId) sfx.play('hurt'); break;
       case 'spawn': if (ev.id === myId) sfx.play('spawn'); break;
       case 'tick': sfx.play('tick'); break;
-      case 'go': sfx.play('go'); break;
-      case 'roundOver': sfx.play(ev.winner !== 'draw' ? 'win' : 'lose'); break;
+      case 'go':
+        sfx.play('go');
+        bgm.play({ fade: true });
+        break;
+      case 'newRound':
+        bgm.play({ fade: true });
+        break;
+      case 'roundOver':
+        sfx.play(ev.winner !== 'draw' ? 'win' : 'lose');
+        bgm.duck(3500);
+        break;
       case 'powerup': sfx.play(ev.kind === 'curse' ? 'curse' : 'powerup', spatial(ev)); break;
       case 'wearOff': if (ev.id === myId) sfx.play('wearOff'); break;
       case 'shieldHit': sfx.play('shieldHit', spatial(ev)); break;
@@ -101,6 +143,7 @@ function playSfx(events, myId, myPos) {
 function startMatch(transport) {
   menu.hide();
   sfx.unlock();
+  bgm.play({ fade: true, reset: true });
   canvas.classList.remove('hidden');
 
   const level = LEVELS[transport.levelId ?? DEFAULT_LEVEL];
@@ -108,7 +151,11 @@ function startMatch(transport) {
   const world = new World(renderer.scene, level, { touch: isTouch });
   const hud = createHud(uiRoot, {
     onExit: () => exit(),
-    onMute: () => sfx.toggle(),
+    onMute: () => {
+      const isMuted = sfx.toggle();
+      bgm.setMuted(isMuted);
+      return isMuted;
+    },
     muted: sfx.muted,
   });
   const input = createInput({ uiRoot, isTouch });
@@ -172,6 +219,7 @@ function startMatch(transport) {
   function exit(reason) {
     cancelAnimationFrame(raf);
     window.removeEventListener('keydown', onKey);
+    bgm.pause({ fade: true });
     transport.dispose?.();
     input.dispose();
     labPanel?.dispose();
@@ -186,3 +234,24 @@ function startMatch(transport) {
   match = { exit };
   window.__blast = { transport, input, world, step, renderer }; // dev/debug hook
 }
+
+window.addEventListener('keydown', (e) => {
+  if (!/INPUT|TEXTAREA/.test(e.target?.tagName)) {
+    if (e.code === 'KeyM') {
+      const isMuted = sfx.toggle();
+      bgm.setMuted(isMuted);
+      const muteBtn = document.querySelector('.btn-mute');
+      if (muteBtn) muteBtn.textContent = isMuted ? '🔇' : '🔊';
+    } else if (e.code === 'KeyC' && window.toggleCapivara) {
+      window.toggleCapivara();
+    } else if (e.code === 'KeyV' && window.rotateCapivara) {
+      window.rotateCapivara();
+    } else if (e.code === 'KeyB' && window.toggleCapivaraRing) {
+      window.toggleCapivaraRing();
+    } else if ((e.code === 'BracketRight' || e.code === 'Equal') && window.setCapivaraScale) {
+      window.setCapivaraScale((window.capivaraHeight || 2.2) + 0.2);
+    } else if ((e.code === 'BracketLeft' || e.code === 'Minus') && window.setCapivaraScale) {
+      window.setCapivaraScale(Math.max(0.6, (window.capivaraHeight || 2.2) - 0.2));
+    }
+  }
+});

@@ -88,6 +88,13 @@ export function integrateBody(level, world, body, mat, dt, opts = {}) {
     // vertical: gravity while airborne, rising (fresh bounce/launch), or
     // off the platform
     const onFloor = overFloor(level, body.x, body.z);
+    if (onFloor && body.y < restY) {
+      body.y = restY;
+      if (body.vy < 0) {
+        out.floorImpact = Math.max(out.floorImpact, -body.vy);
+        body.vy = 0;
+      }
+    }
     if (body.y > restY || body.vy > 0 || !onFloor) {
       body.vy += world.gravity * h;
       body.y += body.vy * h;
@@ -113,6 +120,11 @@ export function integrateBody(level, world, body, mat, dt, opts = {}) {
         }
       }
     }
+  }
+
+  if (overFloor(level, body.x, body.z) && body.y < restY) {
+    body.y = restY;
+    if (body.vy < 0) body.vy = 0;
   }
 
   // resting ground friction: constant deceleration μ·g (Coulomb, N = m·g)
@@ -202,6 +214,7 @@ export function blastKick(body, cx, cz, radius, dvXZ, dvY) {
   const d = Math.hypot(dx, dz);
   if (d >= radius) return 0;
   const t = 1 - d / radius;
+  const push = 0.45 + 0.55 * t;
   let nx, nz;
   if (d < 0.01) {
     const a = Math.random() * Math.PI * 2;
@@ -209,11 +222,11 @@ export function blastKick(body, cx, cz, radius, dvXZ, dvY) {
   } else {
     nx = dx / d; nz = dz / d;
   }
-  body.vx += nx * dvXZ * t;
-  body.vz += nz * dvXZ * t;
-  body.vy = Math.max(body.vy, 0) + dvY * t;
+  body.vx += nx * dvXZ * push;
+  body.vz += nz * dvXZ * push;
+  body.vy = Math.max(body.vy, 0) + dvY * (0.35 + 0.65 * t);
   body.y = Math.max(body.y, 0.02);
-  return Math.hypot(dvXZ * t, dvY * t);
+  return Math.hypot(dvXZ * push, dvY * push);
 }
 
 // -------------------------------------------------------------- constraints
