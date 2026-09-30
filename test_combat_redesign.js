@@ -835,6 +835,63 @@ console.log('\n--- TEST 16: Goofy yeet scream sound asset & playerThrow emission
   assert(err === null, 'sfx.play(playerThrow) executes safely without crashing');
 }
 
+// ============================================================================
+// TEST 17: Void falling physics and elimination
+// ============================================================================
+{
+  console.log('\n--- TEST 17: Void falling physics and elimination ---');
+
+  const sim = createSim({
+    level: LEVELS.skyhaven,
+    mode: CtfMode,
+    config: { ...CONFIG, player: { ...CONFIG.player, respawnTime: 2.0 } },
+  });
+  sim.state.phase = 'play';
+
+  const p1 = addPlayer(sim, { name: 'Faller', team: 'red' });
+  const player = sim.state.players.find(p => p.id === p1);
+
+  // Position player just past the eastern edge of Skyhaven (bounds: w:46, d:46 -> hw:23)
+  player.x = 24.5;
+  player.z = 0;
+  player.y = 0;
+  player.vx = 2.0;
+  player.vy = 0;
+
+  // 17.1: Over void, onGround must be false and jumping should be disabled
+  const jumpInput = new Map();
+  jumpInput.set(p1, { mx: 1, mz: 0, ax: 0, az: 0, ad: 7, run: 1, throw: false, grab: false, punch: false, jump: true, dash: false });
+  step(sim, jumpInput, 1 / 60);
+
+  assert(player.y < 0, `Player fell below floor level (y=${player.y.toFixed(3)} < 0)`);
+  assert(player.vy < 0, `Player has downward fall velocity (vy=${player.vy.toFixed(2)} < 0)`);
+
+  // 17.2: Simulate consecutive fall ticks
+  let koTriggered = false;
+  let koEvent = null;
+  for (let t = 0; t < 60; t++) {
+    step(sim, jumpInput, 1 / 60);
+    const ev = sim.events.find(e => e.t === 'ko' && e.id === p1 && e.cause === 'fall');
+    if (ev && !koTriggered) {
+      koTriggered = true;
+      koEvent = ev;
+    }
+  }
+
+  assert(koTriggered, 'Player was knocked out by void fall');
+  assert(koEvent?.cause === 'fall', 'KO event has cause: "fall"');
+  assert(player.state === 'ko', 'Player state changed to "ko" upon falling below fallY');
+  assert(player.y < CONFIG.world.fallY, `Player altitude reached void threshold (y=${player.y.toFixed(2)} < ${CONFIG.world.fallY})`);
+
+  // 17.3: Respawn returns player to arena surface
+  for (let t = 0; t < 120; t++) {
+    step(sim, new Map(), 1 / 60);
+  }
+  assert(player.state === 'alive', 'Player successfully respawned after void fall');
+  assert(player.y === 0, `Player respawned on arena floor at y=0 (y=${player.y})`);
+  assert(Math.abs(player.x) <= sim.level.bounds.w / 2, 'Player respawned inside arena boundaries');
+}
+
 console.log(`\n========================================`);
 console.log(`TEST RESULTS: ${passed} PASSED, ${failed} FAILED`);
 console.log(`========================================`);

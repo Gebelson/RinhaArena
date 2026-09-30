@@ -173,7 +173,7 @@ export class World {
           this.effects.poof(ev.x, ev.z, '#ffffff');
           break;
         case 'ko':
-          this.effects.poof(ev.x, ev.z, '#ff9d8a');
+          if (ev.cause !== 'fall') this.effects.poof(ev.x, ev.z, '#ff9d8a');
           break;
         case 'powerupSpawn':
           this.effects.poof(ev.x, ev.z, '#ffe9a8');

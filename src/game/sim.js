@@ -255,7 +255,8 @@ function updatePlayer(sim, p, i, dt, paused) {
     }
   }
 
-  const onGround = p.y <= 0.001;
+  const onFloor = overFloor(sim.level, p.x, p.z);
+  const onGround = onFloor && p.y >= -0.05 && p.y <= 0.05;
   // knockout wears off at full rate on the ground, half rate airborne
   // (BombSquad decrements every 5 steps grounded, 10 airborne)
   p.knockT = Math.max(0, p.knockT - dt * (onGround ? 1 : 0.5));
@@ -288,7 +289,7 @@ function updatePlayer(sim, p, i, dt, paused) {
   const gear = Math.min(1, p.gearSpd / cfg.gearSpeed);
 
   const mutualGrapple = p.heldBy && p.heldPlayer === p.heldBy;
-  let ctrl = onGround ? 1 : cfg.airControl;
+  let ctrl = onGround ? 1 : (onFloor ? cfg.airControl : 0);
   if (p.heldBy && !mutualGrapple) ctrl = 0; // hoisted overhead: a passenger
   if (p.knockT > 0 || p.frozenT > 0 || paused) ctrl = 0; // out cold / frozen solid / round paused
 

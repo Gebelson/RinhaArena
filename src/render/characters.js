@@ -551,6 +551,7 @@ export class CharacterView {
       );
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = 0.03;
+      this.groundRing = ring;
       this.group.add(ring);
     }
 
@@ -605,8 +606,15 @@ export class CharacterView {
     }
 
     const g = this.group;
-    g.position.set(p.x, Math.max(0, p.y), p.z);
+    g.position.set(p.x, p.y, p.z);
     this.rig.rotation.y = p.face;
+
+    if (this.groundRing) {
+      this.groundRing.visible = p.y >= -0.15 && p.state === 'alive';
+    }
+    if (this.name) {
+      this.name.visible = p.state !== 'ko' && p.y >= -6;
+    }
 
     const ko = p.state === 'ko';
     // knocked out cold (alive, unconscious): tumbles mid-air, lies flat on
@@ -635,24 +643,25 @@ export class CharacterView {
     for (const e of this.eyes) e.visible = !ko;
     for (const pu of this.pupils) pu.visible = !ko;
 
-    if ((ko || knocked) && p.y > 0.05) {
+    if ((ko || knocked) && (p.y > 0.05 || p.y < -0.05)) {
       this.pose.rotation.x -= 8 * dt; // tumbling through the air
-      // Anti-floor-clipping during mid-air tumble:
-      // When altitude is lower than downreach, lift pose so rotating mesh never penetrates floor
-      const rx = this.pose.rotation.x;
-      const cosX = Math.cos(rx);
-      const sinX = Math.sin(rx);
-      const H = 2.35, D = 1.95;
-      const minLocalY = (cosX < 0 ? H * cosX : 0) - Math.abs(sinX) * (D / 2);
-      const downReach = -minLocalY;
-      const safePy = Math.max(0, p.y);
-      if (safePy + (this.pose.position.y || 0) - downReach < 0.04) {
-        this.pose.position.y = downReach - safePy + 0.04;
+      // Anti-floor-clipping during mid-air tumble: ONLY when on or above the floor!
+      if (p.y >= -0.05) {
+        const rx = this.pose.rotation.x;
+        const cosX = Math.cos(rx);
+        const sinX = Math.sin(rx);
+        const H = 2.35, D = 1.95;
+        const minLocalY = (cosX < 0 ? H * cosX : 0) - Math.abs(sinX) * (D / 2);
+        const downReach = -minLocalY;
+        const floorY = Math.max(0, p.y);
+        if (floorY + (this.pose.position.y || 0) - downReach < 0.04) {
+          this.pose.position.y = downReach - floorY + 0.04;
+        }
       }
     } else {
       const run = knocked ? 0 : clamp(p.spd / 6.8, 0, 1.2);
       this.phase += dt * (3.6 + p.spd * 1.9);
-      const airborne = p.y > 0.05;
+      const airborne = p.y > 0.05 || p.y < -0.05;
       const sw = Math.sin(this.phase) * 0.95 * run;
       // legs tuck mid-jump instead of cycling
       this.legL.rotation.x = airborne ? 0.55 : sw;
@@ -735,8 +744,8 @@ export class CharacterView {
       this.pose.position.x = struggleJitterX * this.grabLie;
       this.pose.position.z = struggleJitterZ * this.grabLie;
 
-      // Absolute floor penetration guard for any pitch, roll or flinch orientation:
-      if (this.capivara?.visible) {
+      // Absolute floor penetration guard for any pitch, roll or flinch orientation (ONLY when on or above the floor):
+      if (this.capivara?.visible && p.y >= -0.05) {
         const rx = this.pose.rotation.x;
         const rz = this.pose.rotation.z;
         const cosX = Math.cos(rx);
@@ -745,10 +754,10 @@ export class CharacterView {
         const H = 2.35, D = 1.95, W = 1.35;
         const minLocalY = (cosX < 0 ? H * cosX : 0) - Math.abs(sinX) * (D / 2) - Math.abs(sinZ) * (W / 2);
         const downReach = -minLocalY;
-        const safePy = Math.max(0, p.y);
+        const floorY = Math.max(0, p.y);
         const minAllowed = 0.04;
-        if (safePy + this.pose.position.y - downReach < minAllowed) {
-          this.pose.position.y = downReach - safePy + minAllowed;
+        if (floorY + this.pose.position.y - downReach < minAllowed) {
+          this.pose.position.y = downReach - floorY + minAllowed;
         }
       }
     }
@@ -761,7 +770,7 @@ export class CharacterView {
 
       if (b && r) {
         const breathe = Math.sin(this.time * 2.5);
-        const airborne = p.y > 0.05 && !isHeld;
+        const airborne = (p.y > 0.05 || p.y < -0.05) && !isHeld;
         const holding = p.carryFlag || p.heldBomb || p.heldPlayer;
         const punching = (p.punchT ?? 0) > 0;
         const throwing = (p.throwT ?? 0) > 0;
@@ -1302,8 +1311,13 @@ export class CharacterView {
       this.curse.scale.set(s, s, s);
     }
 
-    // spawn-protection flicker
-    g.visible = p.invuln > 0.05 ? Math.floor(this.time * 12) % 2 === 0 : true;
+    // Deep void cull + spawn-protection flicker
+    const isFallenDeep = p.y < -12 || (ko && p.y < -8);
+    if (isFallenDeep) {
+      g.visible = false;
+    } else {
+      g.visible = p.invuln > 0.05 ? Math.floor(this.time * 12) % 2 === 0 : true;
+    }
   }
 
   dispose() {

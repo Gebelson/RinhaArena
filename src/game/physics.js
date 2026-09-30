@@ -29,7 +29,7 @@ const combineE = (a, b) => Math.max(a.restitution, b.restitution);
 
 // ------------------------------------------------------------- integration
 
-const overFloor = (level, x, z) =>
+export const overFloor = (level, x, z) =>
   Math.abs(x) <= level.bounds.w / 2 && Math.abs(z) <= level.bounds.d / 2;
 
 // One fixed step for a free body: gravity, solid collisions (impulse +
@@ -59,7 +59,7 @@ export function integrateBody(level, world, body, mat, dt, opts = {}) {
 
     // walls / crates / rails: impulse with restitution + tangential friction
     for (const box of level.solids) {
-      if (body.y - restY > box.h - 0.05) continue; // flies over
+      if (body.y - restY > box.h - 0.05 || body.y - restY < -0.6) continue; // flies over or dropped below floor
       const push = circlePushOut(body.x, body.z, mat.radius, box);
       if (!push) continue;
       body.x += push.x;
