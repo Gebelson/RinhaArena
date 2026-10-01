@@ -66,7 +66,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   };
 
   const MODES = [
-    { id: 'ctf', label: '🚩 Capture the Flag', sub: 'Equipes - vence quem capturar 3 bandeiras.' },
+    { id: 'ctf', label: '🚩 Capture the Flag', sub: 'Equipes - vence quem capturar 5 bandeiras.' },
     { id: 'deathmatch', label: '💀 Death Match', sub: 'Equipes - eliminações vencem a partida.' },
     { id: 'ffa', label: '⚔️ Todos contra Todos', sub: 'Cada um por si - 10 eliminações para vencer.' },
   ];
@@ -308,7 +308,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
                   <span class="big-map-name">Foundry Court</span>
                 </div>
                 <div class="big-map-desc">A floating forge platform. Three lanes, one flag, long falls.</div>
-                <div class="big-map-sub">Equipes - vence quem capturar 3 bandeiras.</div>
+                <div class="big-map-sub">Equipes - vence quem capturar 5 bandeiras.</div>
               </div>
               <div class="big-map-thumbs-col">
                 <div class="map-mini-thumb sel" data-level="foundry" title="Foundry Court" style="background-image: url('./assets/maps/mini_foundry.png');"></div>

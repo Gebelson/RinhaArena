@@ -177,6 +177,7 @@ function startMatch(transport) {
   window.addEventListener('keydown', onKey);
 
   let raf = 0;
+  let roundExitTimer = 0;
   let last = performance.now();
   let firstFrame = true;
 
@@ -225,6 +226,8 @@ function startMatch(transport) {
       submitPlayerRanking(profile).catch((error) => console.warn('[rank] sync failed:', error.message));
       const { rank } = getRankProgress(profile.rankXp);
       console.info(`[rank] ${gainedPoints >= 0 ? '+' : ''}${gainedPoints} PTS · ${rank.name}`);
+      clearTimeout(roundExitTimer);
+      roundExitTimer = window.setTimeout(exit, Math.max(0, CONFIG.rules.overTime * 1000 - 150));
     }
     world.handleEvents(events, myPos);
     hud.pushEvents(events, view, myId);
@@ -242,6 +245,7 @@ function startMatch(transport) {
 
   function exit(reason) {
     cancelAnimationFrame(raf);
+    clearTimeout(roundExitTimer);
     window.removeEventListener('keydown', onKey);
     bgm.pause({ fade: true });
     transport.dispose?.();

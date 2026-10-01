@@ -207,7 +207,7 @@ export const CONFIG = {
 
   rules: {
     roundTime: 180,
-    captureLimit: 3, // BombSquad Score to Win default 3
+    captureLimit: 5,
     killsToWin: 5, // Death Match: kill threshold per player (× largest team size)
     countdown: 3,
     overTime: 7, // victory screen duration before auto-rematch
