@@ -949,7 +949,13 @@ html, body {
 .map-selector-copy strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 2vw; line-height: 1.05; text-transform: uppercase; text-shadow: 0 .22vh 0 #04102d, 0 .3vh .35vh #000b; }
 .map-selector-copy small { margin-top: .55vh; color: #22efff; font-size: 1.2vw; font-weight: 900; text-shadow: 0 .16vh .2vh #001534; }
 .map-selector-copy small b { display: inline-grid; place-items: center; width: 1.65vw; aspect-ratio: 1; margin-right: .2vw; border-radius: 50%; color: #07152f; font-size: 1.05vw; background: linear-gradient(#7ff8ff,#20c9ff); box-shadow: 0 .15vh .25vh #0008; }
-.map-chevron { width: 3.2vw; aspect-ratio: 1; display: grid; place-items: center; flex: 0 0 auto; border-radius: .75vw; color: white; font-size: 3.5vw; font-weight: 900; line-height: .75; background: linear-gradient(145deg,#286fe4,#09296e); border: .12vw solid #55bfff; box-shadow: 0 .25vh .4vh #0009, inset 0 .16vh .15vh #fff5; text-shadow: 0 .18vh .2vh #0009; }
+.map-chevron { width: 2.6vw; height: 5.2vh; position: relative; flex: 0 0 auto; overflow: visible; color: transparent; font-size: 0; background: transparent; border: 0; box-shadow: none; }
+.map-chevron::before {
+  content: ''; position: absolute; left: 44%; top: 50%; width: 1.05vw; height: 1.05vw;
+  border-right: .42vw solid #fff; border-bottom: .42vw solid #fff; border-radius: .16vw;
+  transform: translate(-62%, -50%) rotate(-45deg);
+  filter: drop-shadow(.18vw .22vw .08vw #123d9d) drop-shadow(0 0 .12vw #87c8ff);
+}
 .map-selector:hover { box-shadow: 0 .55vh 0 #02091d, 0 0 1.15vw rgba(35,177,255,.75), inset 0 .22vh 0 #8be1ff, inset 0 -.28vh 0 #02091f; }
 .quick-config { position: absolute; z-index: 20; top: 15%; right: 3%; width: min(460px, 34vw); max-height: 78%; overflow: auto; padding: 18px; border-radius: 22px; color: white; background: rgba(4,12,34,.97); border: 2px solid #2869df; box-shadow: 0 20px 60px #000c, inset 0 1px #fff3; }
 .quick-config-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; color: #ffcf32; font-size: 22px; }
