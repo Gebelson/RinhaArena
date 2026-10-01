@@ -850,7 +850,12 @@ html, body {
 
 
 /* ---------------- HOME LOBBY — 1920 × 1080 reference composition ---------------- */
-.home-lobby { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.home-lobby {
+  --bottom-button-height: 14.1vh;
+  --left-button-width: calc(var(--bottom-button-height) * 3.142);
+  --right-button-width: calc(var(--bottom-button-height) * 2.958);
+  position: relative; width: 100%; height: 100%; overflow: hidden;
+}
 .legacy-menu-template { display: none !important; }
 .home-lobby button { font: inherit; }
 .player-card {
@@ -886,15 +891,15 @@ html, body {
 .image-icon-btn.muted { opacity: .48; filter: grayscale(.8); }
 .art-button { position: absolute; border: 0; border-radius: 0; outline: 0; padding: 0; background: transparent; box-shadow: none; cursor: pointer; overflow: visible; transition: transform .12s, filter .12s; }
 .art-button img { position: absolute; left: 50%; width: auto; max-width: none; transform: translateX(-50%); }
-.shop-button { left: 2.5%; top: 50.5%; width: auto; height: 30.5%; aspect-ratio: 1.568; }
-.ranking-button { right: 2.1%; top: 52.3%; width: auto; height: 28.5%; aspect-ratio: 1.715; }
-.missions-button { left: 2.25%; bottom: 3.05%; width: auto; height: 14.1%; aspect-ratio: 3.142; }
-.play-button { right: 2.05%; bottom: 3.05%; width: auto; height: 14.1%; aspect-ratio: 2.958; }
+.shop-button { left: 2.25%; bottom: calc(3.05% + var(--bottom-button-height) + 2.2vh); width: var(--left-button-width); height: auto; aspect-ratio: 1.568; }
+.ranking-button { right: 2.05%; bottom: calc(3.05% + var(--bottom-button-height) + 2.2vh); width: var(--right-button-width); height: auto; aspect-ratio: 1.715; }
+.missions-button { left: 2.25%; bottom: 3.05%; width: var(--left-button-width); height: var(--bottom-button-height); aspect-ratio: 3.142; }
+.play-button { right: 2.05%; bottom: 3.05%; width: var(--right-button-width); height: var(--bottom-button-height); aspect-ratio: 2.958; }
 .shop-button img { height: 115.1%; top: -10.4%; }
 .ranking-button img { height: 134.9%; top: -16.6%; }
 .missions-button img { height: 240.8%; top: -77.6%; }
 .play-button img { height: 225.8%; top: -63.6%; }
-.map-selector { position: absolute; left: 31.1%; bottom: 3.05%; width: 37.8%; height: 14.1%; display: flex; align-items: center; gap: 1.1vw; padding: .9vh 1.4vw .9vh .85vw; border: .2vw solid #10182f; border-radius: 1.3vw; color: white; background: linear-gradient(140deg,#071127ee,#06142eee); box-shadow: 0 .5vh 1.2vh #000a, inset 0 .15vh .2vh #fff2; cursor: pointer; transition: transform .12s, filter .12s; text-align: left; }
+.map-selector { position: absolute; left: 31.1%; bottom: 3.05%; width: 37.8%; height: var(--bottom-button-height); display: flex; align-items: center; gap: 1.1vw; padding: .9vh 1.4vw .9vh .85vw; border: .2vw solid #10182f; border-radius: 1.3vw; color: white; background: linear-gradient(140deg,#071127ee,#06142eee); box-shadow: 0 .5vh 1.2vh #000a, inset 0 .15vh .2vh #fff2; cursor: pointer; transition: transform .12s, filter .12s; text-align: left; }
 .map-selector-thumb { width: 12.2vw; height: 10.8vh; border-radius: .9vw; object-fit: cover; border: .14vw solid #438fff; }
 .map-selector-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; }
 .map-selector-copy strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 2vw; line-height: 1.05; text-transform: uppercase; }
