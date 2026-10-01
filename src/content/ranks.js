@@ -1,11 +1,11 @@
 export const RANKS = [
-  ['Novato I', 0], ['Novato II', 100], ['Novato III', 250],
-  ['Valente I', 450], ['Valente II', 700], ['Valente III', 1000],
-  ['Brutal I', 1350], ['Brutal II', 1750], ['Brutal III', 2200],
-  ['Temido I', 2700], ['Temido II', 3250], ['Temido III', 3850],
-  ['Implacável I', 4500], ['Implacável II', 5200], ['Implacável III', 5950],
-  ['Lendário I', 6750], ['Lendário II', 7600], ['Lendário III', 8500],
-].map(([name, xp], index) => ({ name, xp, index, row: Math.floor(index / 3), column: index % 3 }));
+  ['Novato I', 0, 'novato-1.png'], ['Novato II', 100, 'novato-2.png'], ['Novato III', 250, 'novato-3.png'],
+  ['Valente I', 450, 'valente-1.png'], ['Valente II', 700, 'valente-2.png'], ['Valente III', 1000, 'valente-3.png'],
+  ['Brutal I', 1350, 'brutal-1.png'], ['Brutal II', 1750, 'brutal-2.png'], ['Brutal III', 2200, 'brutal-3.png'],
+  ['Temido I', 2700, 'temido-1.png'], ['Temido II', 3250, 'temido-2.png'], ['Temido III', 3850, 'temido-3.png'],
+  ['Implacável I', 4500, 'implacavel-1.png'], ['Implacável II', 5200, 'implacavel-2.png'], ['Implacável III', 5950, 'implacavel-3.png'],
+  ['Lendário I', 6750, 'lendario-1.png'], ['Lendário II', 7600, 'lendario-2.png'], ['Lendário III', 8500, 'lendario-3.png'],
+].map(([name, xp, asset], index) => ({ name, xp, asset, index }));
 
 export function getRankProgress(xp = 0) {
   const safeXp = Math.max(0, Number(xp) || 0);
@@ -21,5 +21,5 @@ export function getRankProgress(xp = 0) {
 }
 
 export function rankSpriteStyle(rank) {
-  return `--rank-column:${rank.column};--rank-row:${rank.row}`;
+  return `--rank-image:url('./assets/ui/ranks/${rank.asset}')`;
 }

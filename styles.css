@@ -876,7 +876,7 @@ html, body {
 .rank-divider { width: .12vw; height: 70%; background: #696cff; opacity: .8; }
 .rank-badge-wrap { width: 7.5vw; height: 100%; flex: 0 0 auto; display: grid; place-items: center; align-self: center; }
 .rank-shield { width: 7.4vw; height: 12.6vh; flex: 0 0 auto; background-color: transparent; transform: translateY(-.65vh); filter: drop-shadow(0 .25vw .18vw #02072a); }
-.rank-sprite { background-image: url('./assets/ui/ranks.png'); background-size: 300% 600%; background-position: calc(var(--rank-column) * 50%) calc(var(--rank-row) * 20%); background-repeat: no-repeat; image-rendering: auto; }
+.rank-sprite { background-image: var(--rank-image); background-size: contain; background-position: center; background-repeat: no-repeat; image-rendering: auto; }
 .rank-shield span { width: 55%; aspect-ratio: 1; display: grid; place-items: center; clip-path: polygon(50% 0,100% 35%,82% 100%,18% 100%,0 35%); background: #6d70ff; }
 .top-actions { position: absolute; right: 2.8%; top: 4.6%; height: 8.8%; display: flex; gap: .8vw; align-items: stretch; }
 .coin-card { width: 15.5vw; display: flex; align-items: center; gap: 1vw; padding: .35vw .45vw; border-radius: 1.25vw; background: #061334; border: .12vw solid #124686; box-shadow: 0 .6vh 1.3vh #0009; }
