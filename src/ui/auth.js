@@ -2,7 +2,7 @@ import { requestPasswordReset, restoreSession, signIn, signUp } from '../net/acc
 
 export function openAuthGate(uiRoot, { onAuthenticated }) {
   const overlay = document.createElement('div');
-  overlay.className = 'auth-overlay';
+  overlay.className = 'auth-overlay auth-checking';
   overlay.innerHTML = `
     <section class="auth-window" aria-label="Login Rinha Arena">
       <div class="auth-art" aria-hidden="true">
@@ -101,7 +101,11 @@ export function openAuthGate(uiRoot, { onAuthenticated }) {
   restoreSession().then((account) => {
     if (account) return finish(account);
     setBusy(false);
-  }).catch(() => setBusy(false));
+    overlay.classList.remove('auth-checking');
+  }).catch(() => {
+    setBusy(false);
+    overlay.classList.remove('auth-checking');
+  });
 
   return overlay;
 }

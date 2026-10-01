@@ -1967,6 +1967,7 @@ body[data-graphics="low"] .lobby-bg-video { filter: brightness(var(--game-bright
   transition: opacity .24s ease;
 }
 .auth-overlay.auth-done { opacity: 0; pointer-events: none; }
+.auth-overlay.auth-checking { opacity: 0; pointer-events: none; }
 .auth-window {
   width: min(940px, 92vw);
   height: min(850px, 88dvh);
