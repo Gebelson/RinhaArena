@@ -72,6 +72,12 @@ export function requestPasswordReset(email) {
   return request('/auth/v1/recover', { method: 'POST', body: { email: email.trim() } });
 }
 
+export async function signOut() {
+  const token = activeSession?.access_token;
+  if (token) await request('/auth/v1/logout', { method: 'POST', token }).catch(() => {});
+  rememberSession(null);
+}
+
 async function loadAccount(user, session) {
   const rows = await request(`/rest/v1/player_profiles?id=eq.${encodeURIComponent(user.id)}&select=*`, {
     token: session.access_token,

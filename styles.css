@@ -1042,7 +1042,7 @@ html, body {
 .rank-rules { padding: 6px 18px 10px; color: #a8bcdf; font-size: 12px; text-align: center; }
 .rank-rules b { color: #50eaff; }
 .avatar-modal-window { width: min(760px, calc(100vw - 32px)); max-width: 760px; }
-.settings-modal-window { width: min(620px, calc(100vw - 32px)); max-width: 620px; border: 2px solid #296edc; background: linear-gradient(155deg,#101d3b,#070e20 76%); box-shadow: 0 24px 70px #000d, inset 0 1px #fff3; }
+.settings-modal-window { width: min(760px, calc(100vw - 32px)); max-width: 760px; max-height: min(900px,calc(100vh - 24px)); border: 2px solid #296edc; background: linear-gradient(155deg,#101d3b,#070e20 76%); box-shadow: 0 24px 70px #000d, inset 0 1px #fff3; }
 .settings-body { display: grid; gap: 14px; padding: 18px; overflow-y: auto; }
 .settings-section { overflow: hidden; border: 1px solid #29477e; border-radius: 14px; background: rgba(3,12,32,.75); }
 .settings-section h3 { margin: 0; padding: 9px 14px; color: #55dfff; background: rgba(37,91,183,.18); font-size: 12px; letter-spacing: .13em; }
@@ -1062,6 +1062,25 @@ html, body {
 .settings-volume input { width: 100%; accent-color: #129cff; cursor: pointer; }
 .settings-fullscreen { width: calc(100% - 28px); min-height: 44px; margin: 12px 14px 14px; border: 2px solid #3087f5; border-radius: 11px; color: #fff; background: linear-gradient(#1768cf,#0b3d91); font-weight: 900; cursor: pointer; box-shadow: inset 0 2px #fff3, 0 4px 0 #041a49; }
 .settings-fullscreen:hover { filter: brightness(1.12); }
+.settings-select { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; padding: 9px 14px; border-top: 1px solid #21355b; color: #fff; font-weight: 800; }
+.settings-select select { min-width: 180px; padding: 8px 34px 8px 10px; border: 1px solid #3763a8; border-radius: 9px; color: #fff; background: #0c1c3e; font: 800 13px 'Barlow Condensed',sans-serif; cursor: pointer; }
+.settings-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 12px; }
+.settings-key { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 42px; padding: 6px 8px 6px 12px; border: 1px solid #29477e; border-radius: 9px; color: #dce8ff; background: #0a1733; font-weight: 800; cursor: pointer; }
+.settings-key kbd { min-width: 74px; padding: 7px; border: 1px solid #4088ec; border-radius: 7px; color: #5ee9ff; background: #102b5f; font: 900 12px 'Barlow Condensed',sans-serif; text-align: center; }
+.settings-key.listening { border-color: #ffd548; box-shadow: 0 0 12px #ffc40055; }
+.settings-key.listening kbd { color: #151009; background: #ffd548; }
+.settings-reset-keys { width: calc(100% - 24px); margin: 0 12px 12px; padding: 9px; border: 1px solid #4267a5; border-radius: 8px; color: #cfe0ff; background: #142546; font-weight: 900; cursor: pointer; }
+.settings-disconnect { min-height: 46px; border: 2px solid #e04949; border-radius: 11px; color: #fff; background: linear-gradient(#bd3232,#741919); font-weight: 1000; cursor: pointer; box-shadow: inset 0 2px #fff2; }
+.settings-disconnect:disabled { opacity: .6; cursor: wait; }
+body { --game-brightness: 100%; }
+.lobby-bg-video,#game { filter: brightness(var(--game-brightness)); }
+body[data-colorblind="protanopia"] .lobby-bg-video,body[data-colorblind="protanopia"] #game { filter: brightness(var(--game-brightness)) hue-rotate(12deg) saturate(.72); }
+body[data-colorblind="deuteranopia"] .lobby-bg-video,body[data-colorblind="deuteranopia"] #game { filter: brightness(var(--game-brightness)) hue-rotate(18deg) saturate(.82); }
+body[data-colorblind="tritanopia"] .lobby-bg-video,body[data-colorblind="tritanopia"] #game { filter: brightness(var(--game-brightness)) hue-rotate(-35deg) saturate(.9); }
+body.reduce-game-animations *,body.reduce-game-animations *::before,body.reduce-game-animations *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+body.hide-game-cursor #game { cursor: none; }
+body[data-graphics="low"] .lobby-bg-video { filter: brightness(var(--game-brightness)) contrast(.96); }
+@media (max-height: 720px) { .settings-modal-window { width: min(920px,calc(100vw - 24px)); } .settings-body { grid-template-columns: 1fr 1fr; } .settings-disconnect { grid-column: 1/-1; } }
 .avatar-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; padding: 20px; }
 .avatar-option { position: relative; aspect-ratio: 1; padding: 0; overflow: hidden; border: 3px solid #274b8c; border-radius: 18px; background: #07142f; cursor: pointer; transition: transform .15s, border-color .15s, box-shadow .15s; }
 .avatar-option img { display: block; width: 100%; height: 100%; object-fit: cover; }

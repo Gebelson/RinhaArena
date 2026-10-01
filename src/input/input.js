@@ -13,6 +13,7 @@
 import { clamp, norm2 } from '../core/math.js';
 import { CONFIG } from '../core/config.js';
 import { createTouchControls } from './touch.js';
+import { getSettings } from '../settings.js';
 
 const PULSE = 0.12; // seconds a tap stays visible to the sim
 
@@ -31,13 +32,14 @@ export function createInput({ uiRoot, isTouch }) {
     if (e.repeat) return;
     if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
     keys.add(e.code);
-    if (e.code === 'Space') {
+    const controls = getSettings().controls;
+    if (e.code === controls.jump) {
       jumpPulse = now() + PULSE;
       e.preventDefault();
     }
-    if (e.code === 'KeyE') grabPulse = now() + PULSE;
-    if (e.code === 'KeyF') punchPulse = now() + PULSE;
-    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+    if (e.code === controls.grab) grabPulse = now() + PULSE;
+    if (e.code === controls.punch) punchPulse = now() + PULSE;
+    if (e.code === controls.dash) {
       dashPulse = now() + PULSE;
     }
   };
@@ -74,8 +76,9 @@ export function createInput({ uiRoot, isTouch }) {
 
     sample({ myPos, screenToGround }) {
       // movement (screen up = world -z with our fixed camera)
-      let mx = key('KeyD') + key('ArrowRight') - key('KeyA') - key('ArrowLeft');
-      let mz = key('KeyS') + key('ArrowDown') - key('KeyW') - key('ArrowUp');
+      const controls = getSettings().controls;
+      let mx = key(controls.right) - key(controls.left);
+      let mz = key(controls.down) - key(controls.up);
       const keyboardMove = mx !== 0 || mz !== 0;
       if (touch?.joy.active) {
         mx += touch.joy.x;

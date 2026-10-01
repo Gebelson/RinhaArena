@@ -11,8 +11,9 @@ import { HATS, SKINS } from '../content/cosmetics.js';
 import { RANKS, getRankProgress, rankSpriteStyle } from '../content/ranks.js';
 import { getLevelBadgeAsset, getLevelProgress } from '../content/levels.js';
 import { listPlayerRankings, submitPlayerRanking } from '../net/ranking.js';
-import { saveAccountProfile } from '../net/account.js';
+import { saveAccountProfile, signOut } from '../net/account.js';
 import { openAuthGate } from './auth.js';
+import { applySettings, getSettings, keyLabel, saveSettings } from '../settings.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -22,11 +23,12 @@ const AVATARS = Array.from({ length: 6 }, (_, index) => `avatar-${index + 1}.web
 export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayLab, onClickSound }) {
   const el = document.createElement('div');
   el.className = 'menu';
+  applySettings();
 
   // Mobile browsers only allow fullscreen after a user gesture. Entering it on
   // the first touch hides the address/search bar and preserves the landscape UI.
   const enterMobileFullscreen = async () => {
-    if (!matchMedia('(pointer: coarse)').matches || document.fullscreenElement) return;
+    if (!getSettings().autoFullscreen || document.fullscreenElement) return;
     const root = document.documentElement;
     const requestFullscreen = root.requestFullscreen || root.webkitRequestFullscreen;
     if (!requestFullscreen) return;
@@ -421,7 +423,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const lobbyMusic = new Audio('./audio/lobby-theme.m4a');
   lobbyMusic.loop = true;
   lobbyMusic.preload = 'auto';
-  lobbyMusic.volume = Math.min(1, Math.max(0, Number(localStorage.getItem('blast.musicVolume') ?? .38)));
+  lobbyMusic.volume = getSettings().musicVolume / 100;
   btnAudio.classList.toggle('muted', localStorage.getItem('blast.muted') === '1');
 
   const playLobbyMedia = () => {
@@ -663,7 +665,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
 
   // ------------------------------------------------------------ Modals
   function openSettingsModal() {
-    const muted = localStorage.getItem('blast.muted') === '1';
+    let settings = getSettings();
+    const controlNames = { up: 'Mover para cima', down: 'Mover para baixo', left: 'Mover para esquerda', right: 'Mover para direita', jump: 'Pular', grab: 'Agarrar', punch: 'Socar', dash: 'Correr' };
     const modal = document.createElement('div');
     modal.className = 'modal-overlay settings-modal-overlay';
     modal.innerHTML = `
@@ -672,17 +675,29 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
         <div class="settings-body">
           <section class="settings-section">
             <h3>ÁUDIO</h3>
-            <label class="settings-row"><span><b>Som do jogo</b><small>Ativa músicas e efeitos sonoros</small></span><input class="settings-toggle-input settings-sound" type="checkbox" ${muted ? '' : 'checked'}><i class="settings-toggle"></i></label>
-            <label class="settings-volume"><span><b>Volume da música</b><output>${Math.round(lobbyMusic.volume * 100)}%</output></span><input type="range" min="0" max="100" value="${Math.round(lobbyMusic.volume * 100)}" aria-label="Volume da música"></label>
+            <label class="settings-volume"><span><b>Volume da música</b><output>${settings.musicVolume}%</output></span><input data-setting="musicVolume" type="range" min="0" max="100" value="${settings.musicVolume}"></label>
+            <label class="settings-volume"><span><b>Volume dos efeitos</b><output>${settings.sfxVolume}%</output></span><input data-setting="sfxVolume" type="range" min="0" max="100" value="${settings.sfxVolume}"></label>
           </section>
           <section class="settings-section">
-            <h3>PARTIDA</h3>
-            <label class="settings-row"><span><b>Fogo amigo</b><small>Permite atingir jogadores da sua equipe</small></span><input class="settings-toggle-input settings-friendly-fire" type="checkbox" ${profile.friendlyFire ? 'checked' : ''}><i class="settings-toggle"></i></label>
+            <h3>VÍDEO</h3>
+            <label class="settings-select"><span>Qualidade gráfica</span><select data-setting="graphicsQuality"><option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option><option value="ultra">Ultra</option></select></label>
+            <label class="settings-select"><span>Limite de FPS</span><select data-setting="fps"><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="90">90 FPS</option><option value="120">120 FPS</option></select></label>
+            <label class="settings-volume"><span><b>Brilho</b><output>${settings.brightness}%</output></span><input data-setting="brightness" type="range" min="50" max="150" value="${settings.brightness}"></label>
+            <label class="settings-select"><span>Filtro para daltônicos</span><select data-setting="colorblind"><option value="none">Desativado</option><option value="protanopia">Protanopia</option><option value="deuteranopia">Deuteranopia</option><option value="tritanopia">Tritanopia</option></select></label>
+            <label class="settings-row"><span><b>Tela cheia automática</b><small>Ativada por padrão</small></span><input data-setting="autoFullscreen" class="settings-toggle-input" type="checkbox" ${settings.autoFullscreen ? 'checked' : ''}><i class="settings-toggle"></i></label>
+            <button class="settings-fullscreen" type="button">${document.fullscreenElement ? 'SAIR DA TELA CHEIA' : 'ATIVAR TELA CHEIA AGORA'}</button>
           </section>
           <section class="settings-section">
-            <h3>TELA</h3>
-            <button class="settings-fullscreen" type="button">${document.fullscreenElement ? 'SAIR DA TELA CHEIA' : 'ATIVAR TELA CHEIA'}</button>
+            <h3>INTERFACE</h3>
+            <label class="settings-select"><span>Idioma</span><select data-setting="language"><option value="pt-BR">Português</option><option value="en">English</option><option value="es">Español</option></select></label>
+            ${[['notifications','Notificações'],['chat','Chat'],['animations','Animações'],['gameCursor','Cursor durante a partida']].map(([key,label]) => `<label class="settings-row"><span><b>${label}</b></span><input data-setting="${key}" class="settings-toggle-input" type="checkbox" ${settings[key] ? 'checked' : ''}><i class="settings-toggle"></i></label>`).join('')}
           </section>
+          <section class="settings-section">
+            <h3>CONTROLES E TECLAS</h3>
+            <div class="settings-keys">${Object.entries(controlNames).map(([action,label]) => `<button class="settings-key" data-action="${action}"><span>${label}</span><kbd>${keyLabel(settings.controls[action])}</kbd></button>`).join('')}</div>
+            <button class="settings-reset-keys" type="button">RESTAURAR TECLAS PADRÃO</button>
+          </section>
+          <button class="settings-disconnect" type="button">DESCONECTAR</button>
         </div>
       </div>`;
     uiRoot.appendChild(modal);
@@ -691,38 +706,72 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     modal.querySelector('.modal-close').addEventListener('click', close);
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
 
-    modal.querySelector('.settings-sound').addEventListener('change', (event) => {
-      const nextMuted = !event.currentTarget.checked;
-      localStorage.setItem('blast.muted', nextMuted ? '1' : '0');
-      window.dispatchEvent(new CustomEvent('blast:mute-change', { detail: { muted: nextMuted } }));
-      lobbyMusic.muted = nextMuted;
-      btnAudio.classList.toggle('muted', nextMuted);
-      btnAudio.setAttribute('aria-label', nextMuted ? 'Ativar áudio' : 'Desativar áudio');
-      if (!nextMuted) playLobbyMedia();
+    modal.querySelectorAll('select[data-setting]').forEach((select) => {
+      select.value = String(settings[select.dataset.setting]);
+      select.addEventListener('change', () => {
+        const key = select.dataset.setting;
+        settings = saveSettings({ [key]: key === 'fps' ? Number(select.value) : select.value });
+      });
     });
-
-    const volume = modal.querySelector('.settings-volume input');
-    const volumeOutput = modal.querySelector('.settings-volume output');
-    volume.addEventListener('input', () => {
-      lobbyMusic.volume = Number(volume.value) / 100;
-      localStorage.setItem('blast.musicVolume', String(lobbyMusic.volume));
-      volumeOutput.value = `${volume.value}%`;
+    modal.querySelectorAll('.settings-toggle-input[data-setting]').forEach((toggle) => {
+      toggle.addEventListener('change', async () => {
+        const key = toggle.dataset.setting;
+        if (key === 'notifications' && toggle.checked && 'Notification' in window && Notification.permission === 'default') {
+          toggle.checked = (await Notification.requestPermission()) === 'granted';
+        }
+        settings = saveSettings({ [key]: toggle.checked });
+      });
     });
-
-    modal.querySelector('.settings-friendly-fire').addEventListener('change', (event) => {
-      profile.friendlyFire = event.currentTarget.checked;
-      profile.save();
-      ffBtns.forEach((button) => button.classList.toggle('sel', (button.dataset.ff === 'true') === profile.friendlyFire));
+    modal.querySelectorAll('.settings-volume input').forEach((range) => {
+      range.addEventListener('input', () => {
+        const key = range.dataset.setting;
+        const value = Number(range.value);
+        range.closest('.settings-volume').querySelector('output').value = `${value}%`;
+        settings = saveSettings({ [key]: value });
+        if (key === 'musicVolume') {
+          lobbyMusic.volume = value / 100;
+          localStorage.setItem('rinha.musicVolume', String(value / 100));
+        } else if (key === 'sfxVolume') {
+          window.dispatchEvent(new CustomEvent('rinha:sfx-volume', { detail: { volume: value / 100 } }));
+        }
+      });
     });
 
     modal.querySelector('.settings-fullscreen').addEventListener('click', async (event) => {
       try {
         if (document.fullscreenElement) await document.exitFullscreen();
         else await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-        event.currentTarget.textContent = document.fullscreenElement ? 'SAIR DA TELA CHEIA' : 'ATIVAR TELA CHEIA';
+        event.currentTarget.textContent = document.fullscreenElement ? 'SAIR DA TELA CHEIA' : 'ATIVAR TELA CHEIA AGORA';
       } catch {
         event.currentTarget.textContent = 'TELA CHEIA INDISPONÍVEL';
       }
+    });
+    modal.querySelectorAll('.settings-key').forEach((button) => {
+      button.addEventListener('click', () => {
+        modal.querySelectorAll('.settings-key').forEach((item) => item.classList.remove('listening'));
+        button.classList.add('listening');
+        button.querySelector('kbd').textContent = 'PRESSIONE...';
+        const capture = (event) => {
+          event.preventDefault();
+          settings = saveSettings({ controls: { ...settings.controls, [button.dataset.action]: event.code } });
+          button.querySelector('kbd').textContent = keyLabel(event.code);
+          button.classList.remove('listening');
+        };
+        window.addEventListener('keydown', capture, { once: true, capture: true });
+      });
+    });
+    modal.querySelector('.settings-reset-keys').addEventListener('click', () => {
+      localStorage.removeItem('rinha.settings');
+      const defaults = getSettings();
+      settings = saveSettings({ ...settings, controls: defaults.controls });
+      modal.querySelectorAll('.settings-key').forEach((button) => { button.querySelector('kbd').textContent = keyLabel(settings.controls[button.dataset.action]); });
+    });
+    modal.querySelector('.settings-disconnect').addEventListener('click', async () => {
+      const button = modal.querySelector('.settings-disconnect');
+      button.disabled = true;
+      button.textContent = 'DESCONECTANDO...';
+      await signOut();
+      location.reload();
     });
   }
 

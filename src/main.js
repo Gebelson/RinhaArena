@@ -19,6 +19,7 @@ import { createBgm } from './audio/music.js';
 import { makeLabConfig } from './game/modes/sandbox.js';
 import { getRankProgress } from './content/ranks.js';
 import { submitPlayerRanking } from './net/ranking.js';
+import { applySettings, getSettings } from './settings.js';
 
 const isTouch = navigator.maxTouchPoints > 0
   || matchMedia('(pointer: coarse)').matches
@@ -180,10 +181,14 @@ function startMatch(transport) {
   let raf = 0;
   let roundExitTimer = 0;
   let last = performance.now();
+  let lastRendered = 0;
   let firstFrame = true;
 
   function frame(now) {
     raf = requestAnimationFrame(frame);
+    const frameInterval = 1000 / getSettings().fps;
+    if (now - lastRendered < frameInterval) return;
+    lastRendered = now;
     step(now);
   }
 

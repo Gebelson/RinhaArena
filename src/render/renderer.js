@@ -10,7 +10,11 @@ export function createRenderer(canvas, { touch, theme }) {
     antialias: !touch,
     powerPreference: 'high-performance',
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, touch ? 1.75 : 2));
+  const quality = localStorage.getItem('rinha.settings');
+  let qualityName = 'high';
+  try { qualityName = JSON.parse(quality)?.graphicsQuality || 'high'; } catch { /* use high */ }
+  const qualityScale = { low: .65, medium: .85, high: 1, ultra: 1.25 }[qualityName] || 1;
+  renderer.setPixelRatio(Math.min((window.devicePixelRatio || 1) * qualityScale, touch ? 1.75 : 2.5));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 

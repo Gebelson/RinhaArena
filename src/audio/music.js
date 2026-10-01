@@ -3,7 +3,7 @@
 
 export function createBgm() {
   let audio = null;
-  let targetVolume = 0.35; // balanced to sit nicely under sfx
+  let targetVolume = Math.max(0, Math.min(1, Number(localStorage.getItem('rinha.musicVolume') ?? .38)));
   let currentVolume = 0.35;
   let fadeTimer = null;
   let isPlaying = false;

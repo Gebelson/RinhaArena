@@ -8,13 +8,19 @@ export function createSfx() {
   let muted = typeof localStorage !== 'undefined' && localStorage.getItem('blast.muted') === '1';
   let yeetBuffer = null;
   let yeetLoading = false;
+  let volume = Math.max(0, Math.min(1, Number(localStorage.getItem('rinha.sfxVolume') ?? .5)));
 
   const setMuted = (nextMuted) => {
     muted = Boolean(nextMuted);
-    if (master) master.gain.value = muted ? 0 : 0.5;
+    if (master) master.gain.value = muted ? 0 : volume;
   };
   if (typeof window !== 'undefined') {
     window.addEventListener('blast:mute-change', (event) => setMuted(event.detail?.muted));
+    window.addEventListener('rinha:sfx-volume', (event) => {
+      volume = Math.max(0, Math.min(1, Number(event.detail?.volume) || 0));
+      localStorage.setItem('rinha.sfxVolume', String(volume));
+      if (master && !muted) master.gain.value = volume;
+    });
   }
 
   function loadYeet() {
@@ -40,7 +46,7 @@ export function createSfx() {
       if (AudioCtx) {
         ctx = new AudioCtx();
         master = ctx.createGain();
-        master.gain.value = muted ? 0 : 0.5;
+        master.gain.value = muted ? 0 : volume;
         master.connect(ctx.destination);
       }
     }
