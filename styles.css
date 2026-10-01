@@ -882,6 +882,7 @@ html, body {
 .coin-card strong { flex: 1; font-size: 2vw; }
 .home-lobby .coin-plus {
   position: relative; isolation: isolate; overflow: hidden; width: auto; height: 6.8vh; aspect-ratio: 1; padding: 0;
+  display: grid; place-items: center;
   border: .3vw solid #07152f; border-radius: 1vw; outline: 0;
   background:
     repeating-linear-gradient(125deg, transparent 0 24%, rgba(255,255,255,.12) 24% 39%, transparent 39% 61%),
