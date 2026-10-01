@@ -887,14 +887,18 @@ html, body {
   background:
     repeating-linear-gradient(125deg, transparent 0 24%, rgba(255,255,255,.12) 24% 39%, transparent 39% 61%),
     linear-gradient(160deg,#6dff8b 0%,#20e461 48%,#08b846 100%);
-  color: #061329; font-size: 2.45vw; line-height: 1; font-weight: 1000; cursor: pointer;
-  -webkit-text-stroke: .05vw #001b12; text-shadow: 0 .12vh 0 #8affaa;
+  color: transparent; font-size: 0; line-height: 1; cursor: pointer;
   box-shadow: 0 .48vh 0 #02091d, 0 .62vh .8vh #0009, inset 0 .22vh 0 rgba(255,255,255,.85), inset 0 -.24vh 0 #057e33;
   transition: transform .12s, filter .12s, box-shadow .12s;
 }
 .home-lobby .coin-plus::before {
   content: ''; position: absolute; z-index: -1; left: 10%; right: 10%; top: 8%; height: 24%; border-radius: 99px;
   background: linear-gradient(90deg,rgba(255,255,255,.78),rgba(255,255,255,.08)); pointer-events: none;
+}
+.home-lobby .coin-plus::after {
+  content: '+'; position: absolute; z-index: 2; inset: 0; display: grid; place-items: center;
+  color: #061329; font: 1000 2.45vw/1 Arial, sans-serif; -webkit-text-stroke: .05vw #001b12;
+  text-shadow: 0 .12vh 0 #8affaa; transform: translateY(-.04em); pointer-events: none;
 }
 .home-lobby .coin-plus:hover { transform: translateY(-.25vh) scale(1.025); filter: brightness(1.08); box-shadow: 0 .5vh 0 #02091d, 0 0 .8vw rgba(40,255,112,.65), inset 0 .22vh 0 #fff, inset 0 -.24vh 0 #057e33; }
 .home-lobby .coin-plus:active { transform: translateY(.18vh) scale(.985); box-shadow: 0 .14vh 0 #02091d, 0 .22vh .3vh #0008, inset 0 .14vh .12vh #d9ffe3, inset 0 -.15vh 0 #057e33; }
