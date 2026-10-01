@@ -76,7 +76,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
           </div>
         </div>
         <div class="rank-divider"></div>
-        <div class="rank-badge-wrap"><div class="rank-shield rank-sprite" style="${rankSpriteStyle(initialRank.rank)}" aria-label="${initialRank.rank.name}"></div></div>
+        <div class="rank-badge-wrap"><img class="rank-shield" src="./assets/ui/ranks/${initialRank.rank.asset}" alt="${initialRank.rank.name}" /></div>
       </section>
 
       <nav class="top-actions" aria-label="Ações rápidas">
@@ -421,8 +421,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     const rankProgress = getRankProgress(profile.rankXp);
     xpFill.style.width = `${rankProgress.progress * 100}%`;
     xpText.textContent = `${rankProgress.xp.toLocaleString('pt-BR')} / ${(rankProgress.next?.xp ?? rankProgress.xp).toLocaleString('pt-BR')} XP`;
-    rankShield.style.cssText = rankSpriteStyle(rankProgress.rank);
-    rankShield.setAttribute('aria-label', rankProgress.rank.name);
+    rankShield.src = `./assets/ui/ranks/${rankProgress.rank.asset}`;
+    rankShield.alt = rankProgress.rank.name;
   }
 
   // ------------------------------------------------------------ Event listeners

@@ -860,7 +860,7 @@ html, body {
 .home-lobby button { font: inherit; }
 .player-card {
   position: absolute; left: 2.5%; top: 4.5%; width: 34.4%; height: 14.8%;
-  display: flex; align-items: center; gap: 1.05vw; padding: .9vh 1.25vw;
+  display: flex; align-items: center; gap: .8vw; padding: .9vh .35vw .9vh 1.25vw;
   border-radius: 1.25vw; background: linear-gradient(145deg, rgba(7,19,53,.97), rgba(2,10,31,.94));
   border: .14vw solid rgba(42,101,214,.45); box-shadow: 0 .8vh 2vh #0009, inset 0 .1vh .4vh #fff2;
 }
@@ -874,8 +874,8 @@ html, body {
 .xp-track { height: 2.8vh; margin-bottom: .35vh; overflow: hidden; border-radius: 99px; background: #07164c; border: .12vw solid #4679dd; }
 .xp-track i { display: block; width: 59%; height: 100%; border-radius: inherit; background: linear-gradient(#20c5ff,#0580ed); box-shadow: inset 0 .2vh .4vh #fff6; }
 .rank-divider { width: .12vw; height: 70%; background: #696cff; opacity: .8; }
-.rank-badge-wrap { width: 7.5vw; height: 100%; flex: 0 0 auto; display: grid; place-items: center; align-self: center; }
-.rank-shield { width: 7.4vw; height: 12.6vh; flex: 0 0 auto; background-color: transparent; transform: none; filter: drop-shadow(0 .25vw .18vw #02072a); }
+.rank-badge-wrap { width: auto; height: 100%; margin-left: -.55vw; flex: 0 0 auto; display: grid; place-items: center; align-self: center; }
+.rank-shield { display: block; width: auto; max-width: 8.6vw; height: 12.6vh; object-fit: contain; flex: 0 0 auto; background-color: transparent; transform: none; filter: drop-shadow(0 .25vw .18vw #02072a); }
 .rank-sprite { background-image: var(--rank-image); background-size: contain; background-position: center; background-repeat: no-repeat; image-rendering: auto; }
 .rank-shield span { width: 55%; aspect-ratio: 1; display: grid; place-items: center; clip-path: polygon(50% 0,100% 35%,82% 100%,18% 100%,0 35%); background: #6d70ff; }
 .top-actions { position: absolute; right: 2.8%; top: 4.6%; height: 8.8%; display: flex; gap: .8vw; align-items: stretch; }
