@@ -21,6 +21,23 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const el = document.createElement('div');
   el.className = 'menu';
 
+  // Mobile browsers only allow fullscreen after a user gesture. Entering it on
+  // the first touch hides the address/search bar and preserves the landscape UI.
+  const enterMobileFullscreen = async () => {
+    if (!matchMedia('(pointer: coarse)').matches || document.fullscreenElement) return;
+    const root = document.documentElement;
+    const requestFullscreen = root.requestFullscreen || root.webkitRequestFullscreen;
+    if (!requestFullscreen) return;
+    try {
+      await requestFullscreen.call(root, { navigationUI: 'hide' });
+      const orientationLock = screen.orientation?.lock?.('landscape');
+      if (orientationLock) await orientationLock.catch(() => {});
+    } catch {
+      // Some browsers only expose fullscreen for installed web apps or video.
+    }
+  };
+  window.addEventListener('pointerup', enterMobileFullscreen);
+
   const MAP_DATA = {
     foundry: {
       id: 'foundry',
