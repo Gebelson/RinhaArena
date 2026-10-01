@@ -1978,10 +1978,23 @@ body[data-graphics="low"] .lobby-bg-video { filter: brightness(var(--game-bright
 .menu.auth-pending .player-card,
 .menu.auth-pending .top-actions { opacity: 0; }
 .auth-art {
+  position: relative;
   min-width: 0;
   background-image: url('./assets/ui/login-reference.png');
   background-position: 18.9% 50%;
   background-repeat: no-repeat;
+}
+.auth-art::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 92px;
+  height: 86px;
+  background: url('./assets/ui/login-reference.png') -235px -885px / auto no-repeat;
+  -webkit-mask-image: radial-gradient(ellipse at 24% 68%, #000 0 48%, transparent 82%);
+  mask-image: radial-gradient(ellipse at 24% 68%, #000 0 48%, transparent 82%);
+  pointer-events: none;
 }
 .auth-panel {
   min-width: 0;
