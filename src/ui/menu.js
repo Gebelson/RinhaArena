@@ -827,7 +827,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
         <div class="rank-progress-line"><i style="width:${progress.progress * 100}%"></i></div>
         <div class="rank-progress-label"><span>${progress.rank.name} · ${progress.points} PTS</span><span>${progress.next ? `${progress.next.name} · 100 PTS` : 'PONTUAÇÃO SEM LIMITE'}</span></div>
         <div class="rank-grid">
-          ${RANKS.map((rank) => `<div class="rank-entry ${rank.index === progress.rank.index ? 'current' : ''} ${rank.xp > progress.xp ? 'locked' : 'unlocked'}"><div class="rank-entry-icon rank-sprite" style="${rankSpriteStyle(rank)}"></div><strong>${rank.name}</strong><small>${rank.index === RANKS.length - 1 ? 'SEM LIMITE' : '0–100 PTS'}</small></div>`).join('')}
+          ${RANKS.filter((rank) => rank.index > 0).map((rank) => `<div class="rank-entry ${rank.index === progress.rank.index ? 'current' : ''} ${rank.xp > progress.xp ? 'locked' : 'unlocked'}"><div class="rank-entry-icon rank-sprite" style="${rankSpriteStyle(rank)}"></div><strong>${rank.name}</strong></div>`).join('')}
         </div>
         <div class="rank-rules">Vitória: <b>+25 PTS</b> · Empate: <b>+10 PTS</b> · Derrota: <b>−20 PTS</b></div>
       </div>`;
