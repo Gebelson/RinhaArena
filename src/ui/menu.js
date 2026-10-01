@@ -916,54 +916,6 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     modal.querySelector('.modal-close-btn').addEventListener('click', close);
   }
 
-  function openSettingsModal() {
-    onClickSound?.();
-    const isMuted = localStorage.getItem('blast.muted') === '1';
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-      <div class="modal-window">
-        <div class="modal-header">
-          <div class="modal-title">⚙️ CONFIGURAÇÕES & ÁUDIO</div>
-          <button class="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.04); padding:14px; border-radius:12px;">
-            <div>
-              <div style="font-weight:700; color:#fff;">Sons e Efeitos Sonoros</div>
-              <div style="font-size:12px; color:#8ea6d8;">Ativar ou silenciar áudio do jogo</div>
-            </div>
-            <button class="modal-btn btn-mute-toggle" style="background:${isMuted ? 'rgba(255,83,71,0.2)' : 'rgba(74,222,128,0.2)'}; color:${isMuted ? '#ff8a6e' : '#4ade80'}; border:1px solid currentColor;">
-              ${isMuted ? '🔇 Silenciado' : '🔊 Áudio Ativado'}
-            </button>
-          </div>
-          <div style="font-size:12px; color:#8ea6d8; line-height:1.5; padding:8px 4px;">
-            💡 <i>Dica:</i> Você pode pressionar <b>M</b> a qualquer momento durante a batalha para alternar o som instantaneamente.
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="modal-btn modal-btn-secondary modal-close-btn">Fechar</button>
-        </div>
-      </div>
-    `;
-    uiRoot.appendChild(modal);
-    const close = () => modal.remove();
-    modal.querySelector('.modal-close').addEventListener('click', close);
-    modal.querySelector('.modal-close-btn').addEventListener('click', close);
-    const toggleBtn = modal.querySelector('.btn-mute-toggle');
-    toggleBtn.addEventListener('click', () => {
-      const nowMuted = localStorage.getItem('blast.muted') === '1';
-      localStorage.setItem('blast.muted', nowMuted ? '0' : '1');
-      const nextMuted = !nowMuted;
-      lobbyMusic.muted = nextMuted;
-      btnAudio.classList.toggle('muted', nextMuted);
-      toggleBtn.style.background = nextMuted ? 'rgba(255,83,71,0.2)' : 'rgba(74,222,128,0.2)';
-      toggleBtn.style.color = nextMuted ? '#ff8a6e' : '#4ade80';
-      toggleBtn.textContent = nextMuted ? '🔇 Silenciado' : '🔊 Áudio Ativado';
-      onClickSound?.();
-    });
-  }
-
   function openStatsModal() {
     onClickSound?.();
     const modal = document.createElement('div');
