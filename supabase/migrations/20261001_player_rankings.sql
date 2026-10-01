@@ -4,12 +4,14 @@ create table if not exists public.player_rankings (
   avatar text not null default 'avatar-1.webp',
   points integer not null default 0 check (points >= 0),
   wins integer not null default 0 check (wins >= 0),
+  losses integer not null default 0 check (losses >= 0),
   matches integer not null default 0 check (matches >= 0),
   updated_at timestamptz not null default now()
 );
 
 alter table public.player_rankings enable row level security;
 alter table public.player_rankings add column if not exists avatar text not null default 'avatar-1.webp';
+alter table public.player_rankings add column if not exists losses integer not null default 0 check (losses >= 0);
 revoke all on public.player_rankings from anon, authenticated;
 
 create or replace function public.submit_player_ranking(
@@ -18,6 +20,7 @@ create or replace function public.submit_player_ranking(
   p_avatar text,
   p_points integer,
   p_wins integer,
+  p_losses integer,
   p_matches integer
 )
 returns boolean
@@ -30,13 +33,14 @@ begin
     raise exception 'Jogador não autorizado a atualizar este ranking';
   end if;
 
-  insert into public.player_rankings (player_id, player_name, avatar, points, wins, matches, updated_at)
+  insert into public.player_rankings (player_id, player_name, avatar, points, wins, losses, matches, updated_at)
   values (
     p_player_id,
     left(coalesce(nullif(trim(p_name), ''), 'Player'), 12),
     case when p_avatar ~ '^avatar-[1-6][.]webp$' then p_avatar else 'avatar-1.webp' end,
     greatest(0, coalesce(p_points, 0)),
     greatest(0, coalesce(p_wins, 0)),
+    greatest(0, coalesce(p_losses, 0)),
     greatest(0, coalesce(p_matches, 0)),
     now()
   )
@@ -45,6 +49,7 @@ begin
     avatar = excluded.avatar,
     points = excluded.points,
     wins = excluded.wins,
+    losses = excluded.losses,
     matches = excluded.matches,
     updated_at = now();
   return true;
@@ -63,6 +68,7 @@ as $$
     'avatar', ranked.avatar,
     'points', ranked.points,
     'wins', ranked.wins,
+    'losses', ranked.losses,
     'matches', ranked.matches
   ) order by ranked.points desc, ranked.wins desc, ranked.updated_at asc), '[]'::jsonb)
   from (
@@ -72,9 +78,9 @@ as $$
   ) ranked;
 $$;
 
-revoke all on function public.submit_player_ranking(uuid,text,text,integer,integer,integer) from public;
+revoke all on function public.submit_player_ranking(uuid,text,text,integer,integer,integer,integer) from public;
 revoke all on function public.list_player_rankings(integer) from public;
-grant execute on function public.submit_player_ranking(uuid,text,text,integer,integer,integer) to authenticated;
+grant execute on function public.submit_player_ranking(uuid,text,text,integer,integer,integer,integer) to authenticated;
 grant execute on function public.list_player_rankings(integer) to anon, authenticated;
 
 notify pgrst, 'reload schema';

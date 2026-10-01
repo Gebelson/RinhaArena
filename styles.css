@@ -1098,7 +1098,7 @@ body[data-graphics="low"] .lobby-bg-video { filter: brightness(var(--game-bright
 }
 .leaderboard-modal-overlay { padding: 18px; overflow: hidden; }
 .modal-overlay .leaderboard-window { width: min(980px, calc(100vw - 36px)); max-width: 980px; height: min(760px, calc(100vh - 36px)); max-height: calc(100vh - 36px); }
-.leaderboard-head,.leaderboard-row { display: grid; grid-template-columns: 90px minmax(230px,1.35fr) minmax(190px,1fr) 110px 110px; align-items: center; gap: 12px; }
+.leaderboard-head,.leaderboard-row { display: grid; grid-template-columns: 80px minmax(220px,1.25fr) minmax(170px,.9fr) 85px 85px 95px; align-items: center; gap: 10px; }
 .leaderboard-head { padding: 12px 20px; color: #7e9bcf; font-size: 11px; font-weight: 900; letter-spacing: .08em; border-bottom: 1px solid #283858; }
 .leaderboard-head span { text-align: center; }
 .leaderboard-list { min-height: 0; overflow-y: auto; padding: 8px 12px 14px; scrollbar-color: #316dd0 #09142c; }
@@ -1112,7 +1112,7 @@ body[data-graphics="low"] .lobby-bg-video { filter: brightness(var(--game-bright
 .leaderboard-rank img { width: 58px; height: 58px; object-fit: contain; }
 .leaderboard-rank span { color: #c7d6f2; font-size: 12px; font-weight: 900; text-transform: uppercase; }
 .leaderboard-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; }
-.leaderboard-wins,.leaderboard-points { color: #edf4ff; text-align: center; font-size: 18px; }
+.leaderboard-wins,.leaderboard-losses,.leaderboard-points { color: #edf4ff; text-align: center; font-size: 18px; }
 .leaderboard-points { color: #45e6ff; }
 .leaderboard-top { border-width: 2px; }
 .leaderboard-top-1 { border-color: #ffd43b; background: linear-gradient(90deg,#3a2b08,#17213a); box-shadow: 0 0 18px #ffc4002b; }
@@ -1125,7 +1125,7 @@ body[data-graphics="low"] .lobby-bg-video { filter: brightness(var(--game-bright
 .leaderboard-error { color: #ff998c; }
 .leaderboard-error small { display: block; margin-top: 8px; color: #8ea6d8; }
 @media (max-width: 760px) {
-  .leaderboard-head,.leaderboard-row { grid-template-columns: 58px minmax(130px,1fr) 88px 70px 76px; gap: 5px; }
+  .leaderboard-head,.leaderboard-row { grid-template-columns: 52px minmax(120px,1fr) 78px 60px 60px 70px; gap: 5px; }
   .leaderboard-player { gap: 7px; }
   .leaderboard-player > img { width: 42px; height: 42px; border-radius: 9px; }
   .leaderboard-rank span { display: none; }

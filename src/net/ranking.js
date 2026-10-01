@@ -24,6 +24,7 @@ export function submitPlayerRanking(profile) {
     p_avatar: profile.cos?.avatar || 'avatar-1.webp',
     p_points: profile.rankXp,
     p_wins: profile.rankStats.wins,
+    p_losses: profile.rankStats.losses,
     p_matches: profile.rankStats.matches,
   });
 }
