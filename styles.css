@@ -990,10 +990,18 @@ html, body {
 .quick-config .arena-label { display: block; padding: 6px; }
 .config-extra-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
 .config-extra-actions button { min-height: 40px; border: 1px solid #3281ff; border-radius: 9px; color: white; background: #102b62; font-weight: 900; cursor: pointer; }
-.modal-overlay .rank-modal-window { width: min(940px, 92vw); max-width: 940px; max-height: 90vh; overflow: hidden; }
+.rank-modal-overlay { padding: 8px; overflow: hidden; }
+.modal-overlay .rank-modal-window {
+  width: min(1120px, calc(100vw - 24px));
+  max-width: 1120px;
+  height: min(820px, calc(100vh - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+}
+.rank-modal-window .modal-header { padding: 12px 18px; }
 .rank-modal-window .modal-body { padding: 0; }
-.rank-hero { display: grid; grid-template-columns: 150px 1fr auto; align-items: center; gap: 22px; padding: 18px 24px 12px; }
-.rank-hero-icon { width: 150px; height: 120px; border-radius: 20px; box-shadow: 0 10px 24px #0008; }
+.rank-hero { display: grid; grid-template-columns: 132px 1fr auto; align-items: center; gap: 18px; padding: 10px 18px 8px; }
+.rank-hero-icon { width: 132px; height: 104px; border-radius: 20px; box-shadow: 0 10px 24px #0008; }
 .rank-hero-copy { display: flex; flex-direction: column; }
 .rank-hero-copy span { color: #72d7ff; font-size: 13px; font-weight: 900; letter-spacing: 1.5px; }
 .rank-hero-copy strong { color: white; font-size: 34px; line-height: 1.05; text-transform: uppercase; }
@@ -1003,18 +1011,18 @@ html, body {
 .rank-stats b,.rank-stats span { display: block; }
 .rank-stats b { font-size: 23px; }
 .rank-stats span { color: #88a8df; font-size: 9px; font-weight: 900; }
-.rank-progress-line { height: 16px; margin: 0 24px; overflow: hidden; border: 2px solid #254e9c; border-radius: 99px; background: #06112c; }
+.rank-progress-line { height: 14px; margin: 0 18px; overflow: hidden; border: 2px solid #254e9c; border-radius: 99px; background: #06112c; }
 .rank-progress-line i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#03a9ff,#35edff); box-shadow: 0 0 14px #12cfff; }
-.rank-progress-label { display: flex; justify-content: space-between; padding: 5px 26px 14px; color: #a9bee5; font-size: 11px; font-weight: 800; }
-.rank-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 8px; max-height: 430px; overflow: auto; padding: 4px 18px 12px; }
-.rank-entry { padding: 8px 5px; border: 2px solid #243968; border-radius: 13px; background: linear-gradient(#102454,#08142f); text-align: center; transition: transform .15s, filter .15s; }
+.rank-progress-label { display: flex; justify-content: space-between; padding: 4px 20px 8px; color: #a9bee5; font-size: 11px; font-weight: 800; }
+.rank-grid { display: grid; flex: 1 1 auto; min-height: 0; grid-template-columns: repeat(6,1fr); grid-template-rows: repeat(3,minmax(0,1fr)); gap: 8px; overflow: hidden; padding: 4px 16px 8px; }
+.rank-entry { min-width: 0; min-height: 0; padding: 5px 4px; border: 2px solid #243968; border-radius: 13px; background: linear-gradient(#102454,#08142f); text-align: center; transition: transform .15s, filter .15s; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .rank-entry.current { border-color: #ffd34d; box-shadow: 0 0 16px #ffbd286e; transform: translateY(-2px); }
 .rank-entry.locked { filter: grayscale(1) brightness(.45); }
-.rank-entry-icon { width: 100%; aspect-ratio: 4/3; border-radius: 9px; }
+.rank-entry-icon { width: 100%; min-height: 0; flex: 1 1 auto; border-radius: 9px; background-position: center center; }
 .rank-entry strong,.rank-entry small { display: block; }
-.rank-entry strong { margin-top: 4px; color: white; font-size: 12px; text-transform: uppercase; }
+.rank-entry strong { margin-top: 2px; color: white; font-size: 12px; line-height: 1.1; text-transform: uppercase; }
 .rank-entry small { color: #91a9d1; font-size: 10px; }
-.rank-rules { padding: 10px 18px 16px; color: #a8bcdf; font-size: 12px; text-align: center; }
+.rank-rules { padding: 6px 18px 10px; color: #a8bcdf; font-size: 12px; text-align: center; }
 .rank-rules b { color: #50eaff; }
 @media (max-aspect-ratio: 4/3) {
   .player-card { width: 47%; }
