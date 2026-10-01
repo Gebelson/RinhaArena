@@ -17,6 +17,7 @@ import { createLabPanel } from './ui/labPanel.js';
 import { createSfx } from './audio/sfx.js';
 import { createBgm } from './audio/music.js';
 import { makeLabConfig } from './game/modes/sandbox.js';
+import { getRankProgress } from './content/ranks.js';
 
 const isTouch = navigator.maxTouchPoints > 0
   || matchMedia('(pointer: coarse)').matches
@@ -38,8 +39,14 @@ const profile = (() => {
     name: data.name || 'Player',
     cos: { ...DEFAULT_COS, ...data.cos },
     friendlyFire: data.friendlyFire ?? false,
+    rankXp: Math.max(0, Number(data.rankXp) || 0),
+    rankStats: {
+      matches: Math.max(0, Number(data.rankStats?.matches) || 0),
+      wins: Math.max(0, Number(data.rankStats?.wins) || 0),
+      losses: Math.max(0, Number(data.rankStats?.losses) || 0),
+    },
     save() {
-      localStorage.setItem('blast.profile', JSON.stringify({ name: this.name, cos: this.cos, friendlyFire: this.friendlyFire }));
+      localStorage.setItem('blast.profile', JSON.stringify({ name: this.name, cos: this.cos, friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats }));
     },
   };
 })();
@@ -202,6 +209,19 @@ function startMatch(transport) {
     );
 
     const events = transport.drainEvents();
+    for (const event of events) {
+      if (event.t !== 'roundOver' || view.lab) continue;
+      const draw = event.winner === 'draw';
+      const won = !draw && (view.modeId === 'ffa' ? event.winner === myId : event.winner === me?.team);
+      const gainedXp = draw ? 70 : won ? 120 : 45;
+      profile.rankXp += gainedXp;
+      profile.rankStats.matches += 1;
+      if (won) profile.rankStats.wins += 1;
+      else if (!draw) profile.rankStats.losses += 1;
+      profile.save();
+      const { rank } = getRankProgress(profile.rankXp);
+      console.info(`[rank] +${gainedXp} XP · ${rank.name}`);
+    }
     world.handleEvents(events, myPos);
     hud.pushEvents(events, view, myId);
     labPanel?.update(view, events, myId, dt);

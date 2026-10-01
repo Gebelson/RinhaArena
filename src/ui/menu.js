@@ -8,6 +8,7 @@
 import { LEVELS, DEFAULT_LEVEL, newProceduralSeed } from '../content/levels/index.js';
 import { createRoom, listRooms } from '../net/rooms.js';
 import { HATS, SKINS } from '../content/cosmetics.js';
+import { RANKS, getRankProgress, rankSpriteStyle } from '../content/ranks.js';
 
 export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayLab, onClickSound }) {
   const el = document.createElement('div');
@@ -61,6 +62,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
 
   let selectedMode = 'ctf';
   let selectedLevel = DEFAULT_LEVEL in MAP_DATA ? DEFAULT_LEVEL : 'foundry';
+  const initialRank = getRankProgress(profile.rankXp);
 
   el.innerHTML = `
     <div class="home-lobby">
@@ -70,11 +72,11 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
           <input class="name-input player-name" maxlength="12" aria-label="Nome do jogador" value="${profile.name || 'Player'}" />
           <div class="player-progress-row">
             <div class="level-crown"><span>♛</span><b>25</b></div>
-            <div class="xp-wrap"><div class="xp-track"><i></i></div><strong>1.250 / 2.000</strong></div>
+            <div class="xp-wrap"><div class="xp-track"><i style="width:${initialRank.progress * 100}%"></i></div><strong>${initialRank.xp.toLocaleString('pt-BR')} / ${(initialRank.next?.xp ?? initialRank.xp).toLocaleString('pt-BR')} XP</strong></div>
           </div>
         </div>
         <div class="rank-divider"></div>
-        <div class="rank-shield"><span>◆</span></div>
+        <div class="rank-badge-wrap"><div class="rank-shield rank-sprite" style="${rankSpriteStyle(initialRank.rank)}"></div><small class="rank-current-name">${initialRank.rank.name}</small></div>
       </section>
 
       <nav class="top-actions" aria-label="Ações rápidas">
@@ -377,6 +379,10 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const configPanel = el.querySelector('.quick-config');
   const mapSelector = el.querySelector('.map-selector');
   const mapSelectorThumb = el.querySelector('.map-selector-thumb');
+  const xpFill = el.querySelector('.xp-track i');
+  const xpText = el.querySelector('.xp-wrap strong');
+  const rankShield = el.querySelector('.rank-shield');
+  const rankName = el.querySelector('.rank-current-name');
 
   // ------------------------------------------------------------ Reactive State
   function syncUI() {
@@ -412,6 +418,12 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     bigMapName.textContent = meta.name;
     if (bigMapDesc) bigMapDesc.textContent = meta.desc;
     bigMapSub.textContent = selectedMode === 'ctf' ? 'Capture a Bandeira' : mode.label.replace(/^\S+\s/, '');
+
+    const rankProgress = getRankProgress(profile.rankXp);
+    xpFill.style.width = `${rankProgress.progress * 100}%`;
+    xpText.textContent = `${rankProgress.xp.toLocaleString('pt-BR')} / ${(rankProgress.next?.xp ?? rankProgress.xp).toLocaleString('pt-BR')} XP`;
+    rankShield.style.cssText = rankSpriteStyle(rankProgress.rank);
+    rankName.textContent = rankProgress.rank.name;
   }
 
   // ------------------------------------------------------------ Event listeners
@@ -536,13 +548,40 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     onClickSound?.();
     configPanel.classList.remove('hidden');
   });
-  el.querySelector('.btn-ranking').addEventListener('click', () => openLobbyModal());
+  el.querySelector('.btn-ranking').addEventListener('click', () => openRankingModal());
   el.querySelector('.btn-missions').addEventListener('click', () => openHowToPlayModal());
 
   // Initial Sync
   syncUI();
 
   // ------------------------------------------------------------ Modals
+  function openRankingModal() {
+    onClickSound?.();
+    const progress = getRankProgress(profile.rankXp);
+    const stats = profile.rankStats || { matches: 0, wins: 0, losses: 0 };
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay rank-modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-window rank-modal-window">
+        <div class="modal-header"><div class="modal-title">RANKING</div><button class="modal-close">✕</button></div>
+        <div class="rank-hero">
+          <div class="rank-hero-icon rank-sprite" style="${rankSpriteStyle(progress.rank)}"></div>
+          <div class="rank-hero-copy"><span>RANK ATUAL</span><strong>${progress.rank.name}</strong><small>${progress.xp.toLocaleString('pt-BR')} XP</small></div>
+          <div class="rank-stats"><div><b>${stats.matches}</b><span>PARTIDAS</span></div><div><b>${stats.wins}</b><span>VITÓRIAS</span></div><div><b>${stats.losses}</b><span>DERROTAS</span></div></div>
+        </div>
+        <div class="rank-progress-line"><i style="width:${progress.progress * 100}%"></i></div>
+        <div class="rank-progress-label"><span>${progress.rank.name}</span><span>${progress.next ? `${progress.next.name} · ${progress.next.xp.toLocaleString('pt-BR')} XP` : 'RANK MÁXIMO'}</span></div>
+        <div class="rank-grid">
+          ${RANKS.map((rank) => `<div class="rank-entry ${rank.index === progress.rank.index ? 'current' : ''} ${rank.xp > progress.xp ? 'locked' : 'unlocked'}"><div class="rank-entry-icon rank-sprite" style="${rankSpriteStyle(rank)}"></div><strong>${rank.name}</strong><small>${rank.xp.toLocaleString('pt-BR')} XP</small></div>`).join('')}
+        </div>
+        <div class="rank-rules">Vitória: <b>+120 XP</b> · Empate: <b>+70 XP</b> · Derrota: <b>+45 XP</b></div>
+      </div>`;
+    uiRoot.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+  }
+
   function openHowToPlayModal() {
     onClickSound?.();
     const modal = document.createElement('div');
