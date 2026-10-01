@@ -696,6 +696,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
         </div>
       </div>`;
     uiRoot.appendChild(modal);
+
     const close = () => modal.remove();
     const closeButton = modal.querySelector('.modal-close');
     const grid = modal.querySelector('.shop-character-grid');
@@ -746,6 +747,54 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
         </div>
       </div>`;
     uiRoot.appendChild(modal);
+    const translateSettings = (language) => {
+      const copies = {
+        'pt-BR': {
+          title: 'CONFIGURAÇÕES', tabs: ['ÁUDIO', 'VÍDEO', 'INTERFACE', 'CONTROLES', 'CONTA'],
+          sections: ['ÁUDIO', 'VÍDEO', 'INTERFACE', 'CONTROLES E TECLAS', 'CONTA'],
+          volumes: ['Volume da música', 'Volume dos efeitos', 'Brilho'],
+          selects: ['Qualidade gráfica', 'Limite de FPS', 'Filtro para daltônicos', 'Idioma'],
+          toggles: ['Tela cheia automática', 'Notificações', 'Chat', 'Animações', 'Cursor durante a partida'],
+          controls: ['Mover para cima', 'Mover para baixo', 'Mover para esquerda', 'Mover para direita', 'Pular', 'Agarrar', 'Socar', 'Correr'],
+          reset: 'RESTAURAR TECLAS PADRÃO', disconnect: 'DESCONECTAR', account: 'Encerre sua sessão neste dispositivo.',
+          fullscreen: document.fullscreenElement ? 'SAIR DA TELA CHEIA' : 'ATIVAR TELA CHEIA AGORA', send: 'ENVIAR', placeholder: 'Digite uma mensagem…',
+        },
+        en: {
+          title: 'SETTINGS', tabs: ['AUDIO', 'VIDEO', 'INTERFACE', 'CONTROLS', 'ACCOUNT'],
+          sections: ['AUDIO', 'VIDEO', 'INTERFACE', 'CONTROLS & KEYS', 'ACCOUNT'],
+          volumes: ['Music volume', 'Sound effects volume', 'Brightness'],
+          selects: ['Graphics quality', 'FPS limit', 'Colorblind filter', 'Language'],
+          toggles: ['Automatic fullscreen', 'Notifications', 'Chat', 'Animations', 'In-game cursor'],
+          controls: ['Move up', 'Move down', 'Move left', 'Move right', 'Jump', 'Grab', 'Punch', 'Dash'],
+          reset: 'RESET DEFAULT KEYS', disconnect: 'SIGN OUT', account: 'End your session on this device.',
+          fullscreen: document.fullscreenElement ? 'EXIT FULLSCREEN' : 'ENTER FULLSCREEN NOW', send: 'SEND', placeholder: 'Type a message…',
+        },
+        es: {
+          title: 'CONFIGURACIÓN', tabs: ['AUDIO', 'VÍDEO', 'INTERFAZ', 'CONTROLES', 'CUENTA'],
+          sections: ['AUDIO', 'VÍDEO', 'INTERFAZ', 'CONTROLES Y TECLAS', 'CUENTA'],
+          volumes: ['Volumen de música', 'Volumen de efectos', 'Brillo'],
+          selects: ['Calidad gráfica', 'Límite de FPS', 'Filtro para daltónicos', 'Idioma'],
+          toggles: ['Pantalla completa automática', 'Notificaciones', 'Chat', 'Animaciones', 'Cursor durante la partida'],
+          controls: ['Mover arriba', 'Mover abajo', 'Mover a la izquierda', 'Mover a la derecha', 'Saltar', 'Agarrar', 'Golpear', 'Correr'],
+          reset: 'RESTAURAR TECLAS', disconnect: 'DESCONECTAR', account: 'Cierra tu sesión en este dispositivo.',
+          fullscreen: document.fullscreenElement ? 'SALIR DE PANTALLA COMPLETA' : 'ACTIVAR PANTALLA COMPLETA', send: 'ENVIAR', placeholder: 'Escribe un mensaje…',
+        },
+      };
+      const copy = copies[language];
+      if (!copy) return;
+      modal.querySelector('.modal-title').textContent = copy.title;
+      modal.querySelectorAll('.settings-tabs button').forEach((node, index) => { node.textContent = copy.tabs[index]; });
+      modal.querySelectorAll('.settings-section h3').forEach((node, index) => { node.textContent = copy.sections[index]; });
+      modal.querySelectorAll('.settings-volume b').forEach((node, index) => { node.textContent = copy.volumes[index]; });
+      modal.querySelectorAll('.settings-select > span').forEach((node, index) => { node.textContent = copy.selects[index]; });
+      modal.querySelectorAll('.settings-row b').forEach((node, index) => { node.textContent = copy.toggles[index]; });
+      modal.querySelectorAll('.settings-key > span').forEach((node, index) => { node.textContent = copy.controls[index]; });
+      modal.querySelector('.settings-reset-keys').textContent = copy.reset;
+      modal.querySelector('.settings-disconnect').textContent = copy.disconnect;
+      modal.querySelector('.settings-account-section p').textContent = copy.account;
+      modal.querySelector('.settings-fullscreen').textContent = copy.fullscreen;
+    };
+    translateSettings(settings.language);
 
     const close = () => modal.remove();
     modal.querySelector('.modal-close').addEventListener('click', close);
@@ -762,13 +811,15 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       select.addEventListener('change', () => {
         const key = select.dataset.setting;
         settings = saveSettings({ [key]: key === 'fps' ? Number(select.value) : select.value });
+        if (key === 'language') translateSettings(settings.language);
       });
     });
     modal.querySelectorAll('.settings-toggle-input[data-setting]').forEach((toggle) => {
       toggle.addEventListener('change', async () => {
         const key = toggle.dataset.setting;
-        if (key === 'notifications' && toggle.checked && 'Notification' in window && Notification.permission === 'default') {
-          toggle.checked = (await Notification.requestPermission()) === 'granted';
+        if (key === 'notifications' && toggle.checked) {
+          if (!('Notification' in window)) toggle.checked = false;
+          else if (Notification.permission !== 'granted') toggle.checked = (await Notification.requestPermission()) === 'granted';
         }
         settings = saveSettings({ [key]: toggle.checked });
       });

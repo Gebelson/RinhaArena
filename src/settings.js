@@ -28,7 +28,11 @@ export function getSettings() {
 export function saveSettings(next) {
   const settings = { ...getSettings(), ...next, controls: { ...getSettings().controls, ...(next.controls || {}) } };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  localStorage.setItem('rinha.musicVolume', String(settings.musicVolume / 100));
+  localStorage.setItem('rinha.sfxVolume', String(settings.sfxVolume / 100));
   applySettings(settings);
+  window.dispatchEvent(new CustomEvent('rinha:music-volume', { detail: { volume: settings.musicVolume / 100 } }));
+  window.dispatchEvent(new CustomEvent('rinha:sfx-volume', { detail: { volume: settings.sfxVolume / 100 } }));
   window.dispatchEvent(new CustomEvent('rinha:settings-change', { detail: settings }));
   return settings;
 }

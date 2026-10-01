@@ -8,6 +8,13 @@ export function createBgm() {
   let fadeTimer = null;
   let isPlaying = false;
 
+  const onVolumeChange = (event) => {
+    targetVolume = Math.max(0, Math.min(1, Number(event.detail?.volume) || 0));
+    localStorage.setItem('rinha.musicVolume', String(targetVolume));
+    if (audio && !audio.muted) audio.volume = targetVolume;
+  };
+  window.addEventListener('rinha:music-volume', onVolumeChange);
+
   function ensure() {
     if (!audio && typeof Audio !== 'undefined') {
       audio = new Audio('./audio/battle.mp3');

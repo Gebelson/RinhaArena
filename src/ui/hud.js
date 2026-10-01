@@ -3,6 +3,7 @@
 // exit + mute buttons. Pure DOM over the canvas.
 
 import { TEAMS } from '../core/config.js';
+import { getSettings, keyLabel } from '../settings.js';
 
 export function createHud(uiRoot, { onExit, onMute, muted }) {
   const el = document.createElement('div');
@@ -26,9 +27,14 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
       <div class="hpwrap"><div class="hpbar"></div></div>
     </div>
     <div class="hud-corner">
+      <button class="hud-btn btn-chat" aria-label="Abrir chat">💬</button>
       <button class="hud-btn btn-mute">${muted ? '🔇' : '🔊'}</button>
       <button class="hud-btn btn-exit">✕</button>
     </div>
+    <form class="game-chat hidden" autocomplete="off">
+      <div class="game-chat-log" aria-live="polite"></div>
+      <div class="game-chat-compose"><input maxlength="100" placeholder="Digite uma mensagem…" aria-label="Mensagem do chat"><button type="submit">ENVIAR</button></div>
+    </form>
     <div class="connecting hidden">Connecting…</div>
     <div class="overlay-over hidden"></div>
   `;
@@ -52,11 +58,39 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
   const overPanel = q('.overlay-over');
   const ffaHud = q('.ffa-hud');
   const ffaLead = q('.ffa-lead');
+  const chat = q('.game-chat');
+  const chatLog = q('.game-chat-log');
+  const chatInput = q('.game-chat input');
 
   q('.btn-exit').addEventListener('click', onExit);
   q('.btn-mute').addEventListener('click', (e) => {
     e.currentTarget.textContent = onMute() ? '🔇' : '🔊';
   });
+  q('.btn-chat').addEventListener('click', () => {
+    if (!getSettings().chat) return;
+    chat.classList.toggle('hidden');
+    if (!chat.classList.contains('hidden')) chatInput.focus();
+  });
+  chat.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const message = chatInput.value.trim();
+    if (!message) return;
+    const line = document.createElement('div');
+    const author = document.createElement('b');
+    author.textContent = 'VOCÊ: ';
+    line.append(author, document.createTextNode(message));
+    chatLog.appendChild(line);
+    while (chatLog.children.length > 20) chatLog.firstChild.remove();
+    chatLog.scrollTop = chatLog.scrollHeight;
+    chatInput.value = '';
+  });
+  const onChatKey = (event) => {
+    if (event.code !== 'Enter' || !getSettings().chat || /INPUT|TEXTAREA/.test(event.target?.tagName)) return;
+    event.preventDefault();
+    chat.classList.remove('hidden');
+    chatInput.focus();
+  };
+  window.addEventListener('keydown', onChatKey);
 
   let lastCountdown = -1;
   let centerTimer = null;
@@ -151,7 +185,7 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
           if (cd <= 0) {
             dashFill.style.width = '100%';
             dashFill.classList.remove('recharge');
-            dashText.textContent = '⚡ DASH [Shift]';
+            dashText.textContent = `⚡ DASH [${keyLabel(getSettings().controls.dash)}]`;
             dashHud.classList.add('ready');
           } else {
             const pct = Math.max(0, Math.min(100, (1 - cd / 1.6) * 100));
@@ -204,6 +238,9 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
               <div class="over-next"></div>
             </div>`;
           overPanel.classList.remove('hidden');
+          if (getSettings().notifications && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+            new Notification('Rinha Arena', { body: overPanel.textContent.trim().replace(/\s+/g, ' ') });
+          }
         }
         overPanel.querySelector('.over-next').textContent =
           `Next round in ${Math.max(1, Math.ceil(view.overT))}…`;
@@ -284,6 +321,7 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
 
     dispose() {
       clearTimeout(centerTimer);
+      window.removeEventListener('keydown', onChatKey);
       el.remove();
     },
   };
