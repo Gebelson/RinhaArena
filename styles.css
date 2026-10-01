@@ -1014,7 +1014,8 @@ html, body {
 .rank-progress-line { height: 14px; margin: 0 18px; overflow: hidden; border: 2px solid #254e9c; border-radius: 99px; background: #06112c; }
 .rank-progress-line i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#03a9ff,#35edff); box-shadow: 0 0 14px #12cfff; }
 .rank-progress-label { display: flex; justify-content: space-between; padding: 4px 20px 8px; color: #a9bee5; font-size: 11px; font-weight: 800; }
-.rank-grid { display: grid; flex: 1 1 auto; min-height: 0; grid-template-columns: repeat(6,1fr); grid-template-rows: repeat(3,minmax(0,1fr)); gap: 8px; overflow: hidden; padding: 4px 16px 8px; }
+.rank-grid { display: grid; flex: 1 1 auto; min-height: 0; grid-template-columns: repeat(7,1fr); grid-template-rows: repeat(3,minmax(0,1fr)); gap: 8px; overflow: hidden; padding: 4px 16px 8px; }
+.rank-grid .rank-entry:nth-child(15) { grid-column: 2; }
 .rank-entry { min-width: 0; min-height: 0; padding: 5px 4px; border: 2px solid #243968; border-radius: 13px; background: linear-gradient(#102454,#08142f); text-align: center; transition: transform .15s, filter .15s; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .rank-entry.current { border-color: #ffd34d; box-shadow: 0 0 16px #ffbd286e; transform: translateY(-2px); }
 .rank-entry.locked { filter: grayscale(1) brightness(.45); }

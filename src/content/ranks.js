@@ -1,10 +1,11 @@
 export const RANKS = [
-  ['Novato I', 0, 'novato-1.png'], ['Novato II', 100, 'novato-2.png'], ['Novato III', 250, 'novato-3.png'],
-  ['Valente I', 450, 'valente-1.png'], ['Valente II', 700, 'valente-2.png'], ['Valente III', 1000, 'valente-3.png'],
-  ['Brutal I', 1350, 'brutal-1.png'], ['Brutal II', 1750, 'brutal-2.png'], ['Brutal III', 2200, 'brutal-3.png'],
-  ['Temido I', 2700, 'temido-1.png'], ['Temido II', 3250, 'temido-2.png'], ['Temido III', 3850, 'temido-3.png'],
-  ['Implacável I', 4500, 'implacavel-1.png'], ['Implacável II', 5200, 'implacavel-2.png'], ['Implacável III', 5950, 'implacavel-3.png'],
-  ['Lendário I', 6750, 'lendario-1.png'], ['Lendário II', 7600, 'lendario-2.png'], ['Lendário III', 8500, 'lendario-3.png'],
+  ['Unranked', 0, 'unranked.png'],
+  ['Novato I', 100, 'novato-1.png'], ['Novato II', 250, 'novato-2.png'], ['Novato III', 450, 'novato-3.png'],
+  ['Valente I', 700, 'valente-1.png'], ['Valente II', 1000, 'valente-2.png'], ['Valente III', 1350, 'valente-3.png'],
+  ['Brutal I', 1750, 'brutal-1.png'], ['Brutal II', 2200, 'brutal-2.png'], ['Brutal III', 2700, 'brutal-3.png'],
+  ['Temido I', 3250, 'temido-1.png'], ['Temido II', 3850, 'temido-2.png'], ['Temido III', 4500, 'temido-3.png'],
+  ['Implacável I', 5200, 'implacavel-1.png'], ['Implacável II', 5950, 'implacavel-2.png'], ['Implacável III', 6750, 'implacavel-3.png'],
+  ['Lendário I', 7600, 'lendario-1.png'], ['Lendário II', 8500, 'lendario-2.png'], ['Lendário III', 9500, 'lendario-3.png'],
 ].map(([name, xp, asset], index) => ({ name, xp, asset, index }));
 
 export function getRankProgress(xp = 0) {
