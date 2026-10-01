@@ -929,7 +929,7 @@ html, body {
 .map-selector {
   position: absolute; left: 50%; bottom: 3.05%; width: 37.8%; height: var(--bottom-button-height);
   display: flex; align-items: center; gap: 1.1vw; padding: .72vh 1.15vw .72vh .72vw;
-  overflow: hidden; isolation: isolate; border: .4vw solid #07152f; border-radius: 1.55vw; color: white;
+  overflow: hidden; isolation: isolate; border: .35vw solid #07152f; border-radius: 1.55vw; color: white;
   background: linear-gradient(135deg, #123f9b 0%, #071c50 48%, #061333 100%);
   box-shadow: 0 .55vh 0 #02091d, 0 .9vh 1.4vh #0009, inset 0 .22vh 0 #65c8ff, inset 0 -.28vh 0 #02091f;
   cursor: pointer; transform: translateX(-50%); transition: transform .12s, filter .12s, box-shadow .12s; text-align: left;
