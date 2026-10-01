@@ -4,7 +4,7 @@
 html, body {
   height: 100%;
   overflow: hidden;
-  background: #070a14;
+  background: #070a14 url('./assets/media/lobby-background-poster.webp') center / cover no-repeat;
   font-family: 'Barlow Condensed', 'Rajdhani', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color: #eef2f8;
   touch-action: none;
@@ -32,7 +32,7 @@ html, body {
   height: 100vh;
   overflow: hidden;
   background-color: #070a14;
-  background-image: url('./assets/background-main.png');
+  background-image: url('./assets/media/lobby-background-poster.webp');
   background-size: cover;
   background-position: center center;
   background-repeat: no-repeat;

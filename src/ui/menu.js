@@ -95,7 +95,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const initialLevel = getLevelProgress(profile.rankStats);
 
   el.innerHTML = `
-    <video class="lobby-bg-video" autoplay muted loop playsinline preload="auto" poster="./assets/background-main.png" aria-hidden="true">
+    <video class="lobby-bg-video" autoplay muted loop playsinline preload="auto" poster="./assets/media/lobby-background-poster.webp" aria-hidden="true">
       <source src="./assets/media/lobby-background.mp4" type="video/mp4" />
     </video>
     <div class="home-lobby">
