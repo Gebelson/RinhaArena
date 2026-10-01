@@ -883,7 +883,7 @@ html, body {
 .player-progress-row { display: flex; align-items: center; gap: 0; margin-top: 1.1vh; padding-left: .48vw; }
 .level-badge { position: relative; z-index: 2; margin-right: -.26vw; flex: 0 0 auto; display: grid; place-items: center; filter: drop-shadow(0 .2vw .14vw #0008); }
 .level-badge img { display: block; width: auto; height: 3.45vh; object-fit: contain; }
-.level-badge b { position: absolute; color: #fff; font: 900 1.25vw/1 'Barlow Condensed', sans-serif; text-shadow: 0 .1vw .12vw #2b120a; }
+.level-badge b { position: absolute; color: #fff; font: 900 1.1vw/1 'Barlow Condensed', sans-serif; text-shadow: 0 .1vw .12vw #2b120a; }
 .xp-wrap { flex: 1; min-width: 0; font-size: 1.15vw; font-weight: 800; }
 .xp-track { position: relative; height: 3.05vh; margin-left: -.42vw; overflow: hidden; border-radius: 0 99px 99px 0; background: #07164c; border: .16vw solid #2085ef; }
 .xp-track i { position: absolute; inset: 0 auto 0 0; display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(#20c5ff,#0580ed); box-shadow: inset 0 .2vh .4vh #fff6; }
