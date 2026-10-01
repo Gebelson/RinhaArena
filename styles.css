@@ -879,12 +879,12 @@ html, body {
 .rank-badge-wrap:hover .rank-shield { filter: brightness(1.1) drop-shadow(0 0 .45vw #33a8ff); }
 .rank-sprite { background-image: var(--rank-image); background-size: contain; background-position: center; background-repeat: no-repeat; image-rendering: auto; }
 .rank-shield span { width: 55%; aspect-ratio: 1; display: grid; place-items: center; clip-path: polygon(50% 0,100% 35%,82% 100%,18% 100%,0 35%); background: #6d70ff; }
-.top-actions { position: absolute; right: 2.8%; top: 4.6%; height: 8.8%; display: flex; gap: .8vw; align-items: stretch; }
-.coin-card { width: 15.5vw; display: flex; align-items: center; gap: .55vw; padding: .35vw .45vw; border-radius: 1.25vw; background: #061334; border: .12vw solid #124686; box-shadow: 0 .6vh 1.3vh #0009; }
-.coin-crown { width: 3.7vw; aspect-ratio: 1; display: block; flex: 0 0 auto; object-fit: contain; filter: drop-shadow(0 .2vw .22vw #0008); }
-.coin-card strong { flex: 1; font-size: 2vw; }
+.top-actions { position: absolute; right: 2.8%; top: 4.6%; height: 7.8%; display: flex; gap: .35vw; align-items: stretch; }
+.coin-card { width: 14.3vw; display: flex; align-items: center; gap: .35vw; padding: .2vw .35vw; border-radius: 1.15vw; background: #061334; border: .12vw solid #124686; box-shadow: 0 .6vh 1.3vh #0009; }
+.coin-crown { width: 4.2vw; aspect-ratio: 1; display: block; flex: 0 0 auto; object-fit: contain; filter: drop-shadow(0 .2vw .22vw #0008); }
+.coin-card strong { flex: 1; font-size: 1.8vw; }
 .home-lobby .coin-plus {
-  position: relative; isolation: isolate; overflow: hidden; width: auto; height: 6.8vh; aspect-ratio: 1; padding: 0;
+  position: relative; isolation: isolate; overflow: hidden; width: auto; height: 6.1vh; aspect-ratio: 1; padding: 0;
   display: grid; place-items: center;
   border: .3vw solid #07152f; border-radius: 1vw; outline: 0;
   background:
@@ -905,7 +905,7 @@ html, body {
 }
 .home-lobby .coin-plus:hover { transform: translateY(-.25vh) scale(1.025); filter: brightness(1.08); box-shadow: 0 .5vh 0 #02091d, 0 0 .8vw rgba(40,255,112,.65), inset 0 .22vh 0 #fff, inset 0 -.24vh 0 #057e33; }
 .home-lobby .coin-plus:active { transform: translateY(.18vh) scale(.985); box-shadow: 0 .14vh 0 #02091d, 0 .22vh .3vh #0008, inset 0 .14vh .12vh #d9ffe3, inset 0 -.15vh 0 #057e33; }
-.image-icon-btn { position: relative; width: 5.8vw; border: 0; padding: 0; background: transparent; cursor: pointer; transition: transform .12s, filter .12s; overflow: visible; }
+.image-icon-btn { position: relative; width: 5.2vw; border: 0; padding: 0; background: transparent; cursor: pointer; transition: transform .12s, filter .12s; overflow: visible; }
 .image-icon-btn img { position: absolute; left: 50%; width: auto; max-width: none; transform: translateX(-50%); }
 .btn-lobby img { height: 133.8%; top: -17.1%; }
 .btn-settings img { height: 122.3%; top: -11.7%; }
