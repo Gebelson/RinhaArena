@@ -906,6 +906,15 @@ html, body {
 }
 .image-icon-btn:hover,.art-button:hover,.map-selector:hover { transform: translateY(-.35vh) scale(1.018); filter: brightness(1.08); }
 .image-icon-btn:active,.art-button:active,.map-selector:active { transform: translateY(.2vh) scale(.985); }
+.home-lobby .play-button:hover {
+  border-radius: 0;
+  box-shadow: none;
+  filter: brightness(1.08) drop-shadow(0 0 .7vw rgba(255, 193, 7, .78));
+}
+.home-lobby .play-button:active {
+  border-radius: 0;
+  box-shadow: none;
+}
 .image-icon-btn.muted { opacity: .48; filter: grayscale(.8); }
 .art-button { position: absolute; border: 0; border-radius: 0; outline: 0; padding: 0; background: transparent; box-shadow: none; cursor: pointer; overflow: visible; transition: transform .12s, filter .12s; }
 .art-button img { position: absolute; left: 50%; width: auto; max-width: none; transform: translateX(-50%); }
