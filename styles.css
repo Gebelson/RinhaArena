@@ -874,9 +874,8 @@ html, body {
 .xp-track { height: 2.8vh; margin-bottom: .35vh; overflow: hidden; border-radius: 99px; background: #07164c; border: .12vw solid #4679dd; }
 .xp-track i { display: block; width: 59%; height: 100%; border-radius: inherit; background: linear-gradient(#20c5ff,#0580ed); box-shadow: inset 0 .2vh .4vh #fff6; }
 .rank-divider { width: .12vw; height: 70%; background: #696cff; opacity: .8; }
-.rank-badge-wrap { width: 7.4vw; flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: .15vh; }
-.rank-shield { width: 7.1vw; height: 10.7vh; flex: 0 0 auto; filter: drop-shadow(0 .25vw .18vw #02072a); }
-.rank-current-name { max-width: 100%; color: #fff; font-size: .82vw; line-height: 1; font-weight: 900; text-transform: uppercase; white-space: nowrap; text-shadow: 0 .15vh .2vh #000; }
+.rank-badge-wrap { width: 5.9vw; flex: 0 0 auto; display: grid; place-items: center; }
+.rank-shield { width: 5.8vw; height: 9.4vh; flex: 0 0 auto; filter: drop-shadow(0 .25vw .18vw #02072a); }
 .rank-sprite { background-image: url('./assets/ui/ranks.png'); background-size: 300% 600%; background-position: calc(var(--rank-column) * 50%) calc(var(--rank-row) * 20%); background-repeat: no-repeat; }
 .rank-shield span { width: 55%; aspect-ratio: 1; display: grid; place-items: center; clip-path: polygon(50% 0,100% 35%,82% 100%,18% 100%,0 35%); background: #6d70ff; }
 .top-actions { position: absolute; right: 2.8%; top: 4.6%; height: 8.8%; display: flex; gap: .8vw; align-items: stretch; }

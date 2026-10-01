@@ -76,7 +76,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
           </div>
         </div>
         <div class="rank-divider"></div>
-        <div class="rank-badge-wrap"><div class="rank-shield rank-sprite" style="${rankSpriteStyle(initialRank.rank)}"></div><small class="rank-current-name">${initialRank.rank.name}</small></div>
+        <div class="rank-badge-wrap"><div class="rank-shield rank-sprite" style="${rankSpriteStyle(initialRank.rank)}" aria-label="${initialRank.rank.name}"></div></div>
       </section>
 
       <nav class="top-actions" aria-label="Ações rápidas">
@@ -382,7 +382,6 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const xpFill = el.querySelector('.xp-track i');
   const xpText = el.querySelector('.xp-wrap strong');
   const rankShield = el.querySelector('.rank-shield');
-  const rankName = el.querySelector('.rank-current-name');
 
   // ------------------------------------------------------------ Reactive State
   function syncUI() {
@@ -423,7 +422,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     xpFill.style.width = `${rankProgress.progress * 100}%`;
     xpText.textContent = `${rankProgress.xp.toLocaleString('pt-BR')} / ${(rankProgress.next?.xp ?? rankProgress.xp).toLocaleString('pt-BR')} XP`;
     rankShield.style.cssText = rankSpriteStyle(rankProgress.rank);
-    rankName.textContent = rankProgress.rank.name;
+    rankShield.setAttribute('aria-label', rankProgress.rank.name);
   }
 
   // ------------------------------------------------------------ Event listeners
