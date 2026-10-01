@@ -1911,21 +1911,19 @@ html, body {
 .auth-window {
   width: min(940px, 92vw);
   height: min(850px, 88dvh);
-  min-height: 430px;
+  min-height: 450px;
   display: grid;
   grid-template-columns: 50% 50%;
   overflow: hidden;
   border: 5px solid #030303;
-  border-radius: 20px;
+  border-radius: 22px;
   background: #fff;
-  box-shadow: 0 28px 80px #000d, 0 0 0 28px #000;
 }
 .menu.auth-pending .player-card,
 .menu.auth-pending .top-actions { opacity: 0; }
 .auth-art {
   min-width: 0;
   background-image: url('./assets/ui/login-reference.png');
-  background-size: 260.6% auto;
   background-position: 18.9% 50%;
   background-repeat: no-repeat;
 }
@@ -1938,7 +1936,7 @@ html, body {
   color: #070707;
   background: #fff;
 }
-.auth-form { display: flex; flex-direction: column; }
+.auth-form { display: flex; flex-direction: column; margin-top: 150px; }
 .auth-form h1 {
   margin: 0 0 clamp(28px, 7vh, 68px);
   font: 1000 clamp(46px, 5vw, 74px)/.9 Arial Black, Arial, sans-serif;
@@ -1967,7 +1965,7 @@ html, body {
   user-select: text;
 }
 .auth-form input:focus { border-color: #008fd4; box-shadow: 0 0 0 3px #00a9f02b; }
-.auth-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.auth-actions { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .auth-forgot,
 .auth-switch {
   padding: 0;
