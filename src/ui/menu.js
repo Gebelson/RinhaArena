@@ -70,6 +70,9 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const initialRank = getRankProgress(profile.rankXp);
 
   el.innerHTML = `
+    <video class="lobby-bg-video" autoplay muted loop playsinline preload="auto" poster="./assets/background-main.png" aria-hidden="true">
+      <source src="./assets/media/lobby-background.mp4" type="video/mp4" />
+    </video>
     <div class="home-lobby">
       <section class="player-card" aria-label="Perfil do jogador">
         <div class="player-avatar" aria-hidden="true"></div>
@@ -387,6 +390,26 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const xpFill = el.querySelector('.xp-track i');
   const xpText = el.querySelector('.xp-wrap strong');
   const rankShield = el.querySelector('.rank-shield');
+  const lobbyVideo = el.querySelector('.lobby-bg-video');
+  const lobbyMusic = new Audio('./audio/lobby-theme.m4a');
+  lobbyMusic.loop = true;
+  lobbyMusic.preload = 'auto';
+  lobbyMusic.volume = 0.38;
+  btnAudio.classList.toggle('muted', localStorage.getItem('blast.muted') === '1');
+
+  const playLobbyMedia = () => {
+    lobbyVideo.play().catch(() => {});
+    lobbyMusic.muted = localStorage.getItem('blast.muted') === '1';
+    lobbyMusic.play().catch(() => {});
+  };
+  const pauseLobbyMedia = () => {
+    lobbyVideo.pause();
+    lobbyMusic.pause();
+  };
+  window.addEventListener('pointerdown', () => {
+    if (!el.classList.contains('hidden')) playLobbyMedia();
+  }, { once: true });
+  playLobbyMedia();
 
   // ------------------------------------------------------------ Reactive State
   function syncUI() {
@@ -542,8 +565,11 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   el.querySelector('.quick-config-close').addEventListener('click', () => configPanel.classList.add('hidden'));
   btnAudio.addEventListener('click', () => {
     onClickSound?.();
-    btnAudio.classList.toggle('muted');
-    btnAudio.setAttribute('aria-label', btnAudio.classList.contains('muted') ? 'Ativar áudio' : 'Desativar áudio');
+    const nextMuted = localStorage.getItem('blast.muted') !== '1';
+    localStorage.setItem('blast.muted', nextMuted ? '1' : '0');
+    lobbyMusic.muted = nextMuted;
+    btnAudio.classList.toggle('muted', nextMuted);
+    btnAudio.setAttribute('aria-label', nextMuted ? 'Ativar áudio' : 'Desativar áudio');
   });
   mapSelector.addEventListener('click', () => {
     const ids = Object.keys(MAP_DATA);
@@ -717,6 +743,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       const nowMuted = localStorage.getItem('blast.muted') === '1';
       localStorage.setItem('blast.muted', nowMuted ? '0' : '1');
       const nextMuted = !nowMuted;
+      lobbyMusic.muted = nextMuted;
+      btnAudio.classList.toggle('muted', nextMuted);
       toggleBtn.style.background = nextMuted ? 'rgba(255,83,71,0.2)' : 'rgba(74,222,128,0.2)';
       toggleBtn.style.color = nextMuted ? '#ff8a6e' : '#4ade80';
       toggleBtn.textContent = nextMuted ? '🔇 Silenciado' : '🔊 Áudio Ativado';
@@ -1109,8 +1137,10 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     show() {
       syncUI();
       el.classList.remove('hidden');
+      playLobbyMedia();
     },
     hide() {
+      pauseLobbyMedia();
       el.classList.add('hidden');
     },
   };

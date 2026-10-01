@@ -856,6 +856,17 @@ html, body {
   --right-button-width: calc(var(--bottom-button-height) * 2.958);
   position: relative; width: 100%; height: 100%; overflow: hidden;
 }
+.lobby-bg-video {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+}
+.home-lobby { z-index: 1; }
 .legacy-menu-template { display: none !important; }
 .home-lobby button { font: inherit; }
 .player-card {
