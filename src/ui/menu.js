@@ -85,7 +85,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       </section>
 
       <nav class="top-actions" aria-label="Ações rápidas">
-        <div class="coin-card"><span class="coin-crown">♛</span><strong>1.250</strong><button class="coin-plus" aria-label="Adicionar moedas">+</button></div>
+        <div class="coin-card"><img class="coin-crown" src="./assets/ui/capicoin.png" alt="Capicoin" /><strong>1.250</strong><button class="coin-plus" aria-label="Adicionar moedas">+</button></div>
         <button class="image-icon-btn btn-lobby" aria-label="Amigos e salas"><img src="./assets/ui/menu-friends.png" alt="" /></button>
         <button class="image-icon-btn btn-settings" aria-label="Configurações"><img src="./assets/ui/menu-config.png" alt="" /></button>
         <button class="image-icon-btn btn-audio" aria-label="Áudio"><img src="./assets/ui/menu-audio.png" alt="" /></button>

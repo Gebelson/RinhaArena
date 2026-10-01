@@ -881,7 +881,7 @@ html, body {
 .rank-shield span { width: 55%; aspect-ratio: 1; display: grid; place-items: center; clip-path: polygon(50% 0,100% 35%,82% 100%,18% 100%,0 35%); background: #6d70ff; }
 .top-actions { position: absolute; right: 2.8%; top: 4.6%; height: 8.8%; display: flex; gap: .8vw; align-items: stretch; }
 .coin-card { width: 15.5vw; display: flex; align-items: center; gap: 1vw; padding: .35vw .45vw; border-radius: 1.25vw; background: #061334; border: .12vw solid #124686; box-shadow: 0 .6vh 1.3vh #0009; }
-.coin-crown { width: 4.2vw; aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; color: #fff600; font-size: 2.25vw; background: linear-gradient(#ffae00,#ff5d00); border: .18vw solid #ffe262; }
+.coin-crown { width: 4.2vw; aspect-ratio: 1; display: block; flex: 0 0 auto; object-fit: contain; filter: drop-shadow(0 .2vw .22vw #0008); }
 .coin-card strong { flex: 1; font-size: 2vw; }
 .home-lobby .coin-plus {
   position: relative; isolation: isolate; overflow: hidden; width: auto; height: 6.8vh; aspect-ratio: 1; padding: 0;
