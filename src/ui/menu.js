@@ -14,6 +14,7 @@ import { listPlayerRankings, submitPlayerRanking } from '../net/ranking.js';
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
 }[char]));
+const AVATARS = Array.from({ length: 6 }, (_, index) => `avatar-${index + 1}.webp`);
 
 export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayLab, onClickSound }) {
   const el = document.createElement('div');
@@ -64,6 +65,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
 
   if (!profile.hat) profile.hat = 'crown';
   if (!profile.skin) profile.skin = REFERENCE_SKINS[6];
+  if (!AVATARS.includes(profile.cos.avatar)) profile.cos.avatar = AVATARS[0];
 
   let selectedMode = 'ctf';
   let selectedLevel = DEFAULT_LEVEL in MAP_DATA ? DEFAULT_LEVEL : 'foundry';
@@ -75,7 +77,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     </video>
     <div class="home-lobby">
       <section class="player-card" aria-label="Perfil do jogador">
-        <div class="player-avatar" aria-hidden="true"></div>
+        <button class="player-avatar" type="button" aria-label="Trocar ícone do perfil"><img src="./assets/ui/avatars/${profile.cos.avatar}" alt="Ícone do perfil" /></button>
         <div class="player-summary">
           <input class="name-input player-name" maxlength="12" aria-label="Nome do jogador" value="${profile.name || 'Player'}" />
           <div class="player-progress-row">
@@ -390,6 +392,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const xpFill = el.querySelector('.xp-track i');
   const xpText = el.querySelector('.xp-wrap strong');
   const rankShield = el.querySelector('.rank-shield');
+  const playerAvatar = el.querySelector('.player-avatar img');
   const lobbyVideo = el.querySelector('.lobby-bg-video');
   const lobbyMusic = new Audio('./audio/lobby-theme.m4a');
   lobbyMusic.loop = true;
@@ -453,6 +456,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       : `${rankProgress.points.toLocaleString('pt-BR')} PTS`;
     rankShield.src = `./assets/ui/ranks/${rankProgress.rank.asset}`;
     rankShield.alt = rankProgress.rank.name;
+    playerAvatar.src = `./assets/ui/avatars/${profile.cos.avatar}`;
   }
 
   // ------------------------------------------------------------ Event listeners
@@ -581,6 +585,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     onClickSound?.();
     configPanel.classList.remove('hidden');
   });
+  el.querySelector('.player-avatar').addEventListener('click', () => openAvatarModal());
   el.querySelector('.rank-badge-wrap').addEventListener('click', () => openRankProgressModal());
   el.querySelector('.btn-ranking').addEventListener('click', () => openLeaderboardModal());
   el.querySelector('.btn-missions').addEventListener('click', () => openHowToPlayModal());
@@ -589,6 +594,32 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   syncUI();
 
   // ------------------------------------------------------------ Modals
+  function openAvatarModal() {
+    onClickSound?.();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay avatar-modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-window avatar-modal-window">
+        <div class="modal-header"><div class="modal-title">ESCOLHA SEU ÍCONE</div><button class="modal-close">✕</button></div>
+        <div class="avatar-grid">
+          ${AVATARS.map((avatar, index) => `<button class="avatar-option ${avatar === profile.cos.avatar ? 'selected' : ''}" data-avatar="${avatar}" aria-label="Selecionar ícone ${index + 1}"><img src="./assets/ui/avatars/${avatar}" alt="Ícone ${index + 1}" /></button>`).join('')}
+        </div>
+      </div>`;
+    uiRoot.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    modal.querySelectorAll('.avatar-option').forEach((button) => {
+      button.addEventListener('click', () => {
+        profile.cos.avatar = button.dataset.avatar;
+        profile.save();
+        playerAvatar.src = `./assets/ui/avatars/${profile.cos.avatar}`;
+        onClickSound?.();
+        close();
+      });
+    });
+  }
+
   function openRankProgressModal() {
     onClickSound?.();
     const progress = getRankProgress(profile.rankXp);
