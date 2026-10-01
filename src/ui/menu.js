@@ -9,6 +9,11 @@ import { LEVELS, DEFAULT_LEVEL, newProceduralSeed } from '../content/levels/inde
 import { createRoom, listRooms } from '../net/rooms.js';
 import { HATS, SKINS } from '../content/cosmetics.js';
 import { RANKS, getRankProgress, rankSpriteStyle } from '../content/ranks.js';
+import { listPlayerRankings, submitPlayerRanking } from '../net/ranking.js';
+
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
+}[char]));
 
 export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayLab, onClickSound }) {
   const el = document.createElement('div');
@@ -72,11 +77,11 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
           <input class="name-input player-name" maxlength="12" aria-label="Nome do jogador" value="${profile.name || 'Player'}" />
           <div class="player-progress-row">
             <div class="level-crown"><span>♛</span><b>25</b></div>
-            <div class="xp-wrap"><div class="xp-track"><i style="width:${initialRank.progress * 100}%"></i></div><strong>${initialRank.xp.toLocaleString('pt-BR')} / ${(initialRank.next?.xp ?? initialRank.xp).toLocaleString('pt-BR')} XP</strong></div>
+            <div class="xp-wrap"><div class="xp-track"><i style="width:${initialRank.progress * 100}%"></i></div><strong>${initialRank.next ? `${initialRank.points} / 100 PTS` : `${initialRank.points.toLocaleString('pt-BR')} PTS`}</strong></div>
           </div>
         </div>
         <div class="rank-divider"></div>
-        <div class="rank-badge-wrap"><img class="rank-shield" src="./assets/ui/ranks/${initialRank.rank.asset}" alt="${initialRank.rank.name}" /></div>
+        <button class="rank-badge-wrap" type="button" aria-label="Ver progressão de ranks"><img class="rank-shield" src="./assets/ui/ranks/${initialRank.rank.asset}" alt="${initialRank.rank.name}" /></button>
       </section>
 
       <nav class="top-actions" aria-label="Ações rápidas">
@@ -420,7 +425,9 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
 
     const rankProgress = getRankProgress(profile.rankXp);
     xpFill.style.width = `${rankProgress.progress * 100}%`;
-    xpText.textContent = `${rankProgress.xp.toLocaleString('pt-BR')} / ${(rankProgress.next?.xp ?? rankProgress.xp).toLocaleString('pt-BR')} XP`;
+    xpText.textContent = rankProgress.next
+      ? `${rankProgress.points} / 100 PTS`
+      : `${rankProgress.points.toLocaleString('pt-BR')} PTS`;
     rankShield.src = `./assets/ui/ranks/${rankProgress.rank.asset}`;
     rankShield.alt = rankProgress.rank.name;
   }
@@ -434,6 +441,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     const mirror = el.querySelector('.config-name-mirror');
     if (mirror) mirror.textContent = profile.name;
   });
+  nameInput.addEventListener('change', () => submitPlayerRanking(profile).catch(() => {}));
 
   // Hat Selection
   hatBtns.forEach((btn) => {
@@ -547,14 +555,15 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     onClickSound?.();
     configPanel.classList.remove('hidden');
   });
-  el.querySelector('.btn-ranking').addEventListener('click', () => openRankingModal());
+  el.querySelector('.rank-badge-wrap').addEventListener('click', () => openRankProgressModal());
+  el.querySelector('.btn-ranking').addEventListener('click', () => openLeaderboardModal());
   el.querySelector('.btn-missions').addEventListener('click', () => openHowToPlayModal());
 
   // Initial Sync
   syncUI();
 
   // ------------------------------------------------------------ Modals
-  function openRankingModal() {
+  function openRankProgressModal() {
     onClickSound?.();
     const progress = getRankProgress(profile.rankXp);
     const stats = profile.rankStats || { matches: 0, wins: 0, losses: 0 };
@@ -562,23 +571,58 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     modal.className = 'modal-overlay rank-modal-overlay';
     modal.innerHTML = `
       <div class="modal-window rank-modal-window">
-        <div class="modal-header"><div class="modal-title">RANKING</div><button class="modal-close">✕</button></div>
+        <div class="modal-header"><div class="modal-title">PROGRESSÃO DE RANKS</div><button class="modal-close">✕</button></div>
         <div class="rank-hero">
           <div class="rank-hero-icon rank-sprite" style="${rankSpriteStyle(progress.rank)}"></div>
-          <div class="rank-hero-copy"><span>RANK ATUAL</span><strong>${progress.rank.name}</strong><small>${progress.xp.toLocaleString('pt-BR')} XP</small></div>
+          <div class="rank-hero-copy"><span>RANK ATUAL</span><strong>${progress.rank.name}</strong><small>${progress.points.toLocaleString('pt-BR')} PTS</small></div>
           <div class="rank-stats"><div><b>${stats.matches}</b><span>PARTIDAS</span></div><div><b>${stats.wins}</b><span>VITÓRIAS</span></div><div><b>${stats.losses}</b><span>DERROTAS</span></div></div>
         </div>
         <div class="rank-progress-line"><i style="width:${progress.progress * 100}%"></i></div>
-        <div class="rank-progress-label"><span>${progress.rank.name}</span><span>${progress.next ? `${progress.next.name} · ${progress.next.xp.toLocaleString('pt-BR')} XP` : 'RANK MÁXIMO'}</span></div>
+        <div class="rank-progress-label"><span>${progress.rank.name} · ${progress.points} PTS</span><span>${progress.next ? `${progress.next.name} · 100 PTS` : 'PONTUAÇÃO SEM LIMITE'}</span></div>
         <div class="rank-grid">
-          ${RANKS.map((rank) => `<div class="rank-entry ${rank.index === progress.rank.index ? 'current' : ''} ${rank.xp > progress.xp ? 'locked' : 'unlocked'}"><div class="rank-entry-icon rank-sprite" style="${rankSpriteStyle(rank)}"></div><strong>${rank.name}</strong><small>${rank.xp.toLocaleString('pt-BR')} XP</small></div>`).join('')}
+          ${RANKS.map((rank) => `<div class="rank-entry ${rank.index === progress.rank.index ? 'current' : ''} ${rank.xp > progress.xp ? 'locked' : 'unlocked'}"><div class="rank-entry-icon rank-sprite" style="${rankSpriteStyle(rank)}"></div><strong>${rank.name}</strong><small>${rank.index === RANKS.length - 1 ? 'SEM LIMITE' : '0–100 PTS'}</small></div>`).join('')}
         </div>
-        <div class="rank-rules">Vitória: <b>+120 XP</b> · Empate: <b>+70 XP</b> · Derrota: <b>+45 XP</b></div>
+        <div class="rank-rules">Vitória: <b>+25 PTS</b> · Empate: <b>+10 PTS</b> · Derrota: <b>−20 PTS</b></div>
       </div>`;
     uiRoot.appendChild(modal);
     const close = () => modal.remove();
     modal.querySelector('.modal-close').addEventListener('click', close);
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+  }
+
+  async function openLeaderboardModal() {
+    onClickSound?.();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay leaderboard-modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-window leaderboard-window">
+        <div class="modal-header"><div class="modal-title">RANKING DE JOGADORES</div><button class="modal-close">✕</button></div>
+        <div class="leaderboard-head"><span>POSIÇÃO</span><span>RANK</span><span>JOGADOR</span><span>VITÓRIAS</span><span>PONTOS</span></div>
+        <div class="leaderboard-list"><div class="leaderboard-loading">Carregando ranking…</div></div>
+      </div>`;
+    uiRoot.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+
+    const list = modal.querySelector('.leaderboard-list');
+    try {
+      await submitPlayerRanking(profile);
+      const players = await listPlayerRankings(100);
+      list.innerHTML = players.length ? players.map((player, index) => {
+        const rank = getRankProgress(player.points).rank;
+        const place = index + 1;
+        return `<div class="leaderboard-row ${place <= 3 ? `leaderboard-top leaderboard-top-${place}` : ''} ${player.playerId === profile.playerId ? 'is-me' : ''}">
+          <div class="leaderboard-place"><b>${place}</b>${place <= 3 ? '<span>★</span>' : ''}</div>
+          <div class="leaderboard-rank"><img src="./assets/ui/ranks/${rank.asset}" alt="${rank.name}"><span>${rank.name}</span></div>
+          <strong class="leaderboard-name">${escapeHtml(player.name)}</strong>
+          <b class="leaderboard-wins">${Number(player.wins).toLocaleString('pt-BR')}</b>
+          <b class="leaderboard-points">${Number(player.points).toLocaleString('pt-BR')}</b>
+        </div>`;
+      }).join('') : '<div class="leaderboard-loading">Nenhum jogador classificado ainda.</div>';
+    } catch (error) {
+      list.innerHTML = `<div class="leaderboard-loading leaderboard-error">Não foi possível carregar o ranking agora.<small>${escapeHtml(error.message)}</small></div>`;
+    }
   }
 
   function openHowToPlayModal() {

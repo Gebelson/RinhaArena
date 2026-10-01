@@ -18,6 +18,7 @@ import { createSfx } from './audio/sfx.js';
 import { createBgm } from './audio/music.js';
 import { makeLabConfig } from './game/modes/sandbox.js';
 import { getRankProgress } from './content/ranks.js';
+import { submitPlayerRanking } from './net/ranking.js';
 
 const isTouch = navigator.maxTouchPoints > 0
   || matchMedia('(pointer: coarse)').matches
@@ -36,6 +37,7 @@ const profile = (() => {
   let data;
   try { data = JSON.parse(localStorage.getItem('blast.profile')) ?? {}; } catch { data = {}; }
   return {
+    playerId: data.playerId || crypto.randomUUID(),
     name: data.name || 'Player',
     cos: { ...DEFAULT_COS, ...data.cos },
     friendlyFire: data.friendlyFire ?? false,
@@ -46,10 +48,11 @@ const profile = (() => {
       losses: Math.max(0, Number(data.rankStats?.losses) || 0),
     },
     save() {
-      localStorage.setItem('blast.profile', JSON.stringify({ name: this.name, cos: this.cos, friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats }));
+      localStorage.setItem('blast.profile', JSON.stringify({ playerId: this.playerId, name: this.name, cos: this.cos, friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats }));
     },
   };
 })();
+profile.save();
 
 let match = null;
 
@@ -213,14 +216,15 @@ function startMatch(transport) {
       if (event.t !== 'roundOver' || view.lab) continue;
       const draw = event.winner === 'draw';
       const won = !draw && (view.modeId === 'ffa' ? event.winner === myId : event.winner === me?.team);
-      const gainedXp = draw ? 70 : won ? 120 : 45;
-      profile.rankXp += gainedXp;
+      const gainedPoints = draw ? 10 : won ? 25 : -20;
+      profile.rankXp = Math.max(0, profile.rankXp + gainedPoints);
       profile.rankStats.matches += 1;
       if (won) profile.rankStats.wins += 1;
       else if (!draw) profile.rankStats.losses += 1;
       profile.save();
+      submitPlayerRanking(profile).catch((error) => console.warn('[rank] sync failed:', error.message));
       const { rank } = getRankProgress(profile.rankXp);
-      console.info(`[rank] +${gainedXp} XP · ${rank.name}`);
+      console.info(`[rank] ${gainedPoints >= 0 ? '+' : ''}${gainedPoints} PTS · ${rank.name}`);
     }
     world.handleEvents(events, myPos);
     hud.pushEvents(events, view, myId);
