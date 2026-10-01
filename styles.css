@@ -1942,6 +1942,13 @@ body[data-graphics="low"] .lobby-bg-video { filter: brightness(var(--game-bright
 }
 
 /* ---------------- AUTHENTICATED PLAYER ENTRY ---------------- */
+@font-face {
+  font-family: 'Hanson';
+  src: url('./assets/fonts/Hanson-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 .auth-overlay {
   position: fixed;
   inset: 0;
@@ -1987,11 +1994,16 @@ body[data-graphics="low"] .lobby-bg-video { filter: brightness(var(--game-bright
 }
 .auth-form { display: flex; flex-direction: column; margin-top: 150px; }
 .auth-form h1 {
+  width: 100%;
+  max-width: 100%;
   margin: 0 0 clamp(28px, 7vh, 68px);
-  font: 1000 clamp(46px, 5vw, 74px)/.9 Arial Black, Arial, sans-serif;
-  letter-spacing: -.06em;
+  overflow: hidden;
+  font: 700 clamp(36px, 3.7vw, 54px)/1 'Hanson', Arial Black, sans-serif;
+  letter-spacing: -.035em;
   text-align: center;
+  white-space: nowrap;
 }
+.auth-form.registering h1 { font-size: clamp(30px, 3vw, 42px); }
 .auth-form label {
   display: flex;
   flex-direction: column;

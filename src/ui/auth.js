@@ -33,7 +33,7 @@ export function openAuthGate(uiRoot, { onAuthenticated }) {
 
   const setBusy = (busy, text = '') => {
     submit.disabled = busy;
-    submit.textContent = busy ? 'AGUARDE...' : (registering ? 'CADASTRAR' : 'ENTRAR');
+    submit.textContent = busy ? 'AGUARDE...' : (registering ? 'PRONTO' : 'ENTRAR');
     message.textContent = text;
     message.classList.toggle('error', !!text);
   };
@@ -48,6 +48,7 @@ export function openAuthGate(uiRoot, { onAuthenticated }) {
 
   switchMode.addEventListener('click', () => {
     registering = !registering;
+    form.classList.toggle('registering', registering);
     title.textContent = registering ? 'CADASTRO' : 'LOGIN';
     nicknameRow.classList.toggle('hidden', !registering);
     nicknameInput.required = registering;
@@ -68,7 +69,7 @@ export function openAuthGate(uiRoot, { onAuthenticated }) {
       message.classList.remove('error');
       message.textContent = 'Enviamos as instruções de recuperação para seu e-mail.';
       submit.disabled = false;
-      submit.textContent = registering ? 'CADASTRAR' : 'ENTRAR';
+      submit.textContent = registering ? 'PRONTO' : 'ENTRAR';
     } catch (error) {
       setBusy(false, error.message || 'Não foi possível enviar a recuperação.');
     }
@@ -85,7 +86,7 @@ export function openAuthGate(uiRoot, { onAuthenticated }) {
         message.classList.remove('error');
         message.textContent = 'Confira seu e-mail para confirmar a conta antes de entrar.';
         submit.disabled = false;
-        submit.textContent = 'CADASTRAR';
+        submit.textContent = 'PRONTO';
         return;
       }
       await finish(account);
