@@ -9,6 +9,7 @@ import { LEVELS, DEFAULT_LEVEL, newProceduralSeed } from '../content/levels/inde
 import { createRoom, listRooms } from '../net/rooms.js';
 import { HATS, SKINS } from '../content/cosmetics.js';
 import { RANKS, getRankProgress, rankSpriteStyle } from '../content/ranks.js';
+import { getLevelProgress } from '../content/levels.js';
 import { listPlayerRankings, submitPlayerRanking } from '../net/ranking.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
@@ -70,6 +71,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   let selectedMode = 'ctf';
   let selectedLevel = DEFAULT_LEVEL in MAP_DATA ? DEFAULT_LEVEL : 'foundry';
   const initialRank = getRankProgress(profile.rankXp);
+  const initialLevel = getLevelProgress(profile.rankStats);
 
   el.innerHTML = `
     <video class="lobby-bg-video" autoplay muted loop playsinline preload="auto" poster="./assets/background-main.png" aria-hidden="true">
@@ -81,8 +83,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
         <div class="player-summary">
           <input class="name-input player-name" maxlength="12" aria-label="Nome do jogador" value="${profile.name || 'Player'}" />
           <div class="player-progress-row">
-            <div class="level-crown"><span>♛</span><b>25</b></div>
-            <div class="xp-wrap"><div class="xp-track"><i style="width:${initialRank.progress * 100}%"></i></div><strong>${initialRank.next ? `${initialRank.points} / 100 PTS` : `${initialRank.points.toLocaleString('pt-BR')} PTS`}</strong></div>
+            <div class="level-crown"><span>♛</span><b>${initialLevel.level}</b></div>
+            <div class="xp-wrap"><div class="xp-track"><i style="width:${initialLevel.progress * 100}%"></i></div><strong>${initialLevel.xp} / ${initialLevel.required} XP</strong></div>
           </div>
         </div>
         <div class="rank-divider"></div>
@@ -391,6 +393,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const mapSelectorThumb = el.querySelector('.map-selector-thumb');
   const xpFill = el.querySelector('.xp-track i');
   const xpText = el.querySelector('.xp-wrap strong');
+  const levelText = el.querySelector('.level-crown b');
   const rankShield = el.querySelector('.rank-shield');
   const playerAvatar = el.querySelector('.player-avatar img');
   const lobbyVideo = el.querySelector('.lobby-bg-video');
@@ -450,10 +453,10 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     bigMapSub.textContent = selectedMode === 'ctf' ? 'Capture a Bandeira' : mode.label.replace(/^\S+\s/, '');
 
     const rankProgress = getRankProgress(profile.rankXp);
-    xpFill.style.width = `${rankProgress.progress * 100}%`;
-    xpText.textContent = rankProgress.next
-      ? `${rankProgress.points} / 100 PTS`
-      : `${rankProgress.points.toLocaleString('pt-BR')} PTS`;
+    const levelProgress = getLevelProgress(profile.rankStats);
+    levelText.textContent = levelProgress.level;
+    xpFill.style.width = `${levelProgress.progress * 100}%`;
+    xpText.textContent = `${levelProgress.xp} / ${levelProgress.required} XP`;
     rankShield.src = `./assets/ui/ranks/${rankProgress.rank.asset}`;
     rankShield.alt = rankProgress.rank.name;
     playerAvatar.src = `./assets/ui/avatars/${profile.cos.avatar}`;
