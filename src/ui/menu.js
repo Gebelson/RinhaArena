@@ -672,13 +672,16 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     modal.innerHTML = `
       <div class="modal-window settings-modal-window" role="dialog" aria-modal="true" aria-label="Configurações">
         <div class="modal-header"><div class="modal-title">CONFIGURAÇÕES</div><button class="modal-close" aria-label="Fechar">✕</button></div>
+        <nav class="settings-tabs" aria-label="Categorias de configurações">
+          <button class="active" data-page="audio">ÁUDIO</button><button data-page="video">VÍDEO</button><button data-page="interface">INTERFACE</button><button data-page="controls">CONTROLES</button><button data-page="account">CONTA</button>
+        </nav>
         <div class="settings-body">
-          <section class="settings-section">
+          <div class="settings-page active" data-page="audio"><section class="settings-section">
             <h3>ÁUDIO</h3>
             <label class="settings-volume"><span><b>Volume da música</b><output>${settings.musicVolume}%</output></span><input data-setting="musicVolume" type="range" min="0" max="100" value="${settings.musicVolume}"></label>
             <label class="settings-volume"><span><b>Volume dos efeitos</b><output>${settings.sfxVolume}%</output></span><input data-setting="sfxVolume" type="range" min="0" max="100" value="${settings.sfxVolume}"></label>
-          </section>
-          <section class="settings-section">
+          </section></div>
+          <div class="settings-page" data-page="video"><section class="settings-section">
             <h3>VÍDEO</h3>
             <label class="settings-select"><span>Qualidade gráfica</span><select data-setting="graphicsQuality"><option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option><option value="ultra">Ultra</option></select></label>
             <label class="settings-select"><span>Limite de FPS</span><select data-setting="fps"><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="90">90 FPS</option><option value="120">120 FPS</option></select></label>
@@ -686,18 +689,18 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
             <label class="settings-select"><span>Filtro para daltônicos</span><select data-setting="colorblind"><option value="none">Desativado</option><option value="protanopia">Protanopia</option><option value="deuteranopia">Deuteranopia</option><option value="tritanopia">Tritanopia</option></select></label>
             <label class="settings-row"><span><b>Tela cheia automática</b><small>Ativada por padrão</small></span><input data-setting="autoFullscreen" class="settings-toggle-input" type="checkbox" ${settings.autoFullscreen ? 'checked' : ''}><i class="settings-toggle"></i></label>
             <button class="settings-fullscreen" type="button">${document.fullscreenElement ? 'SAIR DA TELA CHEIA' : 'ATIVAR TELA CHEIA AGORA'}</button>
-          </section>
-          <section class="settings-section">
+          </section></div>
+          <div class="settings-page" data-page="interface"><section class="settings-section">
             <h3>INTERFACE</h3>
             <label class="settings-select"><span>Idioma</span><select data-setting="language"><option value="pt-BR">Português</option><option value="en">English</option><option value="es">Español</option></select></label>
             ${[['notifications','Notificações'],['chat','Chat'],['animations','Animações'],['gameCursor','Cursor durante a partida']].map(([key,label]) => `<label class="settings-row"><span><b>${label}</b></span><input data-setting="${key}" class="settings-toggle-input" type="checkbox" ${settings[key] ? 'checked' : ''}><i class="settings-toggle"></i></label>`).join('')}
-          </section>
-          <section class="settings-section">
+          </section></div>
+          <div class="settings-page" data-page="controls"><section class="settings-section">
             <h3>CONTROLES E TECLAS</h3>
             <div class="settings-keys">${Object.entries(controlNames).map(([action,label]) => `<button class="settings-key" data-action="${action}"><span>${label}</span><kbd>${keyLabel(settings.controls[action])}</kbd></button>`).join('')}</div>
             <button class="settings-reset-keys" type="button">RESTAURAR TECLAS PADRÃO</button>
-          </section>
-          <button class="settings-disconnect" type="button">DESCONECTAR</button>
+          </section></div>
+          <div class="settings-page" data-page="account"><section class="settings-section settings-account-section"><h3>CONTA</h3><p>Encerre sua sessão neste dispositivo.</p><button class="settings-disconnect" type="button">DESCONECTAR</button></section></div>
         </div>
       </div>`;
     uiRoot.appendChild(modal);
@@ -705,6 +708,12 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     const close = () => modal.remove();
     modal.querySelector('.modal-close').addEventListener('click', close);
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    modal.querySelectorAll('.settings-tabs button').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        modal.querySelectorAll('.settings-tabs button').forEach((button) => button.classList.toggle('active', button === tab));
+        modal.querySelectorAll('.settings-page').forEach((page) => page.classList.toggle('active', page.dataset.page === tab.dataset.page));
+      });
+    });
 
     modal.querySelectorAll('select[data-setting]').forEach((select) => {
       select.value = String(settings[select.dataset.setting]);
