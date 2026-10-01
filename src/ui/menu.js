@@ -844,7 +844,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     modal.innerHTML = `
       <div class="modal-window leaderboard-window">
         <div class="modal-header"><div class="modal-title">RANKING DE JOGADORES</div><button class="modal-close">✕</button></div>
-        <div class="leaderboard-head"><span>POSIÇÃO</span><span>RANK</span><span>JOGADOR</span><span>VITÓRIAS</span><span>PONTOS</span></div>
+        <div class="leaderboard-head"><span>POSIÇÃO</span><span>JOGADOR</span><span>RANK</span><span>VITÓRIAS</span><span>PONTOS</span></div>
         <div class="leaderboard-list"><div class="leaderboard-loading">Carregando ranking…</div></div>
       </div>`;
     uiRoot.appendChild(modal);
@@ -859,10 +859,11 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       list.innerHTML = players.length ? players.map((player, index) => {
         const rank = getRankProgress(player.points).rank;
         const place = index + 1;
+        const avatar = AVATARS.includes(player.avatar) ? player.avatar : AVATARS[0];
         return `<div class="leaderboard-row ${place <= 3 ? `leaderboard-top leaderboard-top-${place}` : ''} ${player.playerId === profile.playerId ? 'is-me' : ''}">
           <div class="leaderboard-place"><b>${place}</b>${place <= 3 ? '<span>★</span>' : ''}</div>
+          <div class="leaderboard-player"><img src="./assets/ui/avatars/${avatar}" alt=""><strong class="leaderboard-name">${escapeHtml(player.name)}</strong></div>
           <div class="leaderboard-rank"><img src="./assets/ui/ranks/${rank.asset}" alt="${rank.name}"><span>${rank.name}</span></div>
-          <strong class="leaderboard-name">${escapeHtml(player.name)}</strong>
           <b class="leaderboard-wins">${Number(player.wins).toLocaleString('pt-BR')}</b>
           <b class="leaderboard-points">${Number(player.points).toLocaleString('pt-BR')}</b>
         </div>`;

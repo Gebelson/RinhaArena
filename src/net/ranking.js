@@ -21,6 +21,7 @@ export function submitPlayerRanking(profile) {
   return rpc('submit_player_ranking', {
     p_player_id: profile.playerId,
     p_name: profile.name,
+    p_avatar: profile.cos?.avatar || 'avatar-1.webp',
     p_points: profile.rankXp,
     p_wins: profile.rankStats.wins,
     p_matches: profile.rankStats.matches,
