@@ -9,7 +9,7 @@ import { LEVELS, DEFAULT_LEVEL, newProceduralSeed } from '../content/levels/inde
 import { createRoom, listRooms } from '../net/rooms.js';
 import { HATS, SKINS } from '../content/cosmetics.js';
 import { RANKS, getRankProgress, rankSpriteStyle } from '../content/ranks.js';
-import { getLevelProgress } from '../content/levels.js';
+import { getLevelBadgeAsset, getLevelProgress } from '../content/levels.js';
 import { listPlayerRankings, submitPlayerRanking } from '../net/ranking.js';
 import { saveAccountProfile } from '../net/account.js';
 import { openAuthGate } from './auth.js';
@@ -102,8 +102,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
         <div class="player-summary">
           <input class="name-input player-name" maxlength="12" aria-label="Nome do jogador" value="${profile.name || 'Player'}" />
           <div class="player-progress-row">
-            <div class="level-crown"><span>♛</span><b>${initialLevel.level}</b></div>
-            <div class="xp-wrap"><div class="xp-track"><i style="width:${initialLevel.progress * 100}%"></i></div><strong>${initialLevel.xp} / ${initialLevel.required} XP</strong></div>
+            <div class="level-badge"><img src="./assets/ui/levels/${getLevelBadgeAsset(initialLevel.level)}" alt="Nível ${initialLevel.level}" /><b>${initialLevel.level}</b></div>
+            <div class="xp-wrap"><div class="xp-track"><i style="width:${initialLevel.progress * 100}%"></i><strong>${initialLevel.isMax ? 'NÍVEL MÁXIMO' : `${initialLevel.xp} / ${initialLevel.required} XP`}</strong></div></div>
           </div>
         </div>
         <div class="rank-divider"></div>
@@ -411,8 +411,9 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const mapSelector = el.querySelector('.map-selector');
   const mapSelectorThumb = el.querySelector('.map-selector-thumb');
   const xpFill = el.querySelector('.xp-track i');
-  const xpText = el.querySelector('.xp-wrap strong');
-  const levelText = el.querySelector('.level-crown b');
+  const xpText = el.querySelector('.xp-track strong');
+  const levelText = el.querySelector('.level-badge b');
+  const levelBadge = el.querySelector('.level-badge img');
   const coinText = el.querySelector('.coin-card strong');
   const rankShield = el.querySelector('.rank-shield');
   const playerAvatar = el.querySelector('.player-avatar img');
@@ -475,8 +476,10 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     const rankProgress = getRankProgress(profile.rankXp);
     const levelProgress = getLevelProgress(profile.rankStats);
     levelText.textContent = levelProgress.level;
+    levelBadge.src = `./assets/ui/levels/${getLevelBadgeAsset(levelProgress.level)}`;
+    levelBadge.alt = `Nível ${levelProgress.level}`;
     xpFill.style.width = `${levelProgress.progress * 100}%`;
-    xpText.textContent = `${levelProgress.xp} / ${levelProgress.required} XP`;
+    xpText.textContent = levelProgress.isMax ? 'NÍVEL MÁXIMO' : `${levelProgress.xp} / ${levelProgress.required} XP`;
     rankShield.src = `./assets/ui/ranks/${rankProgress.rank.asset}`;
     rankShield.alt = rankProgress.rank.name;
     playerAvatar.src = `./assets/ui/avatars/${profile.cos.avatar}`;
