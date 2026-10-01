@@ -926,13 +926,31 @@ html, body {
 .ranking-button img { height: 134.9%; top: -16.6%; }
 .missions-button img { height: 240.8%; top: -77.6%; }
 .play-button img { height: 225.8%; top: -63.6%; }
-.map-selector { position: absolute; left: 31.1%; bottom: 3.05%; width: 37.8%; height: var(--bottom-button-height); display: flex; align-items: center; gap: 1.1vw; padding: .9vh 1.4vw .9vh .85vw; border: .2vw solid #10182f; border-radius: 1.3vw; color: white; background: linear-gradient(140deg,#071127ee,#06142eee); box-shadow: 0 .5vh 1.2vh #000a, inset 0 .15vh .2vh #fff2; cursor: pointer; transition: transform .12s, filter .12s; text-align: left; }
-.map-selector-thumb { width: 12.2vw; height: 10.8vh; border-radius: .9vw; object-fit: cover; border: .14vw solid #438fff; }
+.map-selector {
+  position: absolute; left: 31.1%; bottom: 3.05%; width: 37.8%; height: var(--bottom-button-height);
+  display: flex; align-items: center; gap: 1.1vw; padding: .72vh 1.15vw .72vh .72vw;
+  overflow: hidden; isolation: isolate; border: .24vw solid #07152f; border-radius: 1.45vw; color: white;
+  background: linear-gradient(135deg, #123f9b 0%, #071c50 48%, #061333 100%);
+  box-shadow: 0 .55vh 0 #02091d, 0 .9vh 1.4vh #0009, inset 0 .22vh 0 #65c8ff, inset 0 -.28vh 0 #02091f;
+  cursor: pointer; transition: transform .12s, filter .12s, box-shadow .12s; text-align: left;
+}
+.map-selector::before {
+  content: ''; position: absolute; z-index: -1; inset: .16vw; border-radius: 1.05vw;
+  background: linear-gradient(115deg, rgba(255,255,255,.18), transparent 31%, transparent 67%, rgba(31,112,255,.2));
+  pointer-events: none;
+}
+.map-selector::after {
+  content: ''; position: absolute; z-index: -1; top: 8%; left: 2%; width: 58%; height: 20%;
+  border-radius: 99px; background: linear-gradient(90deg, rgba(255,255,255,.34), transparent); opacity: .6;
+  pointer-events: none;
+}
+.map-selector-thumb { width: 12.2vw; height: 10.8vh; flex: 0 0 auto; border-radius: .95vw; object-fit: cover; border: .18vw solid #63c9ff; box-shadow: 0 .28vh .55vh #0009, inset 0 0 .4vw #fff7; }
 .map-selector-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; }
-.map-selector-copy strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 2vw; line-height: 1.05; text-transform: uppercase; }
-.map-selector-copy small { margin-top: .6vh; color: #22d3ee; font-size: 1.25vw; font-weight: 900; }
-.map-selector-copy small b { color: white; font-size: 1.7vw; }
-.map-chevron { font-size: 4vw; font-weight: 900; line-height: 1; }
+.map-selector-copy strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 2vw; line-height: 1.05; text-transform: uppercase; text-shadow: 0 .22vh 0 #04102d, 0 .3vh .35vh #000b; }
+.map-selector-copy small { margin-top: .55vh; color: #22efff; font-size: 1.2vw; font-weight: 900; text-shadow: 0 .16vh .2vh #001534; }
+.map-selector-copy small b { display: inline-grid; place-items: center; width: 1.65vw; aspect-ratio: 1; margin-right: .2vw; border-radius: 50%; color: #07152f; font-size: 1.05vw; background: linear-gradient(#7ff8ff,#20c9ff); box-shadow: 0 .15vh .25vh #0008; }
+.map-chevron { width: 3.2vw; aspect-ratio: 1; display: grid; place-items: center; flex: 0 0 auto; border-radius: .75vw; color: white; font-size: 3.5vw; font-weight: 900; line-height: .75; background: linear-gradient(145deg,#286fe4,#09296e); border: .12vw solid #55bfff; box-shadow: 0 .25vh .4vh #0009, inset 0 .16vh .15vh #fff5; text-shadow: 0 .18vh .2vh #0009; }
+.map-selector:hover { box-shadow: 0 .55vh 0 #02091d, 0 0 1.15vw rgba(35,177,255,.75), inset 0 .22vh 0 #8be1ff, inset 0 -.28vh 0 #02091f; }
 .quick-config { position: absolute; z-index: 20; top: 15%; right: 3%; width: min(460px, 34vw); max-height: 78%; overflow: auto; padding: 18px; border-radius: 22px; color: white; background: rgba(4,12,34,.97); border: 2px solid #2869df; box-shadow: 0 20px 60px #000c, inset 0 1px #fff3; }
 .quick-config-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; color: #ffcf32; font-size: 22px; }
 .quick-config-close { border: 0; background: transparent; color: white; font-size: 20px; cursor: pointer; }
