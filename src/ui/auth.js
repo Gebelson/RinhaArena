@@ -5,7 +5,9 @@ export function openAuthGate(uiRoot, { onAuthenticated }) {
   overlay.className = 'auth-overlay';
   overlay.innerHTML = `
     <section class="auth-window" aria-label="Login Rinha Arena">
-      <div class="auth-art" aria-hidden="true"></div>
+      <div class="auth-art" aria-hidden="true">
+        <img class="auth-logo" src="./assets/ui/logo-rinha-arena.webp" alt="" />
+      </div>
       <div class="auth-panel">
         <form class="auth-form">
           <h1>LOGIN</h1>
