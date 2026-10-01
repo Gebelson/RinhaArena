@@ -1844,3 +1844,50 @@ html, body {
   letter-spacing: 0.5px;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
+
+/* Mobile is landscape-only. Keep the desktop composition and account for notches. */
+@media (orientation: portrait) and (max-width: 1200px) {
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 2147483646;
+    background:
+      radial-gradient(circle at 50% 38%, rgba(31, 129, 255, .24), transparent 35%),
+      linear-gradient(145deg, #081633, #030816 72%);
+  }
+
+  body::after {
+    content: '↻\A GIRE O CELULAR\A Use o modo horizontal para jogar';
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    display: grid;
+    place-items: center;
+    padding: 10vw;
+    color: #fff;
+    font: 900 clamp(20px, 7vw, 44px)/1.35 'Barlow Condensed', sans-serif;
+    letter-spacing: .05em;
+    text-align: center;
+    white-space: pre-line;
+    text-shadow: 0 3px 10px #000, 0 0 24px #087dff;
+  }
+
+  #game,
+  #ui { visibility: hidden; }
+}
+
+@media (orientation: landscape) and (max-height: 700px) {
+  html,
+  body,
+  #game,
+  #ui,
+  .menu { width: 100dvw; height: 100dvh; }
+
+  .player-card { left: calc(2.5% + env(safe-area-inset-left) * .45); }
+  .top-actions { right: calc(2.8% + env(safe-area-inset-right) * .45); }
+  .shop-button,
+  .missions-button { left: calc(2.5% + env(safe-area-inset-left) * .35); }
+  .ranking-button,
+  .play-button { right: calc(2.3% + env(safe-area-inset-right) * .35); }
+}
