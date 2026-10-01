@@ -421,7 +421,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const lobbyMusic = new Audio('./audio/lobby-theme.m4a');
   lobbyMusic.loop = true;
   lobbyMusic.preload = 'auto';
-  lobbyMusic.volume = 0.38;
+  lobbyMusic.volume = Math.min(1, Math.max(0, Number(localStorage.getItem('blast.musicVolume') ?? .38)));
   btnAudio.classList.toggle('muted', localStorage.getItem('blast.muted') === '1');
 
   const playLobbyMedia = () => {
@@ -593,13 +593,14 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   btnHowToPlay.addEventListener('click', () => openHowToPlayModal());
   btnSettings.addEventListener('click', () => {
     onClickSound?.();
-    configPanel.classList.toggle('hidden');
+    openSettingsModal();
   });
   el.querySelector('.quick-config-close').addEventListener('click', () => configPanel.classList.add('hidden'));
   btnAudio.addEventListener('click', () => {
     onClickSound?.();
     const nextMuted = localStorage.getItem('blast.muted') !== '1';
     localStorage.setItem('blast.muted', nextMuted ? '1' : '0');
+    window.dispatchEvent(new CustomEvent('blast:mute-change', { detail: { muted: nextMuted } }));
     lobbyMusic.muted = nextMuted;
     btnAudio.classList.toggle('muted', nextMuted);
     btnAudio.setAttribute('aria-label', nextMuted ? 'Ativar áudio' : 'Desativar áudio');
@@ -661,6 +662,70 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   });
 
   // ------------------------------------------------------------ Modals
+  function openSettingsModal() {
+    const muted = localStorage.getItem('blast.muted') === '1';
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay settings-modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-window settings-modal-window" role="dialog" aria-modal="true" aria-label="Configurações">
+        <div class="modal-header"><div class="modal-title">CONFIGURAÇÕES</div><button class="modal-close" aria-label="Fechar">✕</button></div>
+        <div class="settings-body">
+          <section class="settings-section">
+            <h3>ÁUDIO</h3>
+            <label class="settings-row"><span><b>Som do jogo</b><small>Ativa músicas e efeitos sonoros</small></span><input class="settings-toggle-input settings-sound" type="checkbox" ${muted ? '' : 'checked'}><i class="settings-toggle"></i></label>
+            <label class="settings-volume"><span><b>Volume da música</b><output>${Math.round(lobbyMusic.volume * 100)}%</output></span><input type="range" min="0" max="100" value="${Math.round(lobbyMusic.volume * 100)}" aria-label="Volume da música"></label>
+          </section>
+          <section class="settings-section">
+            <h3>PARTIDA</h3>
+            <label class="settings-row"><span><b>Fogo amigo</b><small>Permite atingir jogadores da sua equipe</small></span><input class="settings-toggle-input settings-friendly-fire" type="checkbox" ${profile.friendlyFire ? 'checked' : ''}><i class="settings-toggle"></i></label>
+          </section>
+          <section class="settings-section">
+            <h3>TELA</h3>
+            <button class="settings-fullscreen" type="button">${document.fullscreenElement ? 'SAIR DA TELA CHEIA' : 'ATIVAR TELA CHEIA'}</button>
+          </section>
+        </div>
+      </div>`;
+    uiRoot.appendChild(modal);
+
+    const close = () => modal.remove();
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+
+    modal.querySelector('.settings-sound').addEventListener('change', (event) => {
+      const nextMuted = !event.currentTarget.checked;
+      localStorage.setItem('blast.muted', nextMuted ? '1' : '0');
+      window.dispatchEvent(new CustomEvent('blast:mute-change', { detail: { muted: nextMuted } }));
+      lobbyMusic.muted = nextMuted;
+      btnAudio.classList.toggle('muted', nextMuted);
+      btnAudio.setAttribute('aria-label', nextMuted ? 'Ativar áudio' : 'Desativar áudio');
+      if (!nextMuted) playLobbyMedia();
+    });
+
+    const volume = modal.querySelector('.settings-volume input');
+    const volumeOutput = modal.querySelector('.settings-volume output');
+    volume.addEventListener('input', () => {
+      lobbyMusic.volume = Number(volume.value) / 100;
+      localStorage.setItem('blast.musicVolume', String(lobbyMusic.volume));
+      volumeOutput.value = `${volume.value}%`;
+    });
+
+    modal.querySelector('.settings-friendly-fire').addEventListener('change', (event) => {
+      profile.friendlyFire = event.currentTarget.checked;
+      profile.save();
+      ffBtns.forEach((button) => button.classList.toggle('sel', (button.dataset.ff === 'true') === profile.friendlyFire));
+    });
+
+    modal.querySelector('.settings-fullscreen').addEventListener('click', async (event) => {
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+        event.currentTarget.textContent = document.fullscreenElement ? 'SAIR DA TELA CHEIA' : 'ATIVAR TELA CHEIA';
+      } catch {
+        event.currentTarget.textContent = 'TELA CHEIA INDISPONÍVEL';
+      }
+    });
+  }
+
   function openAvatarModal() {
     onClickSound?.();
     const modal = document.createElement('div');

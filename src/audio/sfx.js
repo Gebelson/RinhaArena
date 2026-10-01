@@ -9,6 +9,14 @@ export function createSfx() {
   let yeetBuffer = null;
   let yeetLoading = false;
 
+  const setMuted = (nextMuted) => {
+    muted = Boolean(nextMuted);
+    if (master) master.gain.value = muted ? 0 : 0.5;
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('blast:mute-change', (event) => setMuted(event.detail?.muted));
+  }
+
   function loadYeet() {
     if (yeetBuffer || yeetLoading || !ctx) return;
     yeetLoading = true;
@@ -170,9 +178,8 @@ export function createSfx() {
     get muted() { return muted; },
     unlock() { ensure(); },
     toggle() {
-      muted = !muted;
+      setMuted(!muted);
       localStorage.setItem('blast.muted', muted ? '1' : '0');
-      if (master) master.gain.value = muted ? 0 : 0.5;
       return muted;
     },
     play(name, vol = 1) {
