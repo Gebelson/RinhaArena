@@ -63,9 +63,66 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   let selectedLevel = DEFAULT_LEVEL in MAP_DATA ? DEFAULT_LEVEL : 'foundry';
 
   el.innerHTML = `
-    <div class="lobby-root">
-      <!-- Main 3-Zone Desktop Layout -->
-      <div class="lobby-grid">
+    <div class="home-lobby">
+      <section class="player-card" aria-label="Perfil do jogador">
+        <div class="player-avatar" aria-hidden="true"></div>
+        <div class="player-summary">
+          <input class="name-input player-name" maxlength="12" aria-label="Nome do jogador" value="${profile.name || 'Player'}" />
+          <div class="player-progress-row">
+            <div class="level-crown"><span>♛</span><b>25</b></div>
+            <div class="xp-wrap"><div class="xp-track"><i></i></div><strong>1.250 / 2.000</strong></div>
+          </div>
+        </div>
+        <div class="rank-divider"></div>
+        <div class="rank-shield"><span>◆</span></div>
+      </section>
+
+      <nav class="top-actions" aria-label="Ações rápidas">
+        <div class="coin-card"><span class="coin-crown">♛</span><strong>1.250</strong><button class="coin-plus" aria-label="Adicionar moedas">+</button></div>
+        <button class="image-icon-btn btn-lobby" aria-label="Amigos e salas"><img src="./assets/ui/menu-friends.png" alt="" /></button>
+        <button class="image-icon-btn btn-settings" aria-label="Configurações"><img src="./assets/ui/menu-config.png" alt="" /></button>
+        <button class="image-icon-btn btn-audio" aria-label="Áudio"><img src="./assets/ui/menu-audio.png" alt="" /></button>
+      </nav>
+
+      <button class="art-button shop-button btn-shop" aria-label="Loja de personagens"><img src="./assets/ui/menu-shop.png" alt="Loja de personagens" /></button>
+      <button class="art-button ranking-button btn-ranking" aria-label="Ranking"><img src="./assets/ui/menu-ranking.png" alt="Ranking" /></button>
+      <button class="art-button missions-button btn-missions" aria-label="Missões"><img src="./assets/ui/menu-missions.png" alt="Missões" /></button>
+
+      <button class="map-selector" aria-label="Selecionar arena">
+        <img class="map-selector-thumb" src="./assets/maps/mini_foundry.png" alt="" />
+        <span class="map-selector-copy"><strong class="big-map-name">Foundry Court</strong><small><b>⌖</b> <span class="big-map-sub">Capture a Bandeira</span></small></span>
+        <span class="map-chevron">›</span>
+      </button>
+
+      <button class="art-button play-button play-btn-huge" aria-label="Jogar"><img src="./assets/ui/menu-play.png" alt="Jogar" /></button>
+
+      <div class="quick-config hidden" aria-label="Configurações da partida">
+        <div class="quick-config-head"><strong>CONFIGURAÇÕES</strong><button class="quick-config-close" aria-label="Fechar">✕</button></div>
+        <label>NOME DO JOGADOR</label>
+        <div class="config-name-mirror">${profile.name || 'Player'}</div>
+        <label>CHAPÉU</label>
+        <div class="hat-row">${HATS.map((h, i) => `<button class="hat-btn ${profile.hat === h.id ? 'sel' : ''}" data-hat="${h.id}" title="${h.name}"><img src="./assets/ui/hat_${i}.png" alt="${h.name}" class="hat-img" /></button>`).join('')}</div>
+        <label>PELE</label>
+        <div class="skin-row">${REFERENCE_SKINS.map((c) => `<button class="skin-btn ${profile.skin === c ? 'sel' : ''}" data-skin="${c}" style="background-color:${c}" title="Pele"></button>`).join('')}</div>
+        <label>MODO</label>
+        <div class="mode-grid">
+          <button class="mode-btn sel" data-mode="ctf">🚩 Capture a Bandeira</button>
+          <button class="mode-btn" data-mode="deathmatch">💀 Death Match</button>
+          <button class="mode-btn mode-btn-full" data-mode="ffa">⚔️ Todos contra Todos</button>
+        </div>
+        <label>ARENA</label>
+        <div class="arena-grid">
+          ${Object.values(MAP_DATA).map((m) => `<button class="arena-card ${m.id === selectedLevel ? 'sel' : ''}" data-level="${m.id}"><span class="arena-thumb" style="background-image:url('${m.img}')"></span><span class="arena-label">${m.name}</span></button>`).join('')}
+        </div>
+        <label>FOGO AMIGO</label>
+        <div class="ff-grid"><button class="ff-btn ${profile.friendlyFire ? '' : 'sel'}" data-ff="false">🛡️ Desativado</button><button class="ff-btn ${profile.friendlyFire ? 'sel' : ''}" data-ff="true">🔥 Ativado</button></div>
+        <div class="config-extra-actions"><button class="btn-custom-create">CRIAR SALA</button><button class="btn-duel">LIVE BOT</button><button class="btn-doll">TREINO</button><button class="btn-how-to-play">COMO JOGAR</button></div>
+      </div>
+      <div class="menu-err hidden"></div>
+    </div>
+    <!-- Legacy layout removed; its game and multiplayer actions remain wired to the new home screen. -->
+    <div class="legacy-menu-template" hidden>
+      <div class="lobby-root"><div class="lobby-grid">
         <!-- 1. PAINEL LATERAL ESQUERDO: PERSONALIZAÇÃO -->
         <aside class="lobby-left-panel">
           <!-- Top Header -->
@@ -290,7 +347,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
           <div class="menu-err hidden"></div>
         </aside>
       </div>
-    </div>
+    </div></div></div>
   `;
   uiRoot.appendChild(el);
 
@@ -315,6 +372,11 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const btnDoll = el.querySelector('.btn-doll');
   const btnHowToPlay = el.querySelector('.btn-how-to-play');
   const errBox = el.querySelector('.menu-err');
+  const btnSettings = el.querySelector('.btn-settings');
+  const btnAudio = el.querySelector('.btn-audio');
+  const configPanel = el.querySelector('.quick-config');
+  const mapSelector = el.querySelector('.map-selector');
+  const mapSelectorThumb = el.querySelector('.map-selector-thumb');
 
   // ------------------------------------------------------------ Reactive State
   function syncUI() {
@@ -345,10 +407,11 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     });
 
     // 5. Update Big Map Card
-    bigMapImg.style.backgroundImage = `url('${meta.img}')`;
+    if (bigMapImg) bigMapImg.style.backgroundImage = `url('${meta.img}')`;
+    if (mapSelectorThumb) mapSelectorThumb.src = meta.img;
     bigMapName.textContent = meta.name;
-    bigMapDesc.textContent = meta.desc;
-    bigMapSub.textContent = mode.sub;
+    if (bigMapDesc) bigMapDesc.textContent = meta.desc;
+    bigMapSub.textContent = selectedMode === 'ctf' ? 'Capture a Bandeira' : mode.label.replace(/^\S+\s/, '');
   }
 
   // ------------------------------------------------------------ Event listeners
@@ -357,6 +420,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   nameInput.addEventListener('input', () => {
     profile.name = nameInput.value.trim() || 'Player';
     profile.save();
+    const mirror = el.querySelector('.config-name-mirror');
+    if (mirror) mirror.textContent = profile.name;
   });
 
   // Hat Selection
@@ -451,6 +516,28 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
 
   // How to play modal
   btnHowToPlay.addEventListener('click', () => openHowToPlayModal());
+  btnSettings.addEventListener('click', () => {
+    onClickSound?.();
+    configPanel.classList.toggle('hidden');
+  });
+  el.querySelector('.quick-config-close').addEventListener('click', () => configPanel.classList.add('hidden'));
+  btnAudio.addEventListener('click', () => {
+    onClickSound?.();
+    btnAudio.classList.toggle('muted');
+    btnAudio.setAttribute('aria-label', btnAudio.classList.contains('muted') ? 'Ativar áudio' : 'Desativar áudio');
+  });
+  mapSelector.addEventListener('click', () => {
+    const ids = Object.keys(MAP_DATA);
+    selectedLevel = ids[(ids.indexOf(selectedLevel) + 1) % ids.length];
+    onClickSound?.();
+    syncUI();
+  });
+  el.querySelector('.btn-shop').addEventListener('click', () => {
+    onClickSound?.();
+    configPanel.classList.remove('hidden');
+  });
+  el.querySelector('.btn-ranking').addEventListener('click', () => openLobbyModal());
+  el.querySelector('.btn-missions').addEventListener('click', () => openHowToPlayModal());
 
   // Initial Sync
   syncUI();
