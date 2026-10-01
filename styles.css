@@ -2082,8 +2082,8 @@ body[data-graphics="low"] .lobby-bg-video { filter: brightness(var(--game-bright
   }
   .auth-logo { top: 3%; width: min(55%, 190px); }
   .auth-panel { justify-content: center; padding: 2.5% 8% 2%; }
-  .auth-form,
-  .auth-switch { transform: translateY(clamp(6px, 2vh, 10px)); }
+  .auth-form { transform: translateY(clamp(6px, 2vh, 10px)); }
+  .auth-switch { transform: translateY(clamp(-22px, -4vh, -12px)); }
   .auth-form { margin-top: 0; }
   .auth-form h1,
   .auth-form.registering h1 {
