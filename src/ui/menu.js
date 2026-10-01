@@ -11,6 +11,8 @@ import { HATS, SKINS } from '../content/cosmetics.js';
 import { RANKS, getRankProgress, rankSpriteStyle } from '../content/ranks.js';
 import { getLevelProgress } from '../content/levels.js';
 import { listPlayerRankings, submitPlayerRanking } from '../net/ranking.js';
+import { saveAccountProfile } from '../net/account.js';
+import { openAuthGate } from './auth.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -109,7 +111,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       </section>
 
       <nav class="top-actions" aria-label="Ações rápidas">
-        <div class="coin-card"><img class="coin-crown" src="./assets/ui/capicoin.png" alt="Capicoin" /><strong>1.250</strong><button class="coin-plus" aria-label="Adicionar moedas">+</button></div>
+        <div class="coin-card"><img class="coin-crown" src="./assets/ui/capicoin.png" alt="Capicoin" /><strong>${Math.max(0, Number(profile.gold) || 0).toLocaleString('pt-BR')}</strong><button class="coin-plus" aria-label="Adicionar moedas">+</button></div>
         <button class="image-icon-btn btn-lobby" aria-label="Amigos e salas"><img src="./assets/ui/menu-friends.png" alt="" /></button>
         <button class="image-icon-btn btn-settings" aria-label="Configurações"><img src="./assets/ui/menu-config.png" alt="" /></button>
         <button class="image-icon-btn btn-audio" aria-label="Áudio"><img src="./assets/ui/menu-audio.png" alt="" /></button>
@@ -411,6 +413,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   const xpFill = el.querySelector('.xp-track i');
   const xpText = el.querySelector('.xp-wrap strong');
   const levelText = el.querySelector('.level-crown b');
+  const coinText = el.querySelector('.coin-card strong');
   const rankShield = el.querySelector('.rank-shield');
   const playerAvatar = el.querySelector('.player-avatar img');
   const lobbyVideo = el.querySelector('.lobby-bg-video');
@@ -477,6 +480,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     rankShield.src = `./assets/ui/ranks/${rankProgress.rank.asset}`;
     rankShield.alt = rankProgress.rank.name;
     playerAvatar.src = `./assets/ui/avatars/${profile.cos.avatar}`;
+    coinText.textContent = Math.max(0, Number(profile.gold) || 0).toLocaleString('pt-BR');
   }
 
   // ------------------------------------------------------------ Event listeners
@@ -494,6 +498,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   hatBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
       profile.hat = btn.dataset.hat;
+      profile.cos.hat = profile.hat;
       profile.save();
       onClickSound?.();
       syncUI();
@@ -504,6 +509,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   skinBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
       profile.skin = btn.dataset.skin;
+      profile.cos.skin = profile.skin;
       profile.save();
       onClickSound?.();
       syncUI();
@@ -612,6 +618,44 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
 
   // Initial Sync
   syncUI();
+  el.classList.add('auth-pending');
+
+  openAuthGate(uiRoot, {
+    async onAuthenticated(account) {
+      const saved = account.profile;
+      profile.playerId = account.user.id;
+      profile.name = saved.nickname;
+      profile.gold = saved.gold;
+      profile.rankXp = saved.rank_points;
+      profile.rankStats = { matches: saved.matches, wins: saved.wins, losses: saved.losses };
+      profile.hat = saved.hat || 'crown';
+      profile.skin = saved.skin || REFERENCE_SKINS[6];
+      profile.friendlyFire = Boolean(saved.friendly_fire);
+      profile.cos = {
+        ...profile.cos,
+        avatar: AVATARS.includes(saved.avatar) ? saved.avatar : AVATARS[0],
+        hat: profile.hat,
+        skin: profile.skin,
+      };
+
+      let saveTimer = 0;
+      profile.save = function saveAuthenticatedProfile() {
+        localStorage.setItem('blast.profile', JSON.stringify({
+          playerId: this.playerId, name: this.name, gold: this.gold, cos: this.cos,
+          friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats,
+        }));
+        clearTimeout(saveTimer);
+        saveTimer = window.setTimeout(() => saveAccountProfile(this).catch((error) => console.warn('[profile] sync failed:', error.message)), 350);
+      };
+
+      nameInput.value = profile.name;
+      const mirror = el.querySelector('.config-name-mirror');
+      if (mirror) mirror.textContent = profile.name;
+      syncUI();
+      el.classList.remove('auth-pending');
+      await submitPlayerRanking(profile).catch(() => {});
+    },
+  });
 
   // ------------------------------------------------------------ Modals
   function openAvatarModal() {

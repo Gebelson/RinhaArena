@@ -39,6 +39,7 @@ const profile = (() => {
   return {
     playerId: data.playerId || crypto.randomUUID(),
     name: data.name || 'Player',
+    gold: Math.max(0, Number(data.gold) || 0),
     cos: { ...DEFAULT_COS, ...data.cos },
     friendlyFire: data.friendlyFire ?? false,
     rankXp: Math.max(0, Number(data.rankXp) || 0),
@@ -48,7 +49,7 @@ const profile = (() => {
       losses: Math.max(0, Number(data.rankStats?.losses) || 0),
     },
     save() {
-      localStorage.setItem('blast.profile', JSON.stringify({ playerId: this.playerId, name: this.name, cos: this.cos, friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats }));
+      localStorage.setItem('blast.profile', JSON.stringify({ playerId: this.playerId, name: this.name, gold: this.gold, cos: this.cos, friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats }));
     },
   };
 })();
@@ -218,7 +219,9 @@ function startMatch(transport) {
       const draw = event.winner === 'draw';
       const won = !draw && (view.modeId === 'ffa' ? event.winner === myId : event.winner === me?.team);
       const gainedPoints = draw ? 10 : won ? 25 : -20;
+      const gainedGold = draw ? 40 : won ? 100 : 20;
       profile.rankXp = Math.max(0, profile.rankXp + gainedPoints);
+      profile.gold = Math.max(0, (Number(profile.gold) || 0) + gainedGold);
       profile.rankStats.matches += 1;
       if (won) profile.rankStats.wins += 1;
       else if (!draw) profile.rankStats.losses += 1;
