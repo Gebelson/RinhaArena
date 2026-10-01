@@ -886,6 +886,24 @@ html, body {
 .btn-lobby img { height: 133.8%; top: -17.1%; }
 .btn-settings img { height: 122.3%; top: -11.7%; }
 .btn-audio img { height: 133.3%; top: -17.2%; }
+.top-actions .image-icon-btn,
+.top-actions .btn-lobby {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.top-actions .image-icon-btn:hover,
+.top-actions .image-icon-btn:focus,
+.top-actions .image-icon-btn:focus-visible {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+}
 .image-icon-btn:hover,.art-button:hover,.map-selector:hover { transform: translateY(-.35vh) scale(1.018); filter: brightness(1.08); }
 .image-icon-btn:active,.art-button:active,.map-selector:active { transform: translateY(.2vh) scale(.985); }
 .image-icon-btn.muted { opacity: .48; filter: grayscale(.8); }
