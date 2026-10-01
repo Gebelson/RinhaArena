@@ -1580,6 +1580,143 @@ body[data-graphics="low"] .lobby-bg-video { filter: brightness(var(--game-bright
 }
 .modal-btn:hover { filter: brightness(1.1); }
 
+/* Character shop */
+.shop-modal-overlay { padding: clamp(10px, 2vw, 24px); }
+.shop-modal-window {
+  width: min(1120px, 96vw);
+  max-height: 92dvh;
+  background: linear-gradient(145deg, #111a31, #080f21 72%);
+  border-color: rgba(41, 182, 255, .5);
+}
+.shop-modal-window .modal-header { flex: 0 0 auto; }
+.shop-modal-window .modal-title { margin-right: auto; }
+.shop-balance {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+  padding: 5px 12px 5px 7px;
+  border: 1px solid rgba(255, 199, 45, .4);
+  border-radius: 999px;
+  background: rgba(3, 8, 22, .72);
+  color: #fff;
+  font: 900 16px/1 'Barlow Condensed', sans-serif;
+}
+.shop-balance img { width: 28px; height: 28px; object-fit: contain; }
+.shop-character-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: max-content;
+  align-items: start;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 14px;
+  padding: 18px;
+  overflow-y: auto;
+}
+.shop-character-card {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #28477c;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #14264c, #080d1b);
+  box-shadow: inset 0 1px rgba(255,255,255,.06), 0 8px 20px rgba(0,0,0,.28);
+}
+.shop-character-card.acquired { border: 2px solid #ffc82f; }
+.shop-character-art {
+  position: relative;
+  height: clamp(130px, 21vh, 215px);
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 65%, rgba(32, 142, 255, .35), transparent 65%);
+}
+.shop-character-art > img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  transform: scale(1.08);
+  transform-origin: center bottom;
+}
+.shop-character-card.locked .shop-character-art > img {
+  filter: grayscale(1) brightness(.18) contrast(1.25);
+  opacity: .72;
+}
+.shop-character-card.locked .shop-character-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(2,5,14,.05), rgba(2,5,14,.48));
+}
+.shop-lock {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 50%;
+  background: rgba(4, 8, 18, .8);
+  font-size: 24px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.5);
+}
+.shop-character-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px 8px;
+  border-top: 1px solid rgba(88, 150, 255, .2);
+}
+.shop-character-info > strong {
+  overflow: hidden;
+  color: #f4f7ff;
+  font: 900 18px/1 'Barlow Condensed', sans-serif;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.shop-price { display: flex; align-items: center; gap: 4px; color: #ffd34e; font-weight: 900; }
+.shop-price img { width: 23px; height: 23px; object-fit: contain; }
+.shop-character-action {
+  width: calc(100% - 20px);
+  margin: 0 10px 10px;
+  padding: 9px 6px;
+  border: 1px solid #596375;
+  border-radius: 8px;
+  background: linear-gradient(#5b6372, #3d4350);
+  color: #d8dde6;
+  font: 900 13px/1 'Barlow Condensed', sans-serif;
+  letter-spacing: .05em;
+  cursor: not-allowed;
+  opacity: .82;
+}
+.shop-character-card.acquired .shop-character-action {
+  border-color: #3e9f68;
+  background: linear-gradient(#2d8a58, #1c6540);
+  color: #effff6;
+  opacity: 1;
+}
+
+@media (max-width: 760px), (orientation: landscape) and (max-height: 560px) {
+  .shop-modal-window { width: 97vw; max-height: 95dvh; }
+  .shop-modal-window .modal-header { padding: 9px 14px; }
+  .shop-modal-window .modal-title { font-size: 15px; }
+  .shop-balance { padding: 3px 9px 3px 5px; font-size: 14px; }
+  .shop-balance img { width: 22px; height: 22px; }
+  .shop-character-grid { grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 9px; padding: 10px; }
+  .shop-character-art { height: 116px; }
+  .shop-character-info { padding: 7px 8px 6px; }
+  .shop-character-info > strong { font-size: 14px; }
+  .shop-price { font-size: 13px; }
+  .shop-price img { width: 18px; height: 18px; }
+  .shop-character-action { margin: 0 7px 7px; width: calc(100% - 14px); padding: 7px 4px; font-size: 11px; }
+}
+
 /* Room cards inside Lobby */
 .rooms-list {
   display: flex;

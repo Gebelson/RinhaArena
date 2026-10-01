@@ -19,6 +19,12 @@ const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => 
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
 }[char]));
 const AVATARS = Array.from({ length: 6 }, (_, index) => `avatar-${index + 1}.webp`);
+const SHOP_CHARACTERS = [
+  ['capivara', 'Capivara'], ['cachorro', 'Cachorro'], ['coala', 'Coala'], ['coelho', 'Coelho'],
+  ['crocodilo', 'Crocodilo'], ['furao', 'Furão'], ['gato', 'Gato'], ['jacare', 'Jacaré'],
+  ['macaco', 'Macaco'], ['pato', 'Pato'], ['pavao', 'Pavão'], ['porco', 'Porco'],
+  ['tartaruga', 'Tartaruga'], ['tubarao', 'Tubarão'],
+].map(([id, name]) => ({ id, name, acquired: id === 'capivara' }));
 
 export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayLab, onClickSound }) {
   const el = document.createElement('div');
@@ -615,7 +621,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   });
   el.querySelector('.btn-shop').addEventListener('click', () => {
     onClickSound?.();
-    configPanel.classList.remove('hidden');
+    openShopModal();
   });
   el.querySelector('.player-avatar').addEventListener('click', () => openAvatarModal());
   el.querySelector('.rank-badge-wrap').addEventListener('click', () => openRankProgressModal());
@@ -664,6 +670,42 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   });
 
   // ------------------------------------------------------------ Modals
+  function openShopModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay shop-modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-window shop-modal-window" role="dialog" aria-modal="true" aria-label="Loja de personagens">
+        <div class="modal-header">
+          <div class="modal-title">LOJA DE PERSONAGENS</div>
+          <div class="shop-balance"><img src="./assets/ui/capicoin.png" alt=""><strong>${Math.max(0, Number(profile.gold) || 0).toLocaleString('pt-BR')}</strong></div>
+          <button class="modal-close" aria-label="Fechar">✕</button>
+        </div>
+        <div class="shop-character-grid">
+          ${SHOP_CHARACTERS.map((character) => `
+            <article class="shop-character-card ${character.acquired ? 'acquired' : 'locked'}">
+              <div class="shop-character-art">
+                <img src="./assets/ui/shop/${character.id}.webp" alt="${character.acquired ? character.name : 'Personagem oculto'}">
+                ${character.acquired ? '' : '<span class="shop-lock" aria-hidden="true">🔒</span>'}
+              </div>
+              <div class="shop-character-info">
+                <strong>${character.acquired ? character.name : '???'}</strong>
+                <span class="shop-price"><img src="./assets/ui/capicoin.png" alt="Capycoins">900</span>
+              </div>
+              <button class="shop-character-action" type="button" disabled>${character.acquired ? 'ADQUIRIDO' : 'INDISPONÍVEL'}</button>
+            </article>`).join('')}
+        </div>
+      </div>`;
+    uiRoot.appendChild(modal);
+    const close = () => modal.remove();
+    const closeButton = modal.querySelector('.modal-close');
+    const grid = modal.querySelector('.shop-character-grid');
+    closeButton.addEventListener('click', close);
+    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    closeButton.focus({ preventScroll: true });
+    grid.scrollTop = 0;
+    requestAnimationFrame(() => { grid.scrollTop = 0; });
+  }
+
   function openSettingsModal() {
     let settings = getSettings();
     const controlNames = { up: 'Mover para cima', down: 'Mover para baixo', left: 'Mover para esquerda', right: 'Mover para direita', jump: 'Pular', grab: 'Agarrar', punch: 'Socar', dash: 'Correr' };
