@@ -23,6 +23,10 @@ security definer
 set search_path = public
 as $$
 begin
+  if auth.uid() is null or auth.uid() <> p_player_id then
+    raise exception 'Jogador não autorizado a atualizar este ranking';
+  end if;
+
   insert into public.player_rankings (player_id, player_name, points, wins, matches, updated_at)
   values (
     p_player_id,
@@ -64,5 +68,7 @@ $$;
 
 revoke all on function public.submit_player_ranking(uuid,text,integer,integer,integer) from public;
 revoke all on function public.list_player_rankings(integer) from public;
-grant execute on function public.submit_player_ranking(uuid,text,integer,integer,integer) to anon, authenticated;
+grant execute on function public.submit_player_ranking(uuid,text,integer,integer,integer) to authenticated;
 grant execute on function public.list_player_rankings(integer) to anon, authenticated;
+
+notify pgrst, 'reload schema';

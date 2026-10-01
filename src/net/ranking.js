@@ -1,11 +1,13 @@
 import { SUPABASE_KEY, SUPABASE_URL } from './supabase.js';
+import { getAccessToken } from './account.js';
 
 async function rpc(name, body = {}) {
+  const token = getAccessToken();
   const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
     method: 'POST',
     headers: {
       apikey: SUPABASE_KEY,
-      authorization: `Bearer ${SUPABASE_KEY}`,
+      authorization: `Bearer ${token || SUPABASE_KEY}`,
       'content-type': 'application/json',
     },
     body: JSON.stringify(body),

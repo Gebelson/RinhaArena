@@ -78,6 +78,10 @@ export async function signOut() {
   rememberSession(null);
 }
 
+export function getAccessToken() {
+  return activeSession?.access_token || null;
+}
+
 async function loadAccount(user, session) {
   const rows = await request(`/rest/v1/player_profiles?id=eq.${encodeURIComponent(user.id)}&select=*`, {
     token: session.access_token,
