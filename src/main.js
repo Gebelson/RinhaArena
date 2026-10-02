@@ -168,6 +168,7 @@ function startMatch(transport) {
   const world = new World(renderer.scene, level, { touch: isTouch });
   const hud = createHud(uiRoot, {
     onExit: () => exit(),
+    onSendChat: (message) => transport.sendChat?.(message),
     onMute: () => {
       const isMuted = sfx.toggle();
       bgm.setMuted(isMuted);
@@ -180,7 +181,9 @@ function startMatch(transport) {
     ? createLabPanel(uiRoot, transport)
     : null;
 
-  const onKey = (e) => { if (e.code === 'Escape') exit(); };
+  const onKey = (e) => {
+    if (e.code === 'Escape' && !/INPUT|TEXTAREA/.test(e.target?.tagName)) exit();
+  };
   window.addEventListener('keydown', onKey);
 
   let raf = 0;
@@ -224,6 +227,7 @@ function startMatch(transport) {
     );
 
     const events = transport.drainEvents();
+    hud.pushChatMessages(transport.drainChatMessages?.() ?? []);
     for (const event of events) {
       if (event.t !== 'roundOver' || view.lab) continue;
       if (event.matchComplete === false) continue;

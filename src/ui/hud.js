@@ -5,7 +5,7 @@
 import { TEAMS } from '../core/config.js';
 import { getSettings, keyLabel } from '../settings.js';
 
-export function createHud(uiRoot, { onExit, onMute, muted }) {
+export function createHud(uiRoot, { onExit, onMute, onSendChat, muted }) {
   const el = document.createElement('div');
   el.className = 'hud';
   el.innerHTML = `
@@ -62,6 +62,20 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
   const chatLog = q('.game-chat-log');
   const chatInput = q('.game-chat input');
 
+  function appendChatMessage({ displayName, text, own = false } = {}) {
+    const safeName = String(displayName || '').trim();
+    const safeText = String(text || '').trim();
+    if (!safeName || !safeText) return;
+    const line = document.createElement('div');
+    if (own) line.className = 'own';
+    const author = document.createElement('b');
+    author.textContent = `${safeName}: `;
+    line.append(author, document.createTextNode(safeText));
+    chatLog.appendChild(line);
+    while (chatLog.children.length > 20) chatLog.firstChild.remove();
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
   q('.btn-exit').addEventListener('click', onExit);
   q('.btn-mute').addEventListener('click', (e) => {
     e.currentTarget.textContent = onMute() ? '🔇' : '🔊';
@@ -75,20 +89,22 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
     event.preventDefault();
     const message = chatInput.value.trim();
     if (!message) return;
-    const line = document.createElement('div');
-    const author = document.createElement('b');
-    author.textContent = 'VOCÊ: ';
-    line.append(author, document.createTextNode(message));
-    chatLog.appendChild(line);
-    while (chatLog.children.length > 20) chatLog.firstChild.remove();
-    chatLog.scrollTop = chatLog.scrollHeight;
+    onSendChat?.(message);
     chatInput.value = '';
   });
   const onChatKey = (event) => {
-    if (event.code !== 'Enter' || !getSettings().chat || /INPUT|TEXTAREA/.test(event.target?.tagName)) return;
-    event.preventDefault();
-    chat.classList.remove('hidden');
-    chatInput.focus();
+    if (event.code === 'Escape' && chat.contains(document.activeElement)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      chat.classList.add('hidden');
+      chatInput.blur();
+      return;
+    }
+    if (event.code === 'Enter' && getSettings().chat && !/INPUT|TEXTAREA/.test(event.target?.tagName)) {
+      event.preventDefault();
+      chat.classList.remove('hidden');
+      chatInput.focus();
+    }
   };
   window.addEventListener('keydown', onChatKey);
 
@@ -317,6 +333,10 @@ export function createHud(uiRoot, { onExit, onMute, muted }) {
 
     setConnecting(on) {
       connecting.classList.toggle('hidden', !on);
+    },
+
+    pushChatMessages(messages) {
+      for (const message of messages || []) appendChatMessage(message);
     },
 
     dispose() {

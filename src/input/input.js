@@ -50,7 +50,7 @@ export function createInput({ uiRoot, isTouch }) {
     mouse.seen = true;
   };
   const onMouseDown = (e) => {
-    if (e.target.closest?.('.hud-btn, .menu, .touch')) return;
+    if (e.target.closest?.('.hud-btn, .game-chat, .menu, .touch')) return;
     if (e.button === 0) { // LMB: bater / socar (e arremessar o que estiver segurando)
       punchPulse = now() + PULSE;
       throwPulse = now() + PULSE;

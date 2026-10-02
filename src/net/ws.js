@@ -116,6 +116,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
     const snaps = [];
     const eventQ = [];
     const hostEventQ = [];
+    const chatMessages = [];
     const clientPlayers = new Map();
     let lobbyPlayers = [];
     let remoteQueueEndsAt = Number(config.queueEndsAt) || null;
@@ -289,6 +290,27 @@ export async function connectOnline({ room, password, team, profile, host: reque
           }
         }
       }
+    });
+    channel.on('chat-send', (message) => {
+      if (!requestedHost || !matchInfo || message?.matchId !== matchInfo.id) return;
+      const sender = clientPlayers.get(message?.clientId);
+      const text = String(message?.text || '').trim().slice(0, 100);
+      if (!sender?.participantId || !text) return;
+      const payload = {
+        matchId: matchInfo.id,
+        participantId: sender.participantId,
+        displayName: sender.displayName,
+        text,
+      };
+      chatMessages.push(payload);
+      channel.send('chat-message', payload);
+    });
+    channel.on('chat-message', (message) => {
+      if (requestedHost || !matchInfo || message?.matchId !== matchInfo.id) return;
+      const participant = matchInfo.participants.find((entry) => entry.participantId === message?.participantId);
+      const text = String(message?.text || '').trim().slice(0, 100);
+      if (!participant || participant.type !== 'HUMAN' || participant.displayName !== message.displayName || !text) return;
+      chatMessages.push({ ...message, text, own: participant.userId === profile.playerId });
     });
     const broadcastQueue = () => channel.send('queue-update', {
       players: [...clientPlayers.values()].map(({ userId, displayName, cos }) => ({ userId, name: displayName, displayName, cos })),
@@ -655,6 +677,27 @@ export async function connectOnline({ room, password, team, profile, host: reque
         if (requestedHost) return hostEventQ.splice(0, hostEventQ.length);
         return eventQ.splice(0, eventQ.length);
       },
+      sendChat(text) {
+        if (!matchInfo) return;
+        const message = String(text || '').trim().slice(0, 100);
+        if (!message) return;
+        if (requestedHost) {
+          const participant = matchInfo.participants.find((entry) => entry.type === 'HUMAN' && entry.userId === profile.playerId);
+          if (!participant) return;
+          const payload = {
+            matchId: matchInfo.id,
+            participantId: participant.participantId,
+            displayName: participant.displayName,
+            text: message,
+            own: true,
+          };
+          chatMessages.push(payload);
+          channel.send('chat-message', { ...payload, own: undefined });
+        } else {
+          channel.send('chat-send', { clientId, matchId: matchInfo.id, text: message });
+        }
+      },
+      drainChatMessages() { return chatMessages.splice(0, chatMessages.length); },
       dispose() {
         closed = true;
         clearInterval(welcomeTimer);
