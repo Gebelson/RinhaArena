@@ -1051,7 +1051,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
           <button class="modal-close" type="button" aria-label="Fechar">✕</button>
         </header>
         <nav class="game-options-tabs" aria-label="Páginas">
-          <button type="button" data-page="create">CRIAR SALA</button>
+          <button type="button" data-page="create">JOGAR</button>
           <button type="button" data-page="rooms">SALAS CRIADAS</button>
         </nav>
         <div class="game-options-page" data-page-panel="create">
@@ -1089,6 +1089,15 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
                 <label class="go-team-size-wrap"><span>Equipes</span><select class="go-team-size">${[1,2,3,4,5].map((n) => `<option value="${n}" ${n === 2 ? 'selected' : ''}>${n}v${n}</option>`).join('')}</select></label>
                 <label class="go-ffa-size-wrap hidden"><span>Jogadores</span><select class="go-ffa-size">${[2,3,4,5,6,7,8,9,10].map((n) => `<option value="${n}" ${n === 6 ? 'selected' : ''}>${n} jogadores</option>`).join('')}</select></label>
               </div>
+            </section>
+
+            <section class="game-config-block bot-options game-type-section" data-for-type="bots">
+              <h3>CONTRA BOT</h3>
+              <div class="option-row">
+                <label><span>Tipo</span><select class="go-bot-type"><option value="match">Partida contra bots</option><option value="training">Treinamento livre</option></select></label>
+                <label><span>Dificuldade</span><select class="go-bot-difficulty"><option value="easy">Fácil</option><option value="medium" selected>Médio</option><option value="hard">Difícil</option></select></label>
+              </div>
+              <p class="bot-training-hint">No treinamento livre você pode testar movimentação, golpes, bombas e controles sem valer pontos.</p>
             </section>
 
             <section class="game-config-block custom-options game-type-section" data-for-type="custom">
@@ -1143,7 +1152,10 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
         section.classList.toggle('visible', section.dataset.forType.split(' ').includes(matchType));
       });
       const ranked = matchType === 'ranked';
-      modal.querySelector('.game-common-fields').classList.toggle('hidden', matchType === 'bots');
+      const custom = matchType === 'custom';
+      modal.querySelector('.game-common-fields').classList.toggle('hidden', !custom);
+      modal.querySelector('.map-block').classList.toggle('hidden', ranked);
+      if (ranked) chosenMap = 'procedural';
       mapButtons.forEach((button) => {
         const allowed = !ranked || ['foundry', 'skyhaven', 'procedural'].includes(button.dataset.map);
         button.classList.toggle('disabled', !allowed);
@@ -1155,7 +1167,9 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       modal.querySelector('.go-ffa-size-wrap').classList.toggle('hidden', !isFfa);
       modal.querySelector('.go-capture-wrap').classList.toggle('hidden', modeSelect.value !== 'ctf');
       modal.querySelector('.go-kills-wrap').classList.toggle('hidden', modeSelect.value === 'ctf');
-      modal.querySelector('.game-create-button').textContent = matchType === 'bots' ? 'JOGAR CONTRA BOTS' : 'CRIAR E JOGAR';
+      const botTraining = modal.querySelector('.go-bot-type').value === 'training';
+      const buttonCopy = { ranked: 'JOGAR RANQUEADA', normal: 'JOGAR NORMAL', bots: botTraining ? 'INICIAR TREINAMENTO' : 'JOGAR CONTRA BOTS', custom: 'CRIAR E JOGAR' };
+      modal.querySelector('.game-create-button').textContent = buttonCopy[matchType];
     };
     typeButtons.forEach((button) => button.addEventListener('click', () => { matchType = button.dataset.type; syncCreateForm(); }));
     mapButtons.forEach((button) => button.addEventListener('click', () => {
@@ -1164,6 +1178,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       mapButtons.forEach((item) => item.classList.toggle('active', item === button));
     }));
     modeSelect.addEventListener('change', syncCreateForm);
+    modal.querySelector('.go-bot-type').addEventListener('change', syncCreateForm);
     syncCreateForm();
 
     const resolveLevel = (localMatch) => {
@@ -1196,6 +1211,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
           friendlyFire: matchType === 'custom' && modal.querySelector('.go-friendly').value === '1',
           bestOf: ranked ? 3 : 1,
           ranked,
+          botDifficulty: modal.querySelector('.go-bot-difficulty').value,
         },
         powerups: {
           ...CONFIG.powerups,
@@ -1206,12 +1222,35 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       try {
         if (matchType === 'bots') {
           close();
+          if (modal.querySelector('.go-bot-type').value === 'training') {
+            onPlayLab('doll');
+            return;
+          }
           onPlayLocal(modeId, levelId, { config: matchConfig, teamLimits: modeId === 'ffa' ? { ffa: ffaSize } : { red: teamSize, blue: teamSize }, respawnTime });
           return;
         }
-        const name = modal.querySelector('.go-name').value.trim() || `Sala de ${profile.name}`;
-        const code = modal.querySelector('.go-code').value.trim().toLowerCase() || Math.random().toString(36).slice(2, 8);
-        const password = modal.querySelector('.go-password').value || undefined;
+        if (matchType !== 'custom') {
+          button.textContent = 'BUSCANDO PARTIDA...';
+          const prefix = matchType === 'ranked' ? '[RANQUEADA]' : '[NORMAL]';
+          const rooms = await listRooms().catch(() => []);
+          const compatible = rooms.find((room) => room.name?.startsWith(prefix)
+            && room.modeId === modeId
+            && room.levelId === levelId
+            && room.playersCount < room.maxPlayers
+            && (modeId === 'ffa' ? room.teamLimits?.ffa === ffaSize : room.teamLimits?.red === teamSize));
+          if (compatible) {
+            close();
+            await onPlayOnline({ room: compatible.code });
+            return;
+          }
+        }
+        const name = matchType === 'custom'
+          ? (modal.querySelector('.go-name').value.trim() || `Sala de ${profile.name}`)
+          : `${matchType === 'ranked' ? '[RANQUEADA]' : '[NORMAL]'} Partida automática`;
+        const code = matchType === 'custom'
+          ? (modal.querySelector('.go-code').value.trim().toLowerCase() || Math.random().toString(36).slice(2, 8))
+          : `${matchType === 'ranked' ? 'rank' : 'normal'}-${Math.random().toString(36).slice(2, 7)}`;
+        const password = matchType === 'custom' ? (modal.querySelector('.go-password').value || undefined) : undefined;
         const data = await createRoom({ name, code, password, modeId, levelId, redSize: teamSize, blueSize: teamSize, ffaSize, respawnTime, friendlyFire: matchConfig.rules.friendlyFire });
         if (!data?.ok) throw new Error(data?.error || 'Não foi possível criar a sala.');
         data.room.config = matchConfig;
@@ -1221,7 +1260,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       } catch (cause) {
         error.textContent = cause.message || 'Não foi possível iniciar a partida.';
         button.disabled = false;
-        button.textContent = matchType === 'bots' ? 'JOGAR CONTRA BOTS' : 'CRIAR E JOGAR';
+        syncCreateForm();
       }
     });
 
@@ -1232,7 +1271,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       refresh.disabled = true;
       listNode.innerHTML = '<div class="game-room-empty">Carregando salas…</div>';
       try {
-        const rooms = await listRooms();
+        const rooms = (await listRooms()).filter((room) => !/^\[(RANQUEADA|NORMAL)\]/.test(room.name || ''));
         if (!rooms.length) {
           listNode.innerHTML = '<div class="game-room-empty"><b>NENHUMA SALA ABERTA</b><span>Crie uma sala e convide seus amigos.</span></div>';
           return;

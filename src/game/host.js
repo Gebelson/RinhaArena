@@ -10,6 +10,34 @@ import { createSim, addPlayer, removePlayer, step } from './sim.js';
 import { createBotBrain } from './bots.js';
 import { BOT_NAMES, randomCos } from '../content/cosmetics.js';
 
+function adjustBotDifficulty(brain, difficulty = 'medium') {
+  if (difficulty === 'medium') return brain;
+  const reactionDelay = difficulty === 'easy' ? 0.22 : 0.025;
+  let elapsed = reactionDelay;
+  let lastInput = null;
+  return {
+    think(sim, dt) {
+      elapsed += dt;
+      if (lastInput && elapsed < reactionDelay) return lastInput;
+      elapsed = 0;
+      const input = { ...brain.think(sim, dt) };
+      if (difficulty === 'easy') {
+        if (Math.random() < 0.38) input.punch = false;
+        if (Math.random() < 0.45) input.throw = false;
+        input.dash = input.dash && Math.random() < 0.35;
+        const error = (Math.random() - 0.5) * 0.75;
+        const c = Math.cos(error), s = Math.sin(error);
+        [input.ax, input.az] = [input.ax * c - input.az * s, input.ax * s + input.az * c];
+      } else {
+        input.run = 1;
+        if (!input.dash && Math.random() < 0.015) input.dash = true;
+      }
+      lastInput = input;
+      return input;
+    },
+  };
+}
+
 export class GameHost {
   constructor({
     levelId = DEFAULT_LEVEL,
@@ -99,7 +127,8 @@ export class GameHost {
     const name = this.sim.mode.variant === 'doll' ? 'Doll' : (this.botNames.pop() ?? 'Bot-' + this.sim.nextId);
     const id = addPlayer(this.sim, { name, team: assignedTeam, bot: true, cos: randomCos() });
     // modes may supply their own bot brains (sandbox doll/fighter/ffa)
-    this.brains.set(id, this.sim.mode.createBrain?.(id) ?? createBotBrain(id));
+    const brain = this.sim.mode.createBrain?.(id) ?? createBotBrain(id);
+    this.brains.set(id, adjustBotDifficulty(brain, this.config.rules.botDifficulty));
     return id;
   }
 

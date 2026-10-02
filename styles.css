@@ -1944,6 +1944,7 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
 .option-row,.custom-rule-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
 .custom-rule-grid { grid-template-columns: repeat(5,1fr); }
 .custom-options h4 { margin: 14px 0 7px; color: #9fb5db; font-size: 11px; letter-spacing: .06em; }
+.bot-training-hint { margin: 9px 0 0; color: #879dc2; font-size: 11px; }
 .powerup-toggle-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 7px; }
 .powerup-toggle { position: relative; }
 .powerup-toggle input { position: absolute; opacity: 0; }
