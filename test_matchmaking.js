@@ -92,6 +92,20 @@ assert.equal(humansOnlyHost.brains.size, 0);
   assert(!host.temporaryBrains.has(id));
 }
 
+// Permanent abandonment replaces exactly one entity in place and is idempotent.
+{
+  const host = new GameHost({ levelId: humansOnly.mapId, modeId: humansOnly.mode, teamLimits: room.teamLimits, participants: humansOnly.participants });
+  const id = humansOnly.participants[0].participantId;
+  const before = host.sim.state.players.length;
+  const replacement = host.replaceHumanWithBotInPlace(id, 'u0');
+  assert.equal(host.sim.state.players.length, before);
+  assert.equal(replacement.type, ParticipantType.BOT);
+  assert.equal(replacement.replacementForPlayerId, 'u0');
+  assert(host.brains.has(id));
+  assert.equal(host.replaceHumanWithBotInPlace(id, 'u0'), null);
+  assert.equal(host.sim.state.players.length, before);
+}
+
 // Invariant failures.
 assert.throws(() => assertParticipants([{ participantId: 'x' }, { participantId: 'x' }]), /spawnIndex|displayName|duplicate/);
 

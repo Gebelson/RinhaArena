@@ -339,6 +339,9 @@ export function createHud(uiRoot, { onExit, onMute, onSendChat, muted }) {
       for (const message of messages || []) appendChatMessage(message);
     },
 
+    isChatOpen() { return !chat.classList.contains('hidden'); },
+    closeChat() { chat.classList.add('hidden'); chatInput.blur(); },
+
     dispose() {
       clearTimeout(centerTimer);
       window.removeEventListener('keydown', onChatKey);

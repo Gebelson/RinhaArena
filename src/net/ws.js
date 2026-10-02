@@ -119,6 +119,11 @@ export async function connectOnline({ room, password, team, profile, host: reque
     const eventQ = [];
     const hostEventQ = [];
     const chatMessages = [];
+    const controlEvents = [];
+    const abandonWaiters = [];
+    const abandonedUsers = new Set();
+    const surrenderVotes = new Map();
+    const surrenderCooldowns = new Map();
     const clientPlayers = new Map();
     let lobbyPlayers = [];
     let remoteQueueEndsAt = Number(config.queueEndsAt) || null;
@@ -253,6 +258,96 @@ export async function connectOnline({ room, password, team, profile, host: reque
       if (!isHost) return;
       const player = clientPlayers.get(message?.clientId);
       if (player) player.lastSeenAt = Date.now();
+    });
+    const broadcastSurrender = (vote) => {
+      const payload = {
+        team: vote.team,
+        startedAt: vote.startedAt,
+        deadlineAt: vote.deadlineAt,
+        votes: [...vote.votes.entries()],
+      };
+      channel.send('surrender-update', payload);
+      const mine = matchInfo?.participants.find((p) => p.userId === profile.playerId);
+      if (isHost && mine?.team === vote.team) controlEvents.push({ type: 'surrender-update', ...payload });
+    };
+    const finishSurrender = (team) => {
+      const vote = surrenderVotes.get(team);
+      if (!vote) return;
+      clearTimeout(vote.timer);
+      surrenderVotes.delete(team);
+      const humans = matchInfo.participants.filter((p) => p.type === 'HUMAN' && p.team === team && !abandonedUsers.has(p.userId));
+      const yes = [...vote.votes.values()].filter(Boolean).length;
+      const approved = humans.length > 0 && yes / humans.length >= (config.config?.rules?.surrenderApprovalRatio ?? CONFIG.rules.surrenderApprovalRatio);
+      channel.send('surrender-result', { team, approved, yes, total: humans.length });
+      const mine = matchInfo?.participants.find((p) => p.userId === profile.playerId);
+      if (isHost && mine?.team === team) controlEvents.push({ type: 'surrender-result', team, approved, yes, total: humans.length });
+      if (approved) hostGame?.forfeitTeam(team);
+    };
+    channel.on('surrender-start', (message) => {
+      if (!isHost || !matchInfo || matchStart == null) return;
+      const sender = clientPlayers.get(message?.clientId);
+      const participant = matchInfo.participants.find((p) => p.userId === sender?.userId && p.type === 'HUMAN');
+      if (!participant || surrenderVotes.has(participant.team) || Date.now() < (surrenderCooldowns.get(participant.team) || 0)) return;
+      const duration = config.config?.rules?.surrenderVoteDurationMs ?? CONFIG.rules.surrenderVoteDurationMs;
+      const vote = { team: participant.team, startedAt: Date.now(), deadlineAt: Date.now() + duration, votes: new Map([[participant.userId, true]]), timer: null };
+      vote.timer = setTimeout(() => finishSurrender(participant.team), duration);
+      surrenderVotes.set(participant.team, vote);
+      surrenderCooldowns.set(participant.team, vote.deadlineAt + (config.config?.rules?.surrenderVoteCooldownMs ?? CONFIG.rules.surrenderVoteCooldownMs));
+      broadcastSurrender(vote);
+    });
+    channel.on('surrender-vote', (message) => {
+      if (!isHost) return;
+      const sender = clientPlayers.get(message?.clientId);
+      const vote = surrenderVotes.get(message?.team);
+      const participant = matchInfo?.participants.find((p) => p.userId === sender?.userId && p.type === 'HUMAN' && p.team === message.team);
+      if (!vote || !participant || vote.votes.has(participant.userId) || Date.now() >= vote.deadlineAt) return;
+      vote.votes.set(participant.userId, Boolean(message.yes));
+      broadcastSurrender(vote);
+      const humans = matchInfo.participants.filter((p) => p.type === 'HUMAN' && p.team === vote.team && !abandonedUsers.has(p.userId));
+      if (vote.votes.size >= humans.length) finishSurrender(vote.team);
+    });
+    channel.on('surrender-update', (message) => {
+      const mine = matchInfo?.participants.find((p) => p.userId === profile.playerId);
+      if (mine?.team === message?.team) controlEvents.push({ type: 'surrender-update', ...message });
+    });
+    channel.on('surrender-result', (message) => {
+      const mine = matchInfo?.participants.find((p) => p.userId === profile.playerId);
+      if (mine?.team === message?.team) controlEvents.push({ type: 'surrender-result', ...message });
+    });
+    const processAbandon = (userId) => {
+      if (!matchInfo || abandonedUsers.has(userId)) return null;
+      const participant = matchInfo.participants.find((p) => p.type === 'HUMAN' && p.userId === userId);
+      if (!participant) return null;
+      abandonedUsers.add(userId);
+      const remaining = matchInfo.participants.filter((p) => p.type === 'HUMAN' && p.userId !== userId && !abandonedUsers.has(p.userId));
+      if (remaining.length) {
+        hostGame?.replaceHumanWithBotInPlace(participant.participantId, userId);
+        participant.type = 'BOT'; participant.botId = `replacement:${userId}`;
+        participant.participantId = `bot:replacement:${userId}`; participant.userId = undefined;
+        participant.replacementForPlayerId = userId;
+      } else {
+        matchInfo.status = 'FINISHED';
+        for (const vote of surrenderVotes.values()) clearTimeout(vote.timer);
+        surrenderVotes.clear();
+        hostGame = null;
+        channel.send('match-ended', { matchId: matchInfo.id, reason: 'no-humans' });
+      }
+      return {
+        matchId: matchInfo.id, mode: config.matchType || (matchInfo.ranked ? 'ranked' : 'normal'), ranked: matchInfo.ranked,
+        ended: remaining.length === 0,
+        rankPenalty: matchInfo.ranked ? Math.round((config.config?.rules?.normalRankLoss ?? CONFIG.rules.normalRankLoss) * 4 / 3) : 0,
+      };
+    };
+    channel.on('abandon-request', (message) => {
+      if (!isHost || !message?.userId) return;
+      const sender = clientPlayers.get(message.clientId);
+      if (sender?.userId !== message.userId) return;
+      const result = processAbandon(message.userId);
+      channel.send('abandon-result', { target: message.clientId, ...(result || { duplicate: true }) });
+    });
+    channel.on('abandon-result', (message) => {
+      if (message?.target !== clientId) return;
+      while (abandonWaiters.length) abandonWaiters.shift()(message);
     });
     channel.on('error', (message) => {
       if (message?.target === clientId) fail(new Error(message.reason || 'Não foi possível entrar na sala'));
@@ -770,6 +865,24 @@ export async function connectOnline({ room, password, team, profile, host: reque
         }
       },
       drainChatMessages() { return chatMessages.splice(0, chatMessages.length); },
+      drainControlEvents() { return controlEvents.splice(0, controlEvents.length); },
+      requestSurrender() {
+        if (!matchInfo) return false;
+        if (isHost) channel.emit('surrender-start', { clientId });
+        else channel.send('surrender-start', { clientId });
+        return true;
+      },
+      voteSurrender(team, yes) {
+        if (isHost) channel.emit('surrender-vote', { clientId, team, yes });
+        else channel.send('surrender-vote', { clientId, team, yes });
+      },
+      abandonMatch() {
+        if (!matchInfo) return Promise.reject(new Error('Partida indisponível'));
+        if (abandonedUsers.has(profile.playerId)) return Promise.resolve({ duplicate: true });
+        if (isHost) return Promise.resolve(processAbandon(profile.playerId));
+        channel.send('abandon-request', { clientId, userId: profile.playerId, matchId: matchInfo.id });
+        return new Promise((resolve) => abandonWaiters.push(resolve));
+      },
       resumeInfo() {
         if (!matchInfo || matchInfo.status === 'FINISHED') return null;
         return {
@@ -808,6 +921,8 @@ export async function connectOnline({ room, password, team, profile, host: reque
         clearInterval(touchTimer);
         clearInterval(presenceTimer);
         clearTimeout(readyTimer);
+        for (const vote of surrenderVotes.values()) clearTimeout(vote.timer);
+        surrenderVotes.clear();
         if (isHost) {
           transferAuthority();
           channel.send('host-left', { clientId, userId: profile.playerId });
@@ -819,7 +934,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
 
     function transferAuthority() {
       if (!isHost || authorityTransferred || !matchInfo) return false;
-      const remaining = [...clientPlayers.values()].filter((entry) => entry.userId !== profile.playerId && entry.connected !== false);
+      const remaining = [...clientPlayers.values()].filter((entry) => entry.userId !== profile.playerId && entry.connected !== false && !abandonedUsers.has(entry.userId));
       if (!remaining.length) return false;
       authorityTransferred = true;
       const successorUserId = remaining.map((entry) => entry.userId).sort()[0];

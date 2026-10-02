@@ -19,6 +19,7 @@ import { createBgm } from './audio/music.js';
 import { makeLabConfig } from './game/modes/sandbox.js';
 import { getRankProgress } from './content/ranks.js';
 import { submitPlayerRanking } from './net/ranking.js';
+import { registerPlayerAbandon } from './net/discipline.js';
 import { applySettings, getSettings } from './settings.js';
 
 const isTouch = navigator.maxTouchPoints > 0
@@ -28,6 +29,7 @@ const canvas = document.getElementById('game');
 const uiRoot = document.getElementById('ui');
 const sfx = createSfx();
 const bgm = createBgm();
+applySettings();
 
 // Unlock audio context on initial user interaction so audio assets load early
 window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
@@ -181,6 +183,63 @@ function startMatch(transport) {
   const labPanel = transport.modeId?.startsWith('sandbox')
     ? createLabPanel(uiRoot, transport)
     : null;
+  let settingsPanel = null;
+  let actionDialog = null;
+  let abandoning = false;
+  const closeActionDialog = () => { actionDialog?.remove(); actionDialog = null; };
+  const showMessage = (title, text) => {
+    closeActionDialog();
+    const node = document.createElement('div'); node.className = 'modal-overlay match-confirm-overlay';
+    node.innerHTML = `<section class="match-action-dialog"><h2>${title}</h2><p>${text}</p><div class="match-action-buttons"><button type="button">OK</button></div></section>`;
+    uiRoot.appendChild(node); actionDialog = node;
+    node.querySelector('button').onclick = closeActionDialog;
+  };
+  const confirmLeave = () => {
+    closeActionDialog();
+    const node = document.createElement('div'); node.className = 'modal-overlay match-confirm-overlay';
+    node.innerHTML = '<section class="match-action-dialog"><h2>DEIXAR PARTIDA</h2><p>Essa ação não tem mais volta. Tem certeza que deseja sair da partida? Você pode prejudicar sua equipe.</p><div class="match-action-buttons"><button data-no>NÃO</button><button data-yes>SIM</button></div></section>';
+    uiRoot.appendChild(node); actionDialog = node;
+    node.querySelector('[data-no]').onclick = closeActionDialog;
+    node.querySelector('[data-yes]').onclick = async (event) => {
+      if (abandoning) return; abandoning = true; event.currentTarget.disabled = true;
+      try {
+        const result = await transport.abandonMatch();
+        let discipline = null;
+        if (!result?.duplicate) {
+          discipline = await registerPlayerAbandon(result.matchId, result.mode, result.rankPenalty || 0);
+          if (discipline?.rankPenalty) profile.rankXp = Math.max(0, profile.rankXp - discipline.rankPenalty);
+          profile.save();
+        }
+        const warnings = Number(discipline?.abandonWarnings) || 0;
+        const feedback = result.ranked && discipline?.rankPenalty
+          ? `Você perdeu ${discipline.rankPenalty} pontos de rank por abandonar. Aviso de abandono: ${warnings}/2.`
+          : result.mode === 'custom' ? 'Você deixou a partida.' : `Você deixou a partida. Aviso de abandono: ${warnings}/2.`;
+        localStorage.removeItem(ACTIVE_MATCH_KEY);
+        closeActionDialog();
+        exit('abandoned');
+        showMessage('PARTIDA ENCERRADA', feedback + (warnings >= 2 ? ' Penalidade de matchmaking: 5 minutos.' : ''));
+      } catch (error) { abandoning = false; event.currentTarget.disabled = false; showMessage('ERRO', error.message); }
+    };
+  };
+  const openInGameSettings = () => {
+    settingsPanel = menu.openInGameSettings({
+      onSurrender: () => {
+        transport.requestSurrender?.();
+        settingsPanel?.close();
+        settingsPanel = null;
+      },
+      onLeave: confirmLeave,
+    });
+  };
+  const onKey = (event) => {
+    if (event.code !== 'Escape' || /INPUT|TEXTAREA|SELECT/.test(event.target?.tagName)) return;
+    event.preventDefault();
+    if (hud.isChatOpen()) { hud.closeChat(); return; }
+    if (actionDialog) { closeActionDialog(); return; }
+    if (settingsPanel?.modal?.isConnected) { settingsPanel.close(); settingsPanel = null; }
+    else openInGameSettings();
+  };
+  window.addEventListener('keydown', onKey);
 
   const resumeInfo = transport.resumeInfo?.();
   if (resumeInfo) localStorage.setItem(ACTIVE_MATCH_KEY, JSON.stringify(resumeInfo));
@@ -239,13 +298,24 @@ function startMatch(transport) {
     const myPos = me ? { x: me.x, z: me.z } : { x: 0, z: 0 };
 
     const sampled = input.sample({ myPos, screenToGround: renderer.screenToGround });
-    transport.setInput(sampled.input);
+    const controlsBlocked = Boolean(settingsPanel?.modal?.isConnected || actionDialog || document.querySelector('.surrender-vote-overlay'));
+    transport.setInput(controlsBlocked
+      ? { mx: 0, mz: 0, ax: 0, az: 0, run: 0, jump: false, punch: false, throw: false, grab: false, dash: false }
+      : sampled.input);
     world.setAim(
       sampled.aimPoint,
       !!sampled.aimPoint && me?.state === 'alive' && (!isTouch || sampled.aiming),
     );
 
     const events = transport.drainEvents();
+    for (const control of transport.drainControlEvents?.() || []) {
+      if (control.type === 'surrender-update') showSurrenderVote(control);
+      if (control.type === 'surrender-result') {
+        const voteOverlay = document.querySelector('.surrender-vote-overlay');
+        if (voteOverlay) { clearInterval(voteOverlay._timer); voteOverlay.remove(); }
+        showMessage('VOTAÇÃO ENCERRADA', control.approved ? 'A desistência foi aprovada.' : 'A desistência não foi aprovada. A partida continua.');
+      }
+    }
     hud.pushChatMessages(transport.drainChatMessages?.() ?? []);
     for (const event of events) {
       if (event.t !== 'roundOver' || view.lab) continue;
@@ -285,15 +355,19 @@ function startMatch(transport) {
     cancelAnimationFrame(raf);
     clearTimeout(roundExitTimer);
     clearInterval(persistTimer);
+    window.removeEventListener('keydown', onKey);
     window.removeEventListener('pagehide', onPageHide);
     bgm.pause({ fade: true });
-    loading.hide();
     transport.dispose?.();
     input.dispose();
     labPanel?.dispose();
     hud.dispose();
     world.dispose();
     renderer.dispose();
+    settingsPanel?.close();
+    closeActionDialog();
+    const voteOverlay = document.querySelector('.surrender-vote-overlay');
+    if (voteOverlay) { clearInterval(voteOverlay._timer); voteOverlay.remove(); }
     canvas.classList.add('hidden');
     match = null;
     window.__blast = null;
@@ -304,6 +378,27 @@ function startMatch(transport) {
 
   match = { exit };
   window.__blast = { transport, input, world, step, renderer }; // dev/debug hook
+
+  function showSurrenderVote(vote) {
+    let overlay = document.querySelector('.surrender-vote-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div'); overlay.className = 'modal-overlay surrender-vote-overlay';
+      overlay.innerHTML = '<section class="match-action-dialog"><h2>DESISTIR DA PARTIDA?</h2><p class="vote-count"></p><strong class="vote-time"></strong><div class="match-action-buttons"><button data-vote="1">SIM</button><button data-vote="0">NÃO</button></div></section>';
+      uiRoot.appendChild(overlay);
+      overlay.querySelectorAll('[data-vote]').forEach((button) => button.onclick = () => {
+        transport.voteSurrender?.(vote.team, button.dataset.vote === '1');
+        overlay.querySelectorAll('button').forEach((item) => { item.disabled = true; });
+      });
+      overlay._timer = setInterval(() => {
+        const deadline = Number(overlay.dataset.deadline) || 0;
+        overlay.querySelector('.vote-time').textContent = `${Math.max(0, Math.ceil((deadline - Date.now()) / 1000))}s`;
+      }, 250);
+    }
+    overlay.dataset.deadline = vote.deadlineAt;
+    const votes = vote.votes || [];
+    overlay.querySelector('.vote-count').textContent = `${votes.filter(([,yes]) => yes).length} voto(s) SIM • ${votes.filter(([,yes]) => !yes).length} NÃO`;
+    overlay.querySelector('.vote-time').textContent = `${Math.max(0, Math.ceil((vote.deadlineAt - Date.now()) / 1000))}s`;
+  }
 }
 
 async function resumeActiveMatch() {

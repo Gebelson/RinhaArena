@@ -6,7 +6,7 @@ import { CONFIG } from '../core/config.js';
 import { clamp, lerp, angleLerp } from '../core/math.js';
 import { LEVELS, DEFAULT_LEVEL } from '../content/levels/index.js';
 import { MODES, DEFAULT_MODE } from './modes/index.js';
-import { createSim, addPlayer, removePlayer, step } from './sim.js';
+import { createSim, addPlayer, removePlayer, step, endRound } from './sim.js';
 import { createBotBrain } from './bots.js';
 import { BOT_NAMES, randomCos } from '../content/cosmetics.js';
 import { assertParticipants, ParticipantType, validDisplayName } from './matchmaking.js';
@@ -202,6 +202,36 @@ export class GameHost {
     }
     const maxForTeam = team === 'red' ? (this.teamLimits?.red ?? this.teamSize) : (this.teamLimits?.blue ?? this.teamSize);
     if (this.teamCount(team) < maxForTeam) this.addBot(team);
+  }
+
+  replaceHumanWithBotInPlace(id, replacementForPlayerId = id) {
+    const player = this.sim.state.players.find((candidate) => candidate.id === id);
+    if (!player || player.type !== ParticipantType.HUMAN || player.replacementForPlayerId) return null;
+    const botId = `replacement:${replacementForPlayerId}`;
+    player.type = ParticipantType.BOT;
+    player.bot = true;
+    player.userId = null;
+    player.botId = botId;
+    player.participantId = `bot:${botId}`;
+    player.replacementForPlayerId = replacementForPlayerId;
+    player.displayName = BOT_NAMES[this.botSequence++ % BOT_NAMES.length];
+    player.name = player.displayName;
+    player.cos = randomCos();
+    player.connected = true;
+    this.humanLastActive.delete(id);
+    this.temporaryBrains.delete(id);
+    const brain = this.sim.mode.createBrain?.(id) ?? createBotBrain(id);
+    this.brains.set(id, adjustBotDifficulty(brain, this.config.rules.botDifficulty));
+    return player;
+  }
+
+  forfeitTeam(team) {
+    if (this.modeId === 'ffa' || !['red', 'blue'].includes(team)) return false;
+    const winner = team === 'red' ? 'blue' : 'red';
+    const winsNeeded = Math.ceil(this.sim.state.series.bestOf / 2);
+    this.sim.state.series.wins[winner] = Math.max(this.sim.state.series.wins[winner] || 0, winsNeeded - 1);
+    endRound(this.sim, winner);
+    return true;
   }
 
   disconnectHuman(id) {

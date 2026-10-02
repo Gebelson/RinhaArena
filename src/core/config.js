@@ -213,6 +213,10 @@ export const CONFIG = {
     overTime: 7, // victory screen duration before auto-rematch
     friendlyFire: false, // Fogo amigo: false = aliados não se agarram, não se socam e bombas aliadas não afetam o time
     ffaKillsToWin: 10, // Frags to win in FFA
+    surrenderVoteDurationMs: 20_000,
+    surrenderVoteCooldownMs: 60_000,
+    surrenderApprovalRatio: 0.6,
+    normalRankLoss: 20,
   },
 
   world: {

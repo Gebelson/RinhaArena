@@ -17,6 +17,7 @@ export function createLocalGame({ profile, levelId, modeId, config, teamSize, te
   const myId = host.addHuman({ name: profile.name, cos: { ...profile.cos } });
   host.fillBots();
   const chatMessages = [];
+  const controlEvents = [];
 
   return {
     kind: 'local',
@@ -32,6 +33,19 @@ export function createLocalGame({ profile, levelId, modeId, config, teamSize, te
       if (message) chatMessages.push({ displayName: profile.name, text: message, own: true });
     },
     drainChatMessages() { return chatMessages.splice(0, chatMessages.length); },
+    drainControlEvents() { return controlEvents.splice(0, controlEvents.length); },
+    requestSurrender() {
+      const me = host.sim.state.players.find((player) => player.id === myId);
+      if (!me || host.modeId === 'ffa') return false;
+      controlEvents.push({ type: 'surrender-update', team: me.team, deadlineAt: Date.now() + 20_000, votes: [[profile.playerId, true]] });
+      host.forfeitTeam(me.team);
+      queueMicrotask(() => controlEvents.push({ type: 'surrender-result', team: me.team, approved: true, yes: 1, total: 1 }));
+      return true;
+    },
+    voteSurrender() {},
+    abandonMatch() {
+      return Promise.resolve({ matchId: `local:${Date.now()}`, mode: 'bots', ranked: false, ended: true, rankPenalty: 0 });
+    },
     // local-only debug surface (the physics-lab panel drives resets etc.)
     debug: { host, sim: host.sim },
     dispose() {},

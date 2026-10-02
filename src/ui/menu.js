@@ -12,6 +12,7 @@ import { RANKS, getRankProgress, rankSpriteStyle } from '../content/ranks.js';
 import { getLevelBadgeAsset, getLevelProgress } from '../content/levels.js';
 import { listPlayerRankings, submitPlayerRanking } from '../net/ranking.js';
 import { saveAccountProfile, signOut } from '../net/account.js';
+import { getPlayerDiscipline } from '../net/discipline.js';
 import { openAuthGate } from './auth.js';
 import { applySettings, getSettings, keyLabel, saveSettings } from '../settings.js';
 import { CONFIG } from '../core/config.js';
@@ -705,7 +706,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     requestAnimationFrame(() => { grid.scrollTop = 0; });
   }
 
-  function openSettingsModal() {
+  function openSettingsModal({ inGame = false, onSurrender, onLeave } = {}) {
     let settings = getSettings();
     const controlNames = { up: 'Mover para cima', down: 'Mover para baixo', left: 'Mover para esquerda', right: 'Mover para direita', jump: 'Pular', grab: 'Agarrar', punch: 'Socar', dash: 'Correr' };
     const modal = document.createElement('div');
@@ -714,7 +715,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       <div class="modal-window settings-modal-window" role="dialog" aria-modal="true" aria-label="Configurações">
         <div class="modal-header"><div class="modal-title">CONFIGURAÇÕES</div><button class="modal-close" aria-label="Fechar">✕</button></div>
         <nav class="settings-tabs" aria-label="Categorias de configurações">
-          <button class="active" data-page="audio">ÁUDIO</button><button data-page="video">VÍDEO</button><button data-page="interface">INTERFACE</button><button data-page="controls">CONTROLES</button><button data-page="account">CONTA</button>
+          <button class="active" data-page="audio">ÁUDIO</button><button data-page="video">VÍDEO</button><button data-page="interface">INTERFACE</button><button data-page="controls">CONTROLES</button>${inGame ? '' : '<button data-page="account">CONTA</button>'}
         </nav>
         <div class="settings-body">
           <div class="settings-page active" data-page="audio"><section class="settings-section">
@@ -741,8 +742,9 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
             <div class="settings-keys">${Object.entries(controlNames).map(([action,label]) => `<button class="settings-key" data-action="${action}"><span>${label}</span><kbd>${keyLabel(settings.controls[action])}</kbd></button>`).join('')}</div>
             <button class="settings-reset-keys" type="button">RESTAURAR TECLAS PADRÃO</button>
           </section></div>
-          <div class="settings-page" data-page="account"><section class="settings-section settings-account-section"><h3>CONTA</h3><p>Encerre sua sessão neste dispositivo.</p><button class="settings-disconnect" type="button">DESCONECTAR</button></section></div>
+          ${inGame ? '' : '<div class="settings-page" data-page="account"><section class="settings-section settings-account-section"><h3>CONTA</h3><p>Encerre sua sessão neste dispositivo.</p><button class="settings-disconnect" type="button">DESCONECTAR</button></section></div>'}
         </div>
+        ${inGame ? '<footer class="in-game-settings-footer"><button class="settings-surrender" type="button">DESISTIR</button><button class="settings-leave-match" type="button">DEIXAR PARTIDA</button></footer>' : ''}
       </div>`;
     uiRoot.appendChild(modal);
     const translateSettings = (language) => {
@@ -788,8 +790,10 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       modal.querySelectorAll('.settings-row b').forEach((node, index) => { node.textContent = copy.toggles[index]; });
       modal.querySelectorAll('.settings-key > span').forEach((node, index) => { node.textContent = copy.controls[index]; });
       modal.querySelector('.settings-reset-keys').textContent = copy.reset;
-      modal.querySelector('.settings-disconnect').textContent = copy.disconnect;
-      modal.querySelector('.settings-account-section p').textContent = copy.account;
+      if (!inGame) {
+        modal.querySelector('.settings-disconnect').textContent = copy.disconnect;
+        modal.querySelector('.settings-account-section p').textContent = copy.account;
+      }
       modal.querySelector('.settings-fullscreen').textContent = copy.fullscreen;
     };
     translateSettings(settings.language);
@@ -866,13 +870,19 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       settings = saveSettings({ ...settings, controls: defaults.controls });
       modal.querySelectorAll('.settings-key').forEach((button) => { button.querySelector('kbd').textContent = keyLabel(settings.controls[button.dataset.action]); });
     });
-    modal.querySelector('.settings-disconnect').addEventListener('click', async () => {
+    if (!inGame) modal.querySelector('.settings-disconnect').addEventListener('click', async () => {
       const button = modal.querySelector('.settings-disconnect');
       button.disabled = true;
       button.textContent = 'DESCONECTANDO...';
       await signOut();
       location.reload();
     });
+    if (inGame) {
+      modal.classList.add('in-game-settings-overlay');
+      modal.querySelector('.settings-surrender').addEventListener('click', () => onSurrender?.());
+      modal.querySelector('.settings-leave-match').addEventListener('click', () => onLeave?.());
+    }
+    return { modal, close };
   }
 
   function openAvatarModal() {
@@ -1273,6 +1283,15 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       },
     };
     try {
+      if (selection.matchType === 'ranked' || selection.matchType === 'normal') {
+        const discipline = await getPlayerDiscipline();
+        const blockedUntil = Date.parse(discipline?.matchmakingBlockedUntil || '') || 0;
+        const serverNow = Date.parse(discipline?.serverTime || '') || Date.now();
+        if (blockedUntil > serverNow) {
+          openPenaltyModal(blockedUntil - serverNow);
+          return;
+        }
+      }
       if (selection.matchType === 'bots') {
         if (selection.botType === 'training') onPlayLab('doll');
         else onPlayLocal(selection.modeId, levelId, {
@@ -1305,6 +1324,22 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     } finally {
       btnPlayBots.disabled = false;
     }
+  }
+
+  function openPenaltyModal(remainingMs) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay match-confirm-overlay';
+    modal.innerHTML = `<section class="match-action-dialog"><h2>PENALIDADE POR ABANDONO</h2><p>Você abandonou partidas recentemente e precisa aguardar antes de entrar novamente na fila.</p><strong class="penalty-countdown"></strong><div class="match-action-buttons"><button type="button">FECHAR</button></div></section>`;
+    uiRoot.appendChild(modal);
+    const output = modal.querySelector('.penalty-countdown');
+    const deadline = performance.now() + remainingMs;
+    const render = () => {
+      const seconds = Math.max(0, Math.ceil((deadline - performance.now()) / 1000));
+      output.textContent = `${String(Math.floor(seconds / 60)).padStart(2,'0')}:${String(seconds % 60).padStart(2,'0')}`;
+      if (!seconds) clearInterval(timer);
+    };
+    const timer = setInterval(render, 250); render();
+    modal.querySelector('button').addEventListener('click', () => { clearInterval(timer); modal.remove(); });
   }
 
   function openGameOptionsModal(initialPage = 'create') {
@@ -1890,6 +1925,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   }
 
   return {
+    openInGameSettings(options) { return openSettingsModal({ ...options, inGame: true }); },
     show() {
       syncUI();
       el.classList.remove('hidden');
