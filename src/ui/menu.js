@@ -20,7 +20,7 @@ import { CONFIG } from '../core/config.js';
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
 }[char]));
-const AVATARS = Array.from({ length: 6 }, (_, index) => `avatar-${index + 1}.webp`);
+const AVATARS = Array.from({ length: 10 }, (_, index) => `avatar-${index + 1}.webp`);
 const SHOP_CHARACTERS = [
   ['capivara', 'Capivara'], ['cachorro', 'Cachorro'], ['coala', 'Coala'], ['coelho', 'Coelho'],
   ['crocodilo', 'Crocodilo'], ['furao', 'Furão'], ['gato', 'Gato'], ['jacare', 'Jacaré'],
