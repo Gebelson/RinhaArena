@@ -27,7 +27,7 @@ const SHOP_CHARACTERS = [
   ['tartaruga', 'Tartaruga'], ['tubarao', 'Tubarão'],
 ].map(([id, name]) => ({ id, name, acquired: id === 'capivara' }));
 
-export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayLab, onClickSound }) {
+export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepareOnline, onStartPrepared, onPlayLab, onClickSound }) {
   const el = document.createElement('div');
   el.className = 'menu';
   applySettings();
@@ -1046,6 +1046,177 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     modal.querySelector('.modal-close-btn').addEventListener('click', close);
   }
 
+  function queueCodeFor(selection, levelId) {
+    const key = [selection.matchType, selection.modeId, levelId, selection.teamSize, selection.ffaSize].join('|');
+    let hash = 2166136261;
+    for (let index = 0; index < key.length; index += 1) {
+      hash ^= key.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `q${(hash >>> 0).toString(36)}`.slice(0, 12);
+  }
+
+  function queueCapacity(selection) {
+    return selection.modeId === 'ffa'
+      ? Math.max(2, Number(selection.ffaSize) || 2)
+      : Math.max(2, (Number(selection.teamSize) || 1) * 2);
+  }
+
+  function createMatchmakingOverlay(selection) {
+    const capacity = queueCapacity(selection);
+    const modeLabel = selection.matchType === 'ranked' ? 'RANQUEADA' : 'NORMAL GAME';
+    const overlay = document.createElement('div');
+    overlay.className = 'matchmaking-overlay';
+    overlay.innerHTML = `
+      <section class="matchmaking-window" role="dialog" aria-modal="true" aria-label="Buscando jogadores">
+        <div class="matchmaking-scanlines" aria-hidden="true"></div>
+        <div class="matchmaking-kicker">BUSCANDO JOGADORES</div>
+        <div class="matchmaking-heading">
+          <h2>${modeLabel}</h2>
+          <strong class="matchmaking-timer">00:30</strong>
+        </div>
+        <div class="matchmaking-slots" aria-label="Jogadores aceitos">
+          ${Array.from({ length: capacity }, (_, index) => `
+            <div class="matchmaking-slot${index === 0 ? ' is-accepted' : ''}" aria-label="${index === 0 ? 'Jogador aceito' : 'Aguardando jogador'}">
+              <span>${index === 0 ? '●' : '?'}</span>
+            </div>
+          `).join('')}
+        </div>
+        <div class="matchmaking-summary"><b class="matchmaking-count">1 / ${capacity} ACEITOS</b></div>
+        <p class="matchmaking-status">Procurando adversários...</p>
+        <button class="matchmaking-cancel" type="button">CANCELAR</button>
+      </section>
+    `;
+    uiRoot.appendChild(overlay);
+    return overlay;
+  }
+
+  async function enterMatchmakingQueue(selection, matchConfig, levelId) {
+    const overlay = createMatchmakingOverlay(selection);
+    const timerEl = overlay.querySelector('.matchmaking-timer');
+    const statusEl = overlay.querySelector('.matchmaking-status');
+    const countEl = overlay.querySelector('.matchmaking-count');
+    const slots = [...overlay.querySelectorAll('.matchmaking-slot')];
+    const cancelButton = overlay.querySelector('.matchmaking-cancel');
+    const capacity = queueCapacity(selection);
+    const deadline = Date.now() + 30_000;
+    let transport = null;
+    let pollTimer = null;
+    let finished = false;
+    let cancelled = false;
+
+    const updateAccepted = (count) => {
+      const accepted = Math.max(1, Math.min(capacity, count));
+      countEl.textContent = `${accepted} / ${capacity} ACEITOS`;
+      slots.forEach((slot, index) => {
+        slot.classList.toggle('is-accepted', index < accepted);
+        slot.querySelector('span').textContent = index < accepted ? '●' : '?';
+      });
+    };
+    const humanCount = () => {
+      const players = transport?.view?.()?.players || [];
+      return Math.max(1, players.filter((player) => !player.bot).length);
+    };
+    const cleanup = () => {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = null;
+      overlay.remove();
+      btnPlayBots.disabled = false;
+    };
+    const startPrepared = () => {
+      if (finished || cancelled || !transport) return;
+      finished = true;
+      statusEl.textContent = 'Partida encontrada! Preparando arena...';
+      overlay.classList.add('is-found');
+      setTimeout(() => {
+        if (cancelled) return;
+        cleanup();
+        onStartPrepared(transport);
+      }, 500);
+    };
+    const cancel = () => {
+      if (finished || cancelled) return;
+      cancelled = true;
+      transport?.dispose?.();
+      cleanup();
+    };
+    cancelButton.addEventListener('click', cancel);
+
+    pollTimer = setInterval(() => {
+      if (cancelled || finished) return;
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      timerEl.textContent = `00:${String(remaining).padStart(2, '0')}`;
+      const accepted = humanCount();
+      updateAccepted(accepted);
+      if (accepted >= 2) {
+        startPrepared();
+      } else if (remaining <= 0 && transport) {
+        statusEl.textContent = 'Completando a partida com bots...';
+        startPrepared();
+      }
+    }, 250);
+
+    try {
+      const prefix = selection.matchType === 'ranked' ? '[RANQUEADA]' : '[NORMAL]';
+      const rooms = await listRooms().catch(() => []);
+      const compatible = rooms.find((room) => room.name?.startsWith(prefix)
+        && room.modeId === selection.modeId
+        && room.levelId === levelId
+        && room.playersCount < room.maxPlayers
+        && (selection.modeId === 'ffa' ? room.teamLimits?.ffa === selection.ffaSize : room.teamLimits?.red === selection.teamSize));
+
+      if (cancelled) return;
+      if (compatible) {
+        statusEl.textContent = 'Jogador encontrado. Entrando na partida...';
+        transport = await onPrepareOnline({ room: compatible.code });
+        if (cancelled) {
+          transport?.dispose?.();
+          return;
+        }
+        updateAccepted(2);
+        startPrepared();
+        return;
+      }
+
+      const code = queueCodeFor(selection, levelId);
+      const name = `${prefix} Partida automática`;
+      let data;
+      try {
+        data = await createRoom({
+          name, code, modeId: selection.modeId, levelId,
+          redSize: selection.teamSize, blueSize: selection.teamSize, ffaSize: selection.ffaSize,
+          respawnTime: selection.respawnTime, friendlyFire: matchConfig.rules.friendlyFire,
+        });
+        if (!data?.ok) throw new Error(data?.error || 'Não foi possível criar a fila.');
+      } catch {
+        if (cancelled) return;
+        statusEl.textContent = 'Fila encontrada. Conectando...';
+        transport = await onPrepareOnline({ room: code });
+        if (cancelled) transport?.dispose?.();
+        else {
+          updateAccepted(2);
+          startPrepared();
+        }
+        return;
+      }
+
+      data.room.config = matchConfig;
+      data.room.matchType = selection.matchType;
+      transport = await onPrepareOnline({ room: data.code, host: true, hostToken: data.hostToken, roomConfig: data.room });
+      if (cancelled) {
+        transport?.dispose?.();
+        return;
+      }
+      statusEl.textContent = 'Aguardando outro jogador...';
+    } catch (cause) {
+      if (cancelled) return;
+      cleanup();
+      transport?.dispose?.();
+      errBox.textContent = cause.message || 'Não foi possível entrar na fila.';
+      errBox.classList.remove('hidden');
+    }
+  }
+
   async function launchConfirmedGame(selection) {
     onClickSound?.();
     errBox.classList.add('hidden');
@@ -1077,26 +1248,13 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
         return;
       }
 
-      if (selection.matchType !== 'custom') {
-        const prefix = selection.matchType === 'ranked' ? '[RANQUEADA]' : '[NORMAL]';
-        const rooms = await listRooms().catch(() => []);
-        const compatible = rooms.find((room) => room.name?.startsWith(prefix)
-          && room.modeId === selection.modeId
-          && room.levelId === levelId
-          && room.playersCount < room.maxPlayers
-          && (selection.modeId === 'ffa' ? room.teamLimits?.ffa === selection.ffaSize : room.teamLimits?.red === selection.teamSize));
-        if (compatible) {
-          await onPlayOnline({ room: compatible.code });
-          return;
-        }
+      if (selection.matchType === 'ranked' || selection.matchType === 'normal') {
+        await enterMatchmakingQueue(selection, matchConfig, levelId);
+        return;
       }
 
-      const name = selection.matchType === 'custom'
-        ? selection.name
-        : `${selection.matchType === 'ranked' ? '[RANQUEADA]' : '[NORMAL]'} Partida automática`;
-      const code = selection.matchType === 'custom'
-        ? selection.code
-        : `${selection.matchType === 'ranked' ? 'rank' : 'normal'}-${Math.random().toString(36).slice(2, 7)}`;
+      const name = selection.name;
+      const code = selection.code;
       const data = await createRoom({
         name, code, password: selection.password, modeId: selection.modeId, levelId,
         redSize: selection.teamSize, blueSize: selection.teamSize, ffaSize: selection.ffaSize,

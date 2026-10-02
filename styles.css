@@ -2001,6 +2001,145 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
   .game-room-list { padding: 0 14px 14px; }
 }
 
+/* Fila rápida para partidas ranqueadas e normais. */
+.matchmaking-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 48%, #68ff9c35 0 18%, #07130be8 60%),
+    #020806e8;
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+}
+.matchmaking-window {
+  position: relative;
+  isolation: isolate;
+  width: min(720px, calc(100vw - 36px));
+  overflow: hidden;
+  padding: 28px 34px 30px;
+  border: 2px solid #57f5a0;
+  border-radius: 10px;
+  color: #effff5;
+  text-align: center;
+  background:
+    linear-gradient(135deg, #a8ffc40d, transparent 42%),
+    linear-gradient(180deg, #101916f5, #050b09f7);
+  box-shadow: 0 0 0 5px #04100bcc, 0 0 28px #51ff9a85, inset 0 0 28px #45ff8e18;
+}
+.matchmaking-window::before,
+.matchmaking-window::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  width: 140px;
+  height: 140px;
+  border: 1px solid #67fda25c;
+  transform: rotate(45deg);
+}
+.matchmaking-window::before { top: -105px; left: -70px; }
+.matchmaking-window::after { right: -70px; bottom: -105px; }
+.matchmaking-scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .18;
+  background: repeating-linear-gradient(0deg, transparent 0 4px, #9fffcf14 5px);
+}
+.matchmaking-kicker {
+  color: #a6bbae;
+  font: 800 12px/1.1 var(--font-display, sans-serif);
+  letter-spacing: .18em;
+}
+.matchmaking-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 20px;
+  margin: 5px 0 22px;
+}
+.matchmaking-heading h2 {
+  margin: 0;
+  color: #fff;
+  font: 1000 clamp(28px, 5vw, 48px)/1 var(--font-display, sans-serif);
+  letter-spacing: .06em;
+  text-shadow: 0 3px 0 #173924;
+}
+.matchmaking-timer {
+  min-width: 72px;
+  color: #75ffad;
+  font: 900 20px/1 monospace;
+}
+.matchmaking-slots {
+  display: flex;
+  justify-content: center;
+  gap: clamp(5px, 1vw, 9px);
+  margin: 0 auto 12px;
+}
+.matchmaking-slot {
+  display: grid;
+  place-items: center;
+  width: clamp(35px, 6.5vw, 56px);
+  aspect-ratio: 1;
+  border: 2px solid #27332d;
+  border-radius: 5px;
+  color: #53625a;
+  background: #111714;
+  box-shadow: inset 0 0 10px #000a;
+  font: 1000 clamp(16px, 3vw, 25px)/1 var(--font-display, sans-serif);
+  transition: .2s ease;
+}
+.matchmaking-slot.is-accepted {
+  border-color: #b6ffd0;
+  color: #fff;
+  background: linear-gradient(180deg, #30c76f, #12813f);
+  box-shadow: 0 0 14px #5aff9b80, inset 0 0 0 2px #ffffff30;
+}
+.matchmaking-summary {
+  display: flex;
+  justify-content: flex-end;
+  max-width: 640px;
+  margin: auto;
+  color: #c7d7cd;
+  font: 800 12px/1 var(--font-display, sans-serif);
+  letter-spacing: .08em;
+}
+.matchmaking-status {
+  min-height: 20px;
+  margin: 20px 0 14px;
+  color: #b9c9bf;
+  font: 700 13px/1.3 var(--font-ui, sans-serif);
+}
+.matchmaking-cancel {
+  min-width: 190px;
+  padding: 12px 25px;
+  border: 2px solid #ff6666;
+  border-radius: 8px;
+  color: #fff;
+  background: linear-gradient(#8b2a2a, #501414);
+  box-shadow: 0 4px 0 #260909;
+  font: 1000 15px/1 var(--font-display, sans-serif);
+  letter-spacing: .05em;
+  cursor: pointer;
+}
+.matchmaking-cancel:hover { filter: brightness(1.18); transform: translateY(-1px); }
+.matchmaking-overlay.is-found .matchmaking-window { border-color: #ffd65e; box-shadow: 0 0 34px #ffd65e80; }
+.matchmaking-overlay.is-found .matchmaking-cancel { visibility: hidden; }
+
+@media (max-width: 700px), (max-height: 520px) {
+  .matchmaking-overlay { padding: 10px; }
+  .matchmaking-window { width: min(680px, calc(100vw - 20px)); padding: 18px 20px 20px; }
+  .matchmaking-heading { margin-bottom: 14px; }
+  .matchmaking-heading h2 { font-size: clamp(23px, 7vh, 34px); }
+  .matchmaking-slot { width: clamp(28px, 7.2vw, 45px); }
+  .matchmaking-status { margin: 12px 0 9px; }
+  .matchmaking-cancel { padding: 9px 20px; }
+}
+
 .loading-screen.fade-in {
   opacity: 1;
 }

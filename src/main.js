@@ -58,6 +58,22 @@ profile.save();
 
 let match = null;
 
+const prepareOnlineMatch = (opts) => {
+  const room = typeof opts === 'string' ? opts : opts?.room || 'main';
+  const password = typeof opts === 'object' ? opts?.password : null;
+  const team = typeof opts === 'object' ? opts?.team : null;
+  return connectOnline({
+    room,
+    password,
+    team,
+    host: typeof opts === 'object' && !!opts?.host,
+    hostToken: typeof opts === 'object' ? opts?.hostToken : null,
+    roomConfig: typeof opts === 'object' ? opts?.roomConfig : null,
+    profile,
+    onDropped: () => match?.exit('Connection lost'),
+  });
+};
+
 const menu = createMenu(uiRoot, profile, {
   onClickSound: () => { sfx.unlock(); sfx.play('click'); },
   onPlayLocal: (modeId, levelId, matchOptions = {}) => startMatch(createLocalGame({
@@ -81,22 +97,9 @@ const menu = createMenu(uiRoot, profile, {
     config: makeLabConfig(),
     teamSize: 1,
   })),
-  onPlayOnline: async (opts) => {
-    const room = typeof opts === 'string' ? opts : opts?.room || 'main';
-    const password = typeof opts === 'object' ? opts?.password : null;
-    const team = typeof opts === 'object' ? opts?.team : null;
-    const transport = await connectOnline({
-      room,
-      password,
-      team,
-      host: typeof opts === 'object' && !!opts?.host,
-      hostToken: typeof opts === 'object' ? opts?.hostToken : null,
-      roomConfig: typeof opts === 'object' ? opts?.roomConfig : null,
-      profile,
-      onDropped: () => match?.exit('Connection lost'),
-    });
-    startMatch(transport);
-  },
+  onPrepareOnline: prepareOnlineMatch,
+  onStartPrepared: (transport) => startMatch(transport),
+  onPlayOnline: async (opts) => startMatch(await prepareOnlineMatch(opts)),
 });
 function playSfx(events, myId, myPos) {
   const spatial = (ev) => Math.max(0.15, 1 - Math.hypot(ev.x - myPos.x, ev.z - myPos.z) / 30);
