@@ -141,7 +141,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
 
       <button class="map-selector" aria-label="Selecionar arena">
         <img class="map-selector-thumb" src="./assets/maps/random-arena-cover.webp" alt="" />
-        <span class="map-selector-copy"><strong class="big-map-name">RANQUEADA</strong><small><b class="map-mode-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5 8.5 3l7 2.5L21 3v15.5L15.5 21l-7-2.5L3 21V5.5Zm5.5-.1v11l7 2.5v-11l-7-2.5Z"/></svg></b> <span class="big-map-sub">Aleatório</span></small></span>
+        <span class="map-selector-copy"><strong class="big-map-name">RANQUEADA</strong><small><span class="big-map-sub">Aleatório</span></small></span>
         <span class="map-chevron">›</span>
       </button>
 

@@ -984,11 +984,9 @@ html, body {
   pointer-events: none;
 }
 .map-selector-thumb { width: 12.2vw; height: 10.8vh; flex: 0 0 auto; border-radius: .95vw; object-fit: cover; border: .18vw solid #63c9ff; box-shadow: 0 .28vh .55vh #0009, inset 0 0 .4vw #fff7; }
-.map-selector-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.map-selector-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
 .map-selector-copy strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 2vw; line-height: 1.05; text-transform: uppercase; text-shadow: 0 .22vh 0 #04102d, 0 .3vh .35vh #000b; }
-.map-selector-copy small { margin-top: .55vh; color: #22efff; font-size: 1.2vw; font-weight: 900; text-shadow: 0 .16vh .2vh #001534; }
-.map-selector-copy small b { display: inline-grid; place-items: center; width: 1.65vw; aspect-ratio: 1; margin-right: .2vw; border-radius: 50%; color: #07152f; font-size: 1.05vw; background: linear-gradient(#7ff8ff,#20c9ff); box-shadow: 0 .15vh .25vh #0008; }
-.map-mode-icon svg { width: 65%; height: 65%; fill: #07152f; }
+.map-selector-copy small { display: block; width: 100%; margin-top: .55vh; color: #22efff; font-size: 1.5vw; line-height: 1.05; font-weight: 900; text-align: left; text-shadow: 0 .16vh .2vh #001534; }
 .map-chevron {
   width: 3.2vw; height: 6.2vh; flex: 0 0 auto; overflow: visible; color: transparent; font-size: 0;
   background: url('./assets/ui/map-chevron.png') center / 230% auto no-repeat; border: 0; box-shadow: none;
