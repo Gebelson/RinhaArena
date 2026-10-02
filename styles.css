@@ -987,6 +987,7 @@ html, body {
 .map-selector-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
 .map-selector-copy strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 2vw; line-height: 1.05; text-transform: uppercase; text-shadow: 0 .22vh 0 #04102d, 0 .3vh .35vh #000b; }
 .map-selector-copy small { display: block; width: 100%; margin-top: .55vh; color: #22efff; font-size: 1.5vw; line-height: 1.05; font-weight: 900; text-align: left; text-shadow: 0 .16vh .2vh #001534; }
+.map-selector-copy .big-map-sub { font-size: max(16px, 1.15vw); line-height: 1.05; }
 .map-chevron {
   width: 3.2vw; height: 6.2vh; flex: 0 0 auto; overflow: visible; color: transparent; font-size: 0;
   background: url('./assets/ui/map-chevron.png') center / 230% auto no-repeat; border: 0; box-shadow: none;
