@@ -60,17 +60,19 @@ let match = null;
 
 const menu = createMenu(uiRoot, profile, {
   onClickSound: () => { sfx.unlock(); sfx.play('click'); },
-  onPlayLocal: (modeId, levelId) => startMatch(createLocalGame({
+  onPlayLocal: (modeId, levelId, matchOptions = {}) => startMatch(createLocalGame({
     profile,
     modeId,
     levelId,
-    config: {
+    config: matchOptions.config || {
       ...CONFIG,
       rules: {
         ...CONFIG.rules,
         friendlyFire: profile.friendlyFire ?? false,
       },
     },
+    teamLimits: matchOptions.teamLimits,
+    respawnTime: matchOptions.respawnTime,
   })),
   onPlayLab: (variant) => startMatch(createLocalGame({
     profile,
@@ -221,9 +223,10 @@ function startMatch(transport) {
     const events = transport.drainEvents();
     for (const event of events) {
       if (event.t !== 'roundOver' || view.lab) continue;
+      if (event.matchComplete === false) continue;
       const draw = event.winner === 'draw';
       const won = !draw && (view.modeId === 'ffa' ? event.winner === myId : event.winner === me?.team);
-      const gainedPoints = draw ? 10 : won ? 25 : -20;
+      const gainedPoints = event.ranked ? (draw ? 10 : won ? 25 : -20) : 0;
       const gainedGold = draw ? 40 : won ? 100 : 20;
       profile.rankXp = Math.max(0, profile.rankXp + gainedPoints);
       profile.gold = Math.max(0, (Number(profile.gold) || 0) + gainedGold);
@@ -233,7 +236,7 @@ function startMatch(transport) {
       profile.save();
       submitPlayerRanking(profile).catch((error) => console.warn('[rank] sync failed:', error.message));
       const { rank } = getRankProgress(profile.rankXp);
-      console.info(`[rank] ${gainedPoints >= 0 ? '+' : ''}${gainedPoints} PTS · ${rank.name}`);
+      if (event.ranked) console.info(`[rank] ${gainedPoints >= 0 ? '+' : ''}${gainedPoints} PTS · ${rank.name}`);
       clearTimeout(roundExitTimer);
       roundExitTimer = window.setTimeout(exit, Math.max(0, CONFIG.rules.overTime * 1000 - 150));
     }

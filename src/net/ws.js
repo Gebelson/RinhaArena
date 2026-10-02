@@ -69,6 +69,8 @@ function interpState(a, b, t) {
 }
 
 function roomOptions(room) {
+  const roomRules = room.config?.rules || {};
+  const roomPowerups = room.config?.powerups || {};
   return {
     levelId: room.levelId,
     modeId: room.modeId,
@@ -77,8 +79,10 @@ function roomOptions(room) {
     friendlyFire: room.friendlyFire,
     config: {
       ...CONFIG,
+      ...(room.config || {}),
       player: { ...CONFIG.player, respawnTime: room.respawnTime },
-      rules: { ...CONFIG.rules, friendlyFire: room.friendlyFire },
+      powerups: { ...CONFIG.powerups, ...roomPowerups },
+      rules: { ...CONFIG.rules, ...roomRules, friendlyFire: room.friendlyFire },
     },
   };
 }

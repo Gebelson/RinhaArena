@@ -14,6 +14,7 @@ import { listPlayerRankings, submitPlayerRanking } from '../net/ranking.js';
 import { saveAccountProfile, signOut } from '../net/account.js';
 import { openAuthGate } from './auth.js';
 import { applySettings, getSettings, keyLabel, saveSettings } from '../settings.js';
+import { CONFIG } from '../core/config.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -73,9 +74,9 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     },
     procedural: {
       id: 'procedural',
-      name: 'Procedural',
+      name: 'Aleatório',
       img: './assets/maps/procedural.png',
-      desc: 'Arena cósmica gerada dinamicamente com geometria imprevisível.',
+      desc: 'Uma arena diferente é escolhida ou gerada a cada partida.',
     },
   };
 
@@ -576,16 +577,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     });
   });
 
-  // Huge Play vs Bots CTA
-  btnPlayBots.addEventListener('click', () => {
-    onClickSound?.();
-    let lvlId = selectedLevel;
-    if (selectedLevel === 'procedural') {
-      lvlId = LEVELS.procedural.seedId;
-      newProceduralSeed();
-    }
-    onPlayLocal(selectedMode, lvlId);
-  });
+  // The main play controls now open the complete game-mode screen.
+  btnPlayBots.addEventListener('click', () => openGameOptionsModal('create'));
 
   // Physics Lab
   btnDuel.addEventListener('click', () => {
@@ -598,7 +591,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
   });
 
   // Online Multiplayer Modals
-  btnLobby.addEventListener('click', () => openLobbyModal());
+  btnLobby.addEventListener('click', () => openGameOptionsModal('rooms'));
   btnCustomCreate.addEventListener('click', () => openCustomCreateModal());
 
   // How to play modal
@@ -617,12 +610,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     btnAudio.classList.toggle('muted', nextMuted);
     btnAudio.setAttribute('aria-label', nextMuted ? 'Ativar áudio' : 'Desativar áudio');
   });
-  mapSelector.addEventListener('click', () => {
-    const ids = Object.keys(MAP_DATA);
-    selectedLevel = ids[(ids.indexOf(selectedLevel) + 1) % ids.length];
-    onClickSound?.();
-    syncUI();
-  });
+  mapSelector.addEventListener('click', () => openGameOptionsModal('create'));
   el.querySelector('.btn-shop').addEventListener('click', () => {
     onClickSound?.();
     openShopModal();
@@ -1050,6 +1038,231 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     const close = () => modal.remove();
     modal.querySelector('.modal-close').addEventListener('click', close);
     modal.querySelector('.modal-close-btn').addEventListener('click', close);
+  }
+
+  function openGameOptionsModal(initialPage = 'create') {
+    onClickSound?.();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay game-options-overlay';
+    modal.innerHTML = `
+      <section class="game-options-window" aria-label="Opções de jogo">
+        <header class="game-options-header">
+          <div><small>RINHA ARENA</small><h2>OPÇÕES DE JOGO</h2></div>
+          <button class="modal-close" type="button" aria-label="Fechar">✕</button>
+        </header>
+        <nav class="game-options-tabs" aria-label="Páginas">
+          <button type="button" data-page="create">CRIAR SALA</button>
+          <button type="button" data-page="rooms">SALAS CRIADAS</button>
+        </nav>
+        <div class="game-options-page" data-page-panel="create">
+          <div class="match-type-grid">
+            <button type="button" class="match-type active" data-type="ranked"><b>RANQUEADA</b><span>MD3 competitivo • 5v5</span></button>
+            <button type="button" class="match-type" data-type="normal"><b>NORMAL</b><span>Sem pontos de rank</span></button>
+            <button type="button" class="match-type" data-type="bots"><b>CONTRA BOT</b><span>Jogue imediatamente</span></button>
+            <button type="button" class="match-type" data-type="custom"><b>PERSONALIZADA</b><span>Controle todas as regras</span></button>
+          </div>
+
+          <div class="game-option-scroll">
+            <section class="ranked-summary game-type-section" data-for-type="ranked">
+              <div class="competitive-mark">★</div>
+              <div><h3>CONFIGURAÇÃO COMPETITIVA</h3><p>Melhor de 3 partidas, equipes 5v5, bots completando vagas e mapas grandes escolhidos aleatoriamente.</p></div>
+              <div class="competitive-pills"><span>MD3</span><span>5v5</span><span>CTF</span><span>MAPA GRANDE</span></div>
+            </section>
+
+            <section class="game-common-fields">
+              <label><span>NOME DA SALA</span><input class="go-name" maxlength="24" value="Sala de ${escapeHtml(profile.name)}" /></label>
+              <label><span>CÓDIGO</span><input class="go-code" maxlength="12" placeholder="Gerado automaticamente" /></label>
+              <label><span>SENHA <i>OPCIONAL</i></span><input class="go-password" type="password" maxlength="20" placeholder="Sala pública" /></label>
+            </section>
+
+            <section class="game-config-block map-block">
+              <h3>MAPA</h3>
+              <div class="game-map-grid">
+                ${Object.values(MAP_DATA).map((map) => `<button type="button" class="game-map-option ${map.id === 'procedural' ? 'active' : ''}" data-map="${map.id}"><img src="${map.img}" alt="" /><span>${map.name}</span></button>`).join('')}
+              </div>
+            </section>
+
+            <section class="game-config-block standard-options game-type-section" data-for-type="normal bots custom">
+              <h3>MODO E TAMANHO</h3>
+              <div class="option-row">
+                <label><span>Modo</span><select class="go-mode"><option value="ctf">Capture the Flag</option><option value="deathmatch">Death Match</option><option value="ffa">Todos contra todos</option></select></label>
+                <label class="go-team-size-wrap"><span>Equipes</span><select class="go-team-size">${[1,2,3,4,5].map((n) => `<option value="${n}" ${n === 2 ? 'selected' : ''}>${n}v${n}</option>`).join('')}</select></label>
+                <label class="go-ffa-size-wrap hidden"><span>Jogadores</span><select class="go-ffa-size">${[2,3,4,5,6,7,8,9,10].map((n) => `<option value="${n}" ${n === 6 ? 'selected' : ''}>${n} jogadores</option>`).join('')}</select></label>
+              </div>
+            </section>
+
+            <section class="game-config-block custom-options game-type-section" data-for-type="custom">
+              <h3>REGRAS PERSONALIZADAS</h3>
+              <div class="custom-rule-grid">
+                <label><span>Tempo da partida</span><select class="go-time"><option value="120">2 minutos</option><option value="180" selected>3 minutos</option><option value="300">5 minutos</option><option value="600">10 minutos</option></select></label>
+                <label class="go-capture-wrap"><span>Limite de capturas</span><select class="go-captures">${[1,2,3,4,5,7,10].map((n) => `<option value="${n}" ${n === 5 ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+                <label class="go-kills-wrap hidden"><span>Limite de eliminações</span><select class="go-kills"><option value="5">5</option><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option><option value="30">30</option></select></label>
+                <label><span>Respawn</span><select class="go-respawn"><option value="1">1 segundo</option><option value="3">3 segundos</option><option value="5" selected>5 segundos</option><option value="8">8 segundos</option></select></label>
+                <label><span>Fogo amigo</span><select class="go-friendly"><option value="0">Desativado</option><option value="1">Ativado</option></select></label>
+              </div>
+              <h4>BUFFS E DEBUFFS DISPONÍVEIS</h4>
+              <div class="powerup-toggle-grid">
+                ${[
+                  ['bomb','Bomba normal','buff'], ['triple','Bomba tripla','buff'], ['gloves','Luvas','buff'], ['shield','Escudo','buff'],
+                  ['health','Cura','buff'], ['sticky','Bomba adesiva','buff'], ['impact','Bomba de impacto','buff'], ['mines','Minas','buff'],
+                  ['ice','Congelamento','debuff'], ['curse','Maldição','debuff'],
+                ].map(([id, label, kind]) => `<label class="powerup-toggle ${kind}"><input type="checkbox" value="${id}" checked /><span>${label}</span></label>`).join('')}
+              </div>
+            </section>
+          </div>
+          <footer class="game-options-footer"><p class="game-options-error" role="alert"></p><button class="game-create-button" type="button">CRIAR E JOGAR</button></footer>
+        </div>
+
+        <div class="game-options-page" data-page-panel="rooms">
+          <div class="rooms-toolbar"><div><h3>SALAS ABERTAS</h3><span>Escolha uma sala e entre na partida</span></div><button class="game-refresh-rooms" type="button">↻ ATUALIZAR</button></div>
+          <div class="game-room-list"><div class="game-room-empty">Carregando salas…</div></div>
+        </div>
+      </section>`;
+    uiRoot.appendChild(modal);
+
+    const close = () => modal.remove();
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    const pages = [...modal.querySelectorAll('.game-options-page')];
+    const tabs = [...modal.querySelectorAll('.game-options-tabs button')];
+    let roomsLoaded = false;
+    const showPage = (page) => {
+      tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.page === page));
+      pages.forEach((panel) => panel.classList.toggle('active', panel.dataset.pagePanel === page));
+      if (page === 'rooms' && !roomsLoaded) loadGameRooms();
+    };
+    tabs.forEach((tab) => tab.addEventListener('click', () => showPage(tab.dataset.page)));
+
+    let matchType = 'ranked';
+    let chosenMap = 'procedural';
+    const typeButtons = [...modal.querySelectorAll('.match-type')];
+    const mapButtons = [...modal.querySelectorAll('.game-map-option')];
+    const modeSelect = modal.querySelector('.go-mode');
+    const syncCreateForm = () => {
+      typeButtons.forEach((button) => button.classList.toggle('active', button.dataset.type === matchType));
+      modal.querySelectorAll('.game-type-section').forEach((section) => {
+        section.classList.toggle('visible', section.dataset.forType.split(' ').includes(matchType));
+      });
+      const ranked = matchType === 'ranked';
+      modal.querySelector('.game-common-fields').classList.toggle('hidden', matchType === 'bots');
+      mapButtons.forEach((button) => {
+        const allowed = !ranked || ['foundry', 'skyhaven', 'procedural'].includes(button.dataset.map);
+        button.classList.toggle('disabled', !allowed);
+        if (!allowed && chosenMap === button.dataset.map) chosenMap = 'procedural';
+        button.classList.toggle('active', button.dataset.map === chosenMap);
+      });
+      const isFfa = modeSelect.value === 'ffa';
+      modal.querySelector('.go-team-size-wrap').classList.toggle('hidden', isFfa);
+      modal.querySelector('.go-ffa-size-wrap').classList.toggle('hidden', !isFfa);
+      modal.querySelector('.go-capture-wrap').classList.toggle('hidden', modeSelect.value !== 'ctf');
+      modal.querySelector('.go-kills-wrap').classList.toggle('hidden', modeSelect.value === 'ctf');
+      modal.querySelector('.game-create-button').textContent = matchType === 'bots' ? 'JOGAR CONTRA BOTS' : 'CRIAR E JOGAR';
+    };
+    typeButtons.forEach((button) => button.addEventListener('click', () => { matchType = button.dataset.type; syncCreateForm(); }));
+    mapButtons.forEach((button) => button.addEventListener('click', () => {
+      if (button.classList.contains('disabled')) return;
+      chosenMap = button.dataset.map;
+      mapButtons.forEach((item) => item.classList.toggle('active', item === button));
+    }));
+    modeSelect.addEventListener('change', syncCreateForm);
+    syncCreateForm();
+
+    const resolveLevel = (localMatch) => {
+      if (chosenMap !== 'procedural') return chosenMap;
+      if (!localMatch) return 'procedural';
+      newProceduralSeed();
+      return LEVELS.procedural.seedId;
+    };
+    modal.querySelector('.game-create-button').addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      const error = modal.querySelector('.game-options-error');
+      error.textContent = '';
+      button.disabled = true;
+      button.textContent = 'PREPARANDO...';
+      const ranked = matchType === 'ranked';
+      const modeId = ranked ? 'ctf' : modeSelect.value;
+      const teamSize = ranked ? 5 : Number(modal.querySelector('.go-team-size').value);
+      const ffaSize = Number(modal.querySelector('.go-ffa-size').value);
+      const levelId = resolveLevel(matchType === 'bots');
+      const enabledPowerups = [...modal.querySelectorAll('.powerup-toggle input:checked')].map((input) => input.value);
+      const baseDistribution = CONFIG.powerups?.distribution || [];
+      const matchConfig = {
+        ...CONFIG,
+        rules: {
+          ...CONFIG.rules,
+          roundTime: matchType === 'custom' ? Number(modal.querySelector('.go-time').value) : CONFIG.rules.roundTime,
+          captureLimit: ranked ? 3 : (matchType === 'custom' ? Number(modal.querySelector('.go-captures').value) : CONFIG.rules.captureLimit),
+          killsToWin: matchType === 'custom' ? Number(modal.querySelector('.go-kills').value) : CONFIG.rules.killsToWin,
+          ffaKillsToWin: matchType === 'custom' ? Number(modal.querySelector('.go-kills').value) : CONFIG.rules.ffaKillsToWin,
+          friendlyFire: matchType === 'custom' && modal.querySelector('.go-friendly').value === '1',
+          bestOf: ranked ? 3 : 1,
+          ranked,
+        },
+        powerups: {
+          ...CONFIG.powerups,
+          distribution: matchType === 'custom' ? baseDistribution.filter(([id]) => enabledPowerups.includes(id)) : baseDistribution,
+        },
+      };
+      const respawnTime = matchType === 'custom' ? Number(modal.querySelector('.go-respawn').value) : 5;
+      try {
+        if (matchType === 'bots') {
+          close();
+          onPlayLocal(modeId, levelId, { config: matchConfig, teamLimits: modeId === 'ffa' ? { ffa: ffaSize } : { red: teamSize, blue: teamSize }, respawnTime });
+          return;
+        }
+        const name = modal.querySelector('.go-name').value.trim() || `Sala de ${profile.name}`;
+        const code = modal.querySelector('.go-code').value.trim().toLowerCase() || Math.random().toString(36).slice(2, 8);
+        const password = modal.querySelector('.go-password').value || undefined;
+        const data = await createRoom({ name, code, password, modeId, levelId, redSize: teamSize, blueSize: teamSize, ffaSize, respawnTime, friendlyFire: matchConfig.rules.friendlyFire });
+        if (!data?.ok) throw new Error(data?.error || 'Não foi possível criar a sala.');
+        data.room.config = matchConfig;
+        data.room.matchType = matchType;
+        close();
+        await onPlayOnline({ room: data.code, password, host: true, hostToken: data.hostToken, roomConfig: data.room });
+      } catch (cause) {
+        error.textContent = cause.message || 'Não foi possível iniciar a partida.';
+        button.disabled = false;
+        button.textContent = matchType === 'bots' ? 'JOGAR CONTRA BOTS' : 'CRIAR E JOGAR';
+      }
+    });
+
+    async function loadGameRooms() {
+      const listNode = modal.querySelector('.game-room-list');
+      const refresh = modal.querySelector('.game-refresh-rooms');
+      roomsLoaded = true;
+      refresh.disabled = true;
+      listNode.innerHTML = '<div class="game-room-empty">Carregando salas…</div>';
+      try {
+        const rooms = await listRooms();
+        if (!rooms.length) {
+          listNode.innerHTML = '<div class="game-room-empty"><b>NENHUMA SALA ABERTA</b><span>Crie uma sala e convide seus amigos.</span></div>';
+          return;
+        }
+        listNode.innerHTML = '';
+        rooms.forEach((room) => {
+          const card = document.createElement('article');
+          card.className = 'game-room-card';
+          const modeLabel = room.modeId === 'ctf' ? 'CAPTURE THE FLAG' : room.modeId === 'ffa' ? 'TODOS CONTRA TODOS' : 'DEATH MATCH';
+          const capacity = room.modeId === 'ffa' ? room.teamLimits?.ffa : `${room.teamLimits?.red}v${room.teamLimits?.blue}`;
+          card.innerHTML = `<div class="game-room-map" style="background-image:url('${MAP_DATA[room.levelId]?.img || MAP_DATA.procedural.img}')"></div><div class="game-room-copy"><div><h4>${escapeHtml(room.name)}</h4><code>${escapeHtml(room.code)}</code></div><p><span>${modeLabel}</span><span>${escapeHtml(MAP_DATA[room.levelId]?.name || 'Aleatório')}</span><span>${capacity}</span><span>${room.playersCount}/${room.maxPlayers} jogadores</span></p></div><button type="button">ENTRAR</button>`;
+          card.querySelector('button').addEventListener('click', async () => {
+            let password;
+            if (room.isPrivate) {
+              password = prompt(`Digite a senha da sala “${room.name}”:`);
+              if (password === null) return;
+            }
+            close();
+            await onPlayOnline({ room: room.code, password });
+          });
+          listNode.appendChild(card);
+        });
+      } catch (cause) {
+        listNode.innerHTML = `<div class="game-room-empty error">${escapeHtml(cause.message || 'Não foi possível carregar as salas.')}</div>`;
+      } finally {
+        refresh.disabled = false;
+      }
+    }
+    modal.querySelector('.game-refresh-rooms').addEventListener('click', loadGameRooms);
+    showPage(initialPage);
   }
 
   async function openLobbyModal() {

@@ -71,6 +71,10 @@ export function createSim({ level, mode, config }) {
       scores: { red: 0, blue: 0 },
       modeId: mode.id,
       winner: null,
+      series: {
+        bestOf: Math.max(1, Number(config.rules.bestOf) || 1),
+        wins: {},
+      },
       players: [],
       bombs: [],
       powerups: [], // live powerup boxes
@@ -1254,7 +1258,15 @@ export function endRound(sim, winner) {
   s.phase = 'over';
   s.winner = winner;
   s.overT = sim.config.rules.overTime;
-  emit(sim, { t: 'roundOver', winner, scores: { ...s.scores } });
+  if (winner !== 'draw') s.series.wins[winner] = (s.series.wins[winner] || 0) + 1;
+  const winsNeeded = Math.ceil(s.series.bestOf / 2);
+  const matchComplete = winner === 'draw' || (s.series.wins[winner] || 0) >= winsNeeded;
+  emit(sim, {
+    t: 'roundOver', winner, scores: { ...s.scores },
+    series: { bestOf: s.series.bestOf, wins: { ...s.series.wins } },
+    matchComplete,
+    ranked: Boolean(sim.config.rules.ranked),
+  });
 }
 
 export function resetRound(sim) {
