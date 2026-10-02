@@ -2,9 +2,26 @@ import { SUPABASE_KEY, SUPABASE_URL } from './supabase.js';
 
 const SESSION_KEY = 'rinha.auth.session';
 let activeSession = null;
+let refreshPromise = null;
+
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+
+function authError(result, status) {
+  const raw = result?.msg || result?.message || result?.error_description || `Erro ${status}`;
+  const text = String(raw).toLowerCase();
+  if (text.includes('invalid login')) return 'E-mail ou senha incorretos.';
+  if (text.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
+  if (text.includes('user already registered')) return 'Este e-mail já está cadastrado.';
+  if (text.includes('rate limit')) return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+  if (text.includes('password') && text.includes('characters')) return 'A senha precisa ter pelo menos 6 caracteres.';
+  return raw;
+}
 
 async function request(path, { method = 'GET', body, token, headers = {} } = {}) {
-  const response = await fetch(`${SUPABASE_URL}${path}`, {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  let response;
+  try { response = await fetch(`${SUPABASE_URL}${path}`, {
     method,
     headers: {
       apikey: SUPABASE_KEY,
@@ -13,9 +30,12 @@ async function request(path, { method = 'GET', body, token, headers = {} } = {})
       ...headers,
     },
     body: body ? JSON.stringify(body) : undefined,
-  });
+    signal: controller.signal,
+  }); } catch (error) {
+    throw new Error(error?.name === 'AbortError' ? 'A conexão demorou demais. Tente novamente.' : 'Não foi possível conectar. Verifique sua internet.');
+  } finally { clearTimeout(timeout); }
   const result = response.status === 204 ? null : await response.json().catch(() => null);
-  if (!response.ok) throw new Error(result?.msg || result?.message || result?.error_description || `Erro ${response.status}`);
+  if (!response.ok) throw new Error(authError(result, response.status));
   return result;
 }
 
@@ -28,10 +48,11 @@ function rememberSession(session) {
 
 async function refreshSession(session) {
   if (!session?.refresh_token) return null;
-  const fresh = await request('/auth/v1/token?grant_type=refresh_token', {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = request('/auth/v1/token?grant_type=refresh_token', {
     method: 'POST', body: { refresh_token: session.refresh_token },
-  });
-  return rememberSession(fresh);
+  }).then(rememberSession).finally(() => { refreshPromise = null; });
+  return refreshPromise;
 }
 
 export async function restoreSession() {
@@ -52,7 +73,7 @@ export async function restoreSession() {
 
 export async function signIn(email, password) {
   const session = await request('/auth/v1/token?grant_type=password', {
-    method: 'POST', body: { email: email.trim(), password },
+    method: 'POST', body: { email: normalizeEmail(email), password },
   });
   rememberSession(session);
   return loadAccount(session.user, session);
@@ -61,20 +82,23 @@ export async function signIn(email, password) {
 export async function signUp({ nickname, email, password }) {
   const result = await request('/auth/v1/signup', {
     method: 'POST',
-    body: { email: email.trim(), password, data: { nickname: nickname.trim() } },
+    body: { email: normalizeEmail(email), password, data: { nickname: nickname.trim().slice(0, 12) } },
   });
+  if (result?.user && Array.isArray(result.user.identities) && result.user.identities.length === 0) {
+    throw new Error('Este e-mail já está cadastrado. Entre com sua senha ou recupere o acesso.');
+  }
   if (!result.access_token) return { confirmationRequired: true };
   rememberSession(result);
   return loadAccount(result.user, result);
 }
 
 export function requestPasswordReset(email) {
-  return request('/auth/v1/recover', { method: 'POST', body: { email: email.trim() } });
+  return request('/auth/v1/recover', { method: 'POST', body: { email: normalizeEmail(email) } });
 }
 
 export function resendConfirmation(email) {
   return request('/auth/v1/resend', {
-    method: 'POST', body: { type: 'signup', email: email.trim() },
+    method: 'POST', body: { type: 'signup', email: normalizeEmail(email) },
   });
 }
 
@@ -97,7 +121,7 @@ async function loadAccount(user, session) {
     const nickname = String(user.user_metadata?.nickname || user.email?.split('@')[0] || '').trim().slice(0, 12);
     const created = await request('/rest/v1/player_profiles', {
       method: 'POST', token: session.access_token,
-      headers: { Prefer: 'return=representation' },
+      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
       body: { id: user.id, nickname, avatar: 'avatar-1.webp' },
     });
     playerProfile = created?.[0];
