@@ -1,6 +1,7 @@
 import { SUPABASE_KEY, SUPABASE_URL } from './supabase.js';
 
 const SESSION_KEY = 'rinha.auth.session';
+const AUTH_RETURN_URL = 'https://rinhaarena.vercel.app/';
 let activeSession = null;
 let refreshPromise = null;
 
@@ -82,7 +83,7 @@ export async function signIn(email, password) {
 export async function signUp({ nickname, email, password }) {
   const result = await request('/auth/v1/signup', {
     method: 'POST',
-    body: { email: normalizeEmail(email), password, data: { nickname: nickname.trim().slice(0, 12) } },
+    body: { email: normalizeEmail(email), password, data: { nickname: nickname.trim().slice(0, 12) }, email_redirect_to: AUTH_RETURN_URL },
   });
   if (result?.user && Array.isArray(result.user.identities) && result.user.identities.length === 0) {
     throw new Error('Este e-mail já está cadastrado. Entre com sua senha ou recupere o acesso.');
@@ -93,12 +94,12 @@ export async function signUp({ nickname, email, password }) {
 }
 
 export function requestPasswordReset(email) {
-  return request('/auth/v1/recover', { method: 'POST', body: { email: normalizeEmail(email) } });
+  return request('/auth/v1/recover', { method: 'POST', body: { email: normalizeEmail(email), redirect_to: AUTH_RETURN_URL } });
 }
 
 export function resendConfirmation(email) {
   return request('/auth/v1/resend', {
-    method: 'POST', body: { type: 'signup', email: normalizeEmail(email) },
+    method: 'POST', body: { type: 'signup', email: normalizeEmail(email), email_redirect_to: AUTH_RETURN_URL },
   });
 }
 
