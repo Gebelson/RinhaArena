@@ -904,6 +904,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       button.addEventListener('click', () => {
         profile.cos.avatar = button.dataset.avatar;
         profile.save();
+        submitPlayerRanking(profile).catch((error) => console.warn('[avatar] ranking sync failed:', error.message));
         playerAvatar.src = `./assets/ui/avatars/${profile.cos.avatar}`;
         onClickSound?.();
         close();
