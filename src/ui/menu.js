@@ -75,7 +75,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     procedural: {
       id: 'procedural',
       name: 'Aleatório',
-      img: './assets/maps/procedural.png',
+      img: './assets/maps/random-arena-cover.webp',
       desc: 'Uma arena diferente é escolhida ou gerada a cada partida.',
     },
   };
@@ -102,6 +102,11 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
 
   let selectedMode = 'ctf';
   let selectedLevel = DEFAULT_LEVEL in MAP_DATA ? DEFAULT_LEVEL : 'foundry';
+  let confirmedGame = {
+    matchType: 'ranked', chosenMap: 'procedural', modeId: 'ctf',
+    teamSize: 5, ffaSize: 6, respawnTime: 5, botType: 'match',
+    matchConfig: null, name: '', code: '', password: undefined,
+  };
   const initialRank = getRankProgress(profile.rankXp);
   const initialLevel = getLevelProgress(profile.rankStats);
 
@@ -135,8 +140,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       <button class="art-button missions-button btn-missions" aria-label="Missões"><img src="./assets/ui/menu-missions.png" alt="Missões" /></button>
 
       <button class="map-selector" aria-label="Selecionar arena">
-        <img class="map-selector-thumb" src="./assets/maps/mini_foundry.png" alt="" />
-        <span class="map-selector-copy"><strong class="big-map-name">Foundry Court</strong><small><b>⌖</b> <span class="big-map-sub">Capture a Bandeira</span></small></span>
+        <img class="map-selector-thumb" src="./assets/maps/random-arena-cover.webp" alt="" />
+        <span class="map-selector-copy"><strong class="big-map-name">RANQUEADA</strong><small><b class="map-mode-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5 8.5 3l7 2.5L21 3v15.5L15.5 21l-7-2.5L3 21V5.5Zm5.5-.1v11l7 2.5v-11l-7-2.5Z"/></svg></b> <span class="big-map-sub">Aleatório</span></small></span>
         <span class="map-chevron">›</span>
       </button>
 
@@ -453,7 +458,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
 
   // ------------------------------------------------------------ Reactive State
   function syncUI() {
-    const meta = MAP_DATA[selectedLevel] || MAP_DATA.foundry;
+    const meta = MAP_DATA[confirmedGame.chosenMap] || MAP_DATA.procedural;
     const mode = MODES.find((m) => m.id === selectedMode) || MODES[0];
 
     // 1. Hat and Skin selection active class
@@ -482,9 +487,10 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     // 5. Update Big Map Card
     if (bigMapImg) bigMapImg.style.backgroundImage = `url('${meta.img}')`;
     if (mapSelectorThumb) mapSelectorThumb.src = meta.img;
-    bigMapName.textContent = meta.name;
+    const gameTypeNames = { ranked: 'RANQUEADA', normal: 'NORMAL GAME', bots: 'CONTRA BOT', custom: 'PERSONALIZADA' };
+    bigMapName.textContent = gameTypeNames[confirmedGame.matchType] || 'RANQUEADA';
     if (bigMapDesc) bigMapDesc.textContent = meta.desc;
-    bigMapSub.textContent = selectedMode === 'ctf' ? 'Capture a Bandeira' : mode.label.replace(/^\S+\s/, '');
+    bigMapSub.textContent = meta.name;
 
     const rankProgress = getRankProgress(profile.rankXp);
     const levelProgress = getLevelProgress(profile.rankStats);
@@ -577,8 +583,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     });
   });
 
-  // The main play controls now open the complete game-mode screen.
-  btnPlayBots.addEventListener('click', () => openGameOptionsModal('create'));
+  // The lobby play button starts the configuration previously confirmed.
+  btnPlayBots.addEventListener('click', () => launchConfirmedGame(confirmedGame));
 
   // Physics Lab
   btnDuel.addEventListener('click', () => {
@@ -1040,6 +1046,74 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     modal.querySelector('.modal-close-btn').addEventListener('click', close);
   }
 
+  async function launchConfirmedGame(selection) {
+    onClickSound?.();
+    errBox.classList.add('hidden');
+    btnPlayBots.disabled = true;
+    const localMatch = selection.matchType === 'bots';
+    let levelId = selection.chosenMap;
+    if (levelId === 'procedural' && localMatch) {
+      newProceduralSeed();
+      levelId = LEVELS.procedural.seedId;
+    }
+    const matchConfig = selection.matchConfig || {
+      ...CONFIG,
+      rules: {
+        ...CONFIG.rules,
+        ranked: selection.matchType === 'ranked',
+        bestOf: selection.matchType === 'ranked' ? 3 : 1,
+        captureLimit: selection.matchType === 'ranked' ? 3 : CONFIG.rules.captureLimit,
+        botDifficulty: 'medium',
+      },
+    };
+    try {
+      if (selection.matchType === 'bots') {
+        if (selection.botType === 'training') onPlayLab('doll');
+        else onPlayLocal(selection.modeId, levelId, {
+          config: matchConfig,
+          teamLimits: selection.modeId === 'ffa' ? { ffa: selection.ffaSize } : { red: selection.teamSize, blue: selection.teamSize },
+          respawnTime: selection.respawnTime,
+        });
+        return;
+      }
+
+      if (selection.matchType !== 'custom') {
+        const prefix = selection.matchType === 'ranked' ? '[RANQUEADA]' : '[NORMAL]';
+        const rooms = await listRooms().catch(() => []);
+        const compatible = rooms.find((room) => room.name?.startsWith(prefix)
+          && room.modeId === selection.modeId
+          && room.levelId === levelId
+          && room.playersCount < room.maxPlayers
+          && (selection.modeId === 'ffa' ? room.teamLimits?.ffa === selection.ffaSize : room.teamLimits?.red === selection.teamSize));
+        if (compatible) {
+          await onPlayOnline({ room: compatible.code });
+          return;
+        }
+      }
+
+      const name = selection.matchType === 'custom'
+        ? selection.name
+        : `${selection.matchType === 'ranked' ? '[RANQUEADA]' : '[NORMAL]'} Partida automática`;
+      const code = selection.matchType === 'custom'
+        ? selection.code
+        : `${selection.matchType === 'ranked' ? 'rank' : 'normal'}-${Math.random().toString(36).slice(2, 7)}`;
+      const data = await createRoom({
+        name, code, password: selection.password, modeId: selection.modeId, levelId,
+        redSize: selection.teamSize, blueSize: selection.teamSize, ffaSize: selection.ffaSize,
+        respawnTime: selection.respawnTime, friendlyFire: matchConfig.rules.friendlyFire,
+      });
+      if (!data?.ok) throw new Error(data?.error || 'Não foi possível criar a sala.');
+      data.room.config = matchConfig;
+      data.room.matchType = selection.matchType;
+      await onPlayOnline({ room: data.code, password: selection.password, host: true, hostToken: data.hostToken, roomConfig: data.room });
+    } catch (cause) {
+      errBox.textContent = cause.message || 'Não foi possível iniciar a partida.';
+      errBox.classList.remove('hidden');
+    } finally {
+      btnPlayBots.disabled = false;
+    }
+  }
+
   function openGameOptionsModal(initialPage = 'create') {
     onClickSound?.();
     const modal = document.createElement('div');
@@ -1119,7 +1193,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
               </div>
             </section>
           </div>
-          <footer class="game-options-footer"><p class="game-options-error" role="alert"></p><button class="game-create-button" type="button">CRIAR E JOGAR</button></footer>
+          <footer class="game-options-footer"><p class="game-options-error" role="alert"></p><button class="game-create-button" type="button">CONFIRMAR</button></footer>
         </div>
 
         <div class="game-options-page" data-page-panel="rooms">
@@ -1141,11 +1215,16 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     };
     tabs.forEach((tab) => tab.addEventListener('click', () => showPage(tab.dataset.page)));
 
-    let matchType = 'ranked';
-    let chosenMap = 'procedural';
+    let matchType = confirmedGame.matchType;
+    let chosenMap = confirmedGame.chosenMap;
     const typeButtons = [...modal.querySelectorAll('.match-type')];
     const mapButtons = [...modal.querySelectorAll('.game-map-option')];
     const modeSelect = modal.querySelector('.go-mode');
+    modeSelect.value = confirmedGame.modeId;
+    modal.querySelector('.go-team-size').value = String(confirmedGame.teamSize);
+    modal.querySelector('.go-ffa-size').value = String(confirmedGame.ffaSize);
+    modal.querySelector('.go-bot-type').value = confirmedGame.botType;
+    modal.querySelector('.go-bot-difficulty').value = confirmedGame.matchConfig?.rules?.botDifficulty || 'medium';
     const syncCreateForm = () => {
       typeButtons.forEach((button) => button.classList.toggle('active', button.dataset.type === matchType));
       modal.querySelectorAll('.game-type-section').forEach((section) => {
@@ -1167,9 +1246,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
       modal.querySelector('.go-ffa-size-wrap').classList.toggle('hidden', !isFfa);
       modal.querySelector('.go-capture-wrap').classList.toggle('hidden', modeSelect.value !== 'ctf');
       modal.querySelector('.go-kills-wrap').classList.toggle('hidden', modeSelect.value === 'ctf');
-      const botTraining = modal.querySelector('.go-bot-type').value === 'training';
-      const buttonCopy = { ranked: 'JOGAR RANQUEADA', normal: 'JOGAR NORMAL', bots: botTraining ? 'INICIAR TREINAMENTO' : 'JOGAR CONTRA BOTS', custom: 'CRIAR E JOGAR' };
-      modal.querySelector('.game-create-button').textContent = buttonCopy[matchType];
+      modal.querySelector('.game-create-button').textContent = 'CONFIRMAR';
     };
     typeButtons.forEach((button) => button.addEventListener('click', () => { matchType = button.dataset.type; syncCreateForm(); }));
     mapButtons.forEach((button) => button.addEventListener('click', () => {
@@ -1181,23 +1258,11 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
     modal.querySelector('.go-bot-type').addEventListener('change', syncCreateForm);
     syncCreateForm();
 
-    const resolveLevel = (localMatch) => {
-      if (chosenMap !== 'procedural') return chosenMap;
-      if (!localMatch) return 'procedural';
-      newProceduralSeed();
-      return LEVELS.procedural.seedId;
-    };
-    modal.querySelector('.game-create-button').addEventListener('click', async (event) => {
-      const button = event.currentTarget;
-      const error = modal.querySelector('.game-options-error');
-      error.textContent = '';
-      button.disabled = true;
-      button.textContent = 'PREPARANDO...';
+    modal.querySelector('.game-create-button').addEventListener('click', () => {
       const ranked = matchType === 'ranked';
       const modeId = ranked ? 'ctf' : modeSelect.value;
       const teamSize = ranked ? 5 : Number(modal.querySelector('.go-team-size').value);
       const ffaSize = Number(modal.querySelector('.go-ffa-size').value);
-      const levelId = resolveLevel(matchType === 'bots');
       const enabledPowerups = [...modal.querySelectorAll('.powerup-toggle input:checked')].map((input) => input.value);
       const baseDistribution = CONFIG.powerups?.distribution || [];
       const matchConfig = {
@@ -1219,49 +1284,23 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
         },
       };
       const respawnTime = matchType === 'custom' ? Number(modal.querySelector('.go-respawn').value) : 5;
-      try {
-        if (matchType === 'bots') {
-          close();
-          if (modal.querySelector('.go-bot-type').value === 'training') {
-            onPlayLab('doll');
-            return;
-          }
-          onPlayLocal(modeId, levelId, { config: matchConfig, teamLimits: modeId === 'ffa' ? { ffa: ffaSize } : { red: teamSize, blue: teamSize }, respawnTime });
-          return;
-        }
-        if (matchType !== 'custom') {
-          button.textContent = 'BUSCANDO PARTIDA...';
-          const prefix = matchType === 'ranked' ? '[RANQUEADA]' : '[NORMAL]';
-          const rooms = await listRooms().catch(() => []);
-          const compatible = rooms.find((room) => room.name?.startsWith(prefix)
-            && room.modeId === modeId
-            && room.levelId === levelId
-            && room.playersCount < room.maxPlayers
-            && (modeId === 'ffa' ? room.teamLimits?.ffa === ffaSize : room.teamLimits?.red === teamSize));
-          if (compatible) {
-            close();
-            await onPlayOnline({ room: compatible.code });
-            return;
-          }
-        }
-        const name = matchType === 'custom'
-          ? (modal.querySelector('.go-name').value.trim() || `Sala de ${profile.name}`)
-          : `${matchType === 'ranked' ? '[RANQUEADA]' : '[NORMAL]'} Partida automática`;
-        const code = matchType === 'custom'
-          ? (modal.querySelector('.go-code').value.trim().toLowerCase() || Math.random().toString(36).slice(2, 8))
-          : `${matchType === 'ranked' ? 'rank' : 'normal'}-${Math.random().toString(36).slice(2, 7)}`;
-        const password = matchType === 'custom' ? (modal.querySelector('.go-password').value || undefined) : undefined;
-        const data = await createRoom({ name, code, password, modeId, levelId, redSize: teamSize, blueSize: teamSize, ffaSize, respawnTime, friendlyFire: matchConfig.rules.friendlyFire });
-        if (!data?.ok) throw new Error(data?.error || 'Não foi possível criar a sala.');
-        data.room.config = matchConfig;
-        data.room.matchType = matchType;
-        close();
-        await onPlayOnline({ room: data.code, password, host: true, hostToken: data.hostToken, roomConfig: data.room });
-      } catch (cause) {
-        error.textContent = cause.message || 'Não foi possível iniciar a partida.';
-        button.disabled = false;
-        syncCreateForm();
-      }
+      confirmedGame = {
+        matchType,
+        chosenMap: ranked ? 'procedural' : chosenMap,
+        modeId,
+        teamSize,
+        ffaSize,
+        respawnTime,
+        botType: modal.querySelector('.go-bot-type').value,
+        matchConfig,
+        name: modal.querySelector('.go-name').value.trim() || `Sala de ${profile.name}`,
+        code: modal.querySelector('.go-code').value.trim().toLowerCase() || Math.random().toString(36).slice(2, 8),
+        password: modal.querySelector('.go-password').value || undefined,
+      };
+      selectedMode = modeId;
+      selectedLevel = confirmedGame.chosenMap;
+      close();
+      syncUI();
     });
 
     async function loadGameRooms() {
