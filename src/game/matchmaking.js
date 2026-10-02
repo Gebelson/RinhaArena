@@ -17,6 +17,26 @@ export function validDisplayName(value) {
   return name;
 }
 
+export function replaceHumanParticipantWithBot(match, userId) {
+  if (!match?.id || !Array.isArray(match.participants)) return null;
+  const index = match.participants.findIndex((participant) => participant.type === ParticipantType.HUMAN && participant.userId === userId);
+  if (index < 0) return null;
+  const previous = match.participants[index];
+  const botId = `replacement:${match.id}:${previous.spawnIndex}`;
+  const replacement = {
+    ...previous,
+    participantId: `bot:${botId}`,
+    type: ParticipantType.BOT,
+    botId,
+    userId: undefined,
+    displayName: BOT_NAMES[previous.spawnIndex % BOT_NAMES.length],
+    cos: randomCos(),
+  };
+  match.participants[index] = replacement;
+  assertParticipants(match.participants, match.participants.length);
+  return replacement;
+}
+
 export function assertParticipants(participants, maxPlayers = MAX_PLAYERS) {
   if (!Array.isArray(participants)) throw new Error('[MATCH] participants must be an array');
   if (participants.length > maxPlayers) throw new Error(`[MATCH] ${participants.length} participants exceeds ${maxPlayers}`);

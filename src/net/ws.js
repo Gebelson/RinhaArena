@@ -12,7 +12,8 @@ import { SupabaseRealtimeChannel } from './supabase.js';
 import { integrateBody, overFloor } from '../game/physics.js';
 import { LEVELS, DEFAULT_LEVEL } from '../content/levels/index.js';
 import {
-  createMatchmakingSession, finalizeMatchmakingSession, MatchmakingStatus, validDisplayName,
+  createMatchmakingSession, finalizeMatchmakingSession, MatchmakingStatus,
+  replaceHumanParticipantWithBot, validDisplayName,
 } from '../game/matchmaking.js';
 
 const TICK_RATE = CONFIG.tickRate || 60;
@@ -127,6 +128,8 @@ export async function connectOnline({ room, password, team, profile, host: reque
     const startWaiters = [];
     let matchStart = null;
     let readyTimer = null;
+    let isHost = requestedHost;
+    let hostTransferReceived = false;
 
     let level = LEVELS[config.levelId] || LEVELS[DEFAULT_LEVEL];
     const playerCfg = config.config?.player || CONFIG.player;
@@ -186,10 +189,32 @@ export async function connectOnline({ room, password, team, profile, host: reque
       else fail(new Error('Conexão multiplayer interrompida'));
     });
     channel.on('host-left', () => {
-      if (!requestedHost && !closed) onDropped?.();
+      if (isHost || closed) return;
+      setTimeout(() => {
+        if (!hostTransferReceived && !closed) onDropped?.();
+      }, 750);
+    });
+    channel.on('host-transfer', (message) => {
+      if (isHost || closed || !message?.match || !message?.successorUserId) return;
+      hostTransferReceived = true;
+      resolveMatch(message.match);
+      if (message.successorUserId !== profile.playerId) return;
+      isHost = true;
+      clientPlayers.clear();
+      for (const record of message.players || []) {
+        if (record?.clientId && record?.userId) clientPlayers.set(record.clientId, { ...record, connected: true });
+      }
+      matchInfo = message.match;
+      hostGame = new GameHost({ ...roomOptions(config), participants: matchInfo.participants });
+      for (const participant of matchInfo.participants) {
+        if (participant.type === 'HUMAN') readyUsers.add(participant.userId);
+      }
+      channel.send('match-found', { match: matchInfo });
+      maybeStartMatch(true);
+      console.info(`[MATCH] authority transferred match=${matchInfo.id} successor=${profile.playerId}`);
     });
     channel.on('welcome', (message) => {
-      if (requestedHost || message?.target !== clientId || settled) return;
+      if (isHost || message?.target !== clientId || settled) return;
       myId = message.playerId;
       lobbyPlayers = Array.isArray(message.players) ? message.players : [];
       remoteQueueEndsAt = Number(message.queueEndsAt) || remoteQueueEndsAt;
@@ -203,7 +228,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
     });
     channel.on('match-found', (message) => resolveMatch(message?.match));
     channel.on('match-client-ready', (message) => {
-      if (!requestedHost || !matchInfo || !message?.userId) return;
+      if (!isHost || !matchInfo || !message?.userId) return;
       if (matchInfo.participants.some((participant) => participant.type === 'HUMAN' && participant.userId === message.userId)) {
         readyUsers.add(message.userId);
         maybeStartMatch();
@@ -223,7 +248,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       if (message?.target === clientId) fail(new Error(message.reason || 'Não foi possível entrar na sala'));
     });
     channel.on('snap', (message) => {
-      if (requestedHost || !message?.state) return;
+      if (isHost || !message?.state) return;
       snaps.push(message.state);
       if (snaps.length > 40) snaps.shift();
       if (message.events?.length) eventQ.push(...message.events);
@@ -292,7 +317,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       }
     });
     channel.on('chat-send', (message) => {
-      if (!requestedHost || !matchInfo || message?.matchId !== matchInfo.id) return;
+      if (!isHost || !matchInfo || message?.matchId !== matchInfo.id) return;
       const sender = clientPlayers.get(message?.clientId);
       const text = String(message?.text || '').trim().slice(0, 100);
       if (!sender?.participantId || !text) return;
@@ -306,7 +331,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       channel.send('chat-message', payload);
     });
     channel.on('chat-message', (message) => {
-      if (requestedHost || !matchInfo || message?.matchId !== matchInfo.id) return;
+      if (isHost || !matchInfo || message?.matchId !== matchInfo.id) return;
       const participant = matchInfo.participants.find((entry) => entry.participantId === message?.participantId);
       const text = String(message?.text || '').trim().slice(0, 100);
       if (!participant || participant.type !== 'HUMAN' || participant.displayName !== message.displayName || !text) return;
@@ -317,7 +342,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       deadlineAt: remoteQueueEndsAt,
     });
     const maybeStartMatch = (force = false) => {
-      if (!requestedHost || !matchInfo || matchStart) return;
+      if (!isHost || !matchInfo || matchStart) return;
       const humanIds = matchInfo.participants.filter((participant) => participant.type === 'HUMAN').map((participant) => participant.userId);
       if (!force && !humanIds.every((userId) => readyUsers.has(userId))) return;
       clearTimeout(readyTimer);
@@ -328,7 +353,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       while (startWaiters.length) startWaiters.shift()(matchStart);
     };
     channel.on('join', (message) => {
-      if (!requestedHost || !message?.clientId || message.clientId === clientId) return;
+      if (!isHost || !message?.clientId || message.clientId === clientId) return;
       const displayName = validDisplayName(message.displayName);
       if (!message.userId || !displayName) {
         channel.send('error', { target: message.clientId, reason: 'Perfil multiplayer inválido' });
@@ -385,17 +410,25 @@ export async function connectOnline({ room, password, team, profile, host: reque
       touchRoom(roomCode, hostToken, clientPlayers.size);
     });
     channel.on('input', (message) => {
-      if (!requestedHost || !hostGame) return;
+      if (!isHost || !hostGame) return;
       const player = clientPlayers.get(message?.clientId);
       if (player?.participantId && hostGame) hostGame.setInput(player.participantId, message.input ?? {});
     });
     channel.on('leave', (message) => {
-      if (!requestedHost) return;
+      if (!isHost) return;
       const player = clientPlayers.get(message?.clientId);
       if (!player) return;
       clientPlayers.delete(message.clientId);
       if (session?.status === MatchmakingStatus.WAITING) session.players.delete(player.userId);
-      else if (player.participantId) hostGame?.disconnectHuman(player.participantId);
+      else if (player.participantId && matchInfo && !matchStart) {
+        const index = matchInfo.participants.findIndex((participant) => participant.type === 'HUMAN' && participant.userId === player.userId);
+        if (index >= 0) {
+          replaceHumanParticipantWithBot(matchInfo, player.userId);
+          hostGame = new GameHost({ ...roomOptions(config), participants: matchInfo.participants });
+          channel.send('match-found', { match: matchInfo });
+          maybeStartMatch();
+        }
+      } else if (player.participantId) hostGame?.disconnectHuman(player.participantId);
       broadcastQueue();
       touchRoom(roomCode, hostToken, clientPlayers.size);
     });
@@ -429,7 +462,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       get levelId() { return config.levelId; },
       get modeId() { return config.modeId; },
       lobbyPlayers() {
-        if (requestedHost) return [...clientPlayers.values()].map((entry) => ({
+        if (isHost) return [...clientPlayers.values()].map((entry) => ({
           userId: entry.userId, name: entry.displayName, displayName: entry.displayName, cos: entry.cos,
         }));
         return lobbyPlayers;
@@ -443,7 +476,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       },
       clientReadyAndWaitForStart() {
         if (!matchInfo) return Promise.reject(new Error('MATCH_CLIENT_READY antes de MATCH_FOUND'));
-        if (requestedHost) {
+        if (isHost) {
           readyUsers.add(profile.playerId);
           maybeStartMatch();
         } else {
@@ -453,7 +486,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
         return new Promise((resolve) => startWaiters.push(resolve));
       },
       finalizeMatchmaking() {
-        if (!requestedHost) return matchInfo;
+        if (!isHost) return matchInfo;
         if (matchInfo) return matchInfo;
         const match = finalizeMatchmakingSession(session, config);
         hostGame = new GameHost({ ...roomOptions(config), participants: match.participants });
@@ -472,7 +505,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
         return match;
       },
       setInput(input) {
-        if (requestedHost && hostGame) {
+        if (isHost && hostGame) {
           hostGame.setInput(myId, input);
           return;
         }
@@ -519,7 +552,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
         }
       },
       update(dt) {
-        if (requestedHost && hostGame) {
+        if (isHost && hostGame) {
           hostGame.step(dt);
           snapAccumulator += dt;
           if (snapAccumulator >= SNAPSHOT_INTERVAL) {
@@ -632,7 +665,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
         }
       },
       view() {
-        if (requestedHost) return hostGame?.view() ?? null;
+        if (isHost) return hostGame?.view() ?? null;
         if (snaps.length === 0) return null;
         if (snaps.length === 1) return patchWithPrediction(snaps[0]);
 
@@ -674,14 +707,14 @@ export async function connectOnline({ room, password, team, profile, host: reque
         return patchWithPrediction(result);
       },
       drainEvents() {
-        if (requestedHost) return hostEventQ.splice(0, hostEventQ.length);
+        if (isHost) return hostEventQ.splice(0, hostEventQ.length);
         return eventQ.splice(0, eventQ.length);
       },
       sendChat(text) {
         if (!matchInfo) return;
         const message = String(text || '').trim().slice(0, 100);
         if (!message) return;
-        if (requestedHost) {
+        if (isHost) {
           const participant = matchInfo.participants.find((entry) => entry.type === 'HUMAN' && entry.userId === profile.playerId);
           if (!participant) return;
           const payload = {
@@ -703,9 +736,15 @@ export async function connectOnline({ room, password, team, profile, host: reque
         clearInterval(welcomeTimer);
         clearInterval(touchTimer);
         clearTimeout(readyTimer);
-        if (requestedHost) {
-          channel.send('host-left', { clientId });
-          touchRoom(roomCode, hostToken, 0);
+        if (isHost) {
+          const remaining = [...clientPlayers.values()].filter((entry) => entry.userId !== profile.playerId && entry.connected !== false);
+          if (matchInfo && !matchStart && remaining.length) {
+            replaceHumanParticipantWithBot(matchInfo, profile.playerId);
+            const successorUserId = remaining.map((entry) => entry.userId).sort()[0];
+            channel.send('host-transfer', { successorUserId, players: remaining, match: matchInfo });
+          }
+          channel.send('host-left', { clientId, userId: profile.playerId });
+          if (hostToken) touchRoom(roomCode, hostToken, 0);
         } else channel.send('leave', { clientId });
         channel.close();
       },

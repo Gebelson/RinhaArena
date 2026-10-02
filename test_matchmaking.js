@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { GameHost } from './src/game/host.js';
 import {
   createMatchmakingSession, finalizeMatchmakingSession, MatchmakingStatus,
-  ParticipantType, assertParticipants, validDisplayName,
+  ParticipantType, assertParticipants, replaceHumanParticipantWithBot, validDisplayName,
 } from './src/game/matchmaking.js';
 
 const room = {
@@ -32,6 +32,20 @@ for (const humans of [1, 2, 3]) {
   assert.equal(host.sim.state.players.length, match.participants.length);
   assert.equal(host.brains.size, 20 - humans);
   assert(host.sim.state.players.every((entity) => entity.participantId && entity.matchId === match.id));
+}
+
+// A human who leaves after MATCH_FOUND is replaced in the same spawn slot by a valid AI participant.
+{
+  const match = finalizeMatchmakingSession(session(2), room, { now: 30_000 });
+  const departed = match.participants.find((participant) => participant.userId === 'u1');
+  const replacement = replaceHumanParticipantWithBot(match, 'u1');
+  assert.equal(replacement.type, ParticipantType.BOT);
+  assert.equal(replacement.spawnIndex, departed.spawnIndex);
+  assert.equal(match.participants.length, 20);
+  assert.equal(match.participants.filter((participant) => participant.type === ParticipantType.HUMAN).length, 1);
+  const host = new GameHost({ levelId: match.mapId, modeId: match.mode, teamLimits: room.teamLimits, participants: match.participants });
+  assert.equal(host.sim.state.players.length, 20);
+  assert.equal(host.brains.size, 19);
 }
 
 // 2, 14, 15: one finalized payload is idempotent and carries one map/seed/list.
