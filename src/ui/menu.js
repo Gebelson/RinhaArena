@@ -1102,8 +1102,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     const slots = [...overlay.querySelectorAll('.matchmaking-slot')];
     const cancelButton = overlay.querySelector('.matchmaking-cancel');
     const capacity = queueCapacity(selection);
-    const startedAt = Date.now();
-    const deadline = startedAt + 30_000;
+    let startedAt = Date.now();
+    let deadline = startedAt + 30_000;
     let transport = null;
     let pollTimer = null;
     let finished = false;
@@ -1127,6 +1127,12 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       if (Array.isArray(lobby) && lobby.length) return lobby;
       const players = transport?.view?.()?.players || [];
       return players.filter((player) => !player.bot);
+    };
+    const syncQueueDeadline = () => {
+      const sharedDeadline = Number(transport?.matchmakingEndsAt?.());
+      if (!Number.isFinite(sharedDeadline) || sharedDeadline <= 0) return;
+      deadline = sharedDeadline;
+      startedAt = deadline - 30_000;
     };
     const cleanup = () => {
       if (pollTimer) clearInterval(pollTimer);
@@ -1159,10 +1165,13 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       timerEl.textContent = `00:${String(elapsed).padStart(2, '0')}`;
       const players = humanPlayers();
       updateAccepted(players);
-      if (players.length >= 2) {
-        startPrepared();
-      } else if (Date.now() >= deadline && transport) {
-        statusEl.textContent = 'Completando a partida com bots...';
+      if (players.length >= 2 && Date.now() < deadline) {
+        statusEl.textContent = 'Jogadores encontrados. Aguardando o fim da fila...';
+      }
+      if (Date.now() >= deadline && transport) {
+        statusEl.textContent = players.length >= 2
+          ? 'Jogadores encontrados! Preparando arena...'
+          : 'Completando a partida com bots...';
         startPrepared();
       }
     }, 250);
@@ -1172,7 +1181,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       const rooms = await listRooms().catch(() => []);
       const compatible = rooms.find((room) => room.name?.startsWith(prefix)
         && room.modeId === selection.modeId
-        && room.levelId === levelId
+        && (levelId === 'procedural' ? String(room.levelId).startsWith('procedural') : room.levelId === levelId)
         && room.playersCount < room.maxPlayers
         && (selection.modeId === 'ffa' ? room.teamLimits?.ffa === selection.ffaSize : room.teamLimits?.red === selection.teamSize));
 
@@ -1184,17 +1193,21 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
           transport?.dispose?.();
           return;
         }
+        syncQueueDeadline();
         updateAccepted(transport.lobbyPlayers?.() || 2);
-        startPrepared();
+        statusEl.textContent = 'Jogador encontrado. Aguardando o fim da fila...';
         return;
       }
 
       const code = queueCodeFor(selection, levelId);
       const name = `${prefix} Partida automática`;
+      const roomLevelId = levelId === 'procedural'
+        ? `procedural:${Math.floor(10000 + Math.random() * 89999)}`
+        : levelId;
       let data;
       try {
         data = await createRoom({
-          name, code, modeId: selection.modeId, levelId,
+          name, code, modeId: selection.modeId, levelId: roomLevelId,
           redSize: selection.teamSize, blueSize: selection.teamSize, ffaSize: selection.ffaSize,
           respawnTime: selection.respawnTime, friendlyFire: matchConfig.rules.friendlyFire,
         });
@@ -1205,14 +1218,16 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         transport = await onPrepareOnline({ room: code });
         if (cancelled) transport?.dispose?.();
         else {
+          syncQueueDeadline();
           updateAccepted(transport.lobbyPlayers?.() || 2);
-          startPrepared();
+          statusEl.textContent = 'Jogador encontrado. Aguardando o fim da fila...';
         }
         return;
       }
 
       data.room.config = matchConfig;
       data.room.matchType = selection.matchType;
+      data.room.queueEndsAt = deadline;
       transport = await onPrepareOnline({ room: data.code, host: true, hostToken: data.hostToken, roomConfig: data.room });
       if (cancelled) {
         transport?.dispose?.();
