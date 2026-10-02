@@ -33,8 +33,12 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPlayL
 
   // Mobile browsers only allow fullscreen after a user gesture. Entering it on
   // the first touch hides the address/search bar and preserves the landscape UI.
+  let fullscreenRequested = false;
   const enterMobileFullscreen = async () => {
-    if (!getSettings().autoFullscreen || document.fullscreenElement) return;
+    const isMobile = navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches;
+    if (!isMobile || fullscreenRequested || !getSettings().autoFullscreen || document.fullscreenElement) return;
+    fullscreenRequested = true;
+    window.removeEventListener('pointerup', enterMobileFullscreen);
     const root = document.documentElement;
     const requestFullscreen = root.requestFullscreen || root.webkitRequestFullscreen;
     if (!requestFullscreen) return;

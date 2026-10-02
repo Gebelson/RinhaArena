@@ -1,4 +1,4 @@
-import { requestPasswordReset, restoreSession, signIn, signUp } from '../net/account.js';
+import { requestPasswordReset, resendConfirmation, restoreSession, signIn, signUp } from '../net/account.js';
 
 export function openAuthGate(uiRoot, { onAuthenticated }) {
   const overlay = document.createElement('div');
@@ -16,6 +16,7 @@ export function openAuthGate(uiRoot, { onAuthenticated }) {
           <label>SENHA<input name="password" type="password" minlength="6" autocomplete="current-password" required /></label>
           <div class="auth-actions"><button class="auth-forgot" type="button">ESQUECI MINHA SENHA</button><button class="auth-submit" type="submit">ENTRAR</button></div>
           <p class="auth-message" role="status"></p>
+          <button class="auth-resend hidden" type="button">REENVIAR E-MAIL DE CONFIRMAÇÃO</button>
         </form>
         <button class="auth-switch" type="button">AINDA NÃO TEM CONTA? <u>CADASTRE-SE</u></button>
       </div>
@@ -29,6 +30,8 @@ export function openAuthGate(uiRoot, { onAuthenticated }) {
   const emailInput = form.elements.email;
   const passwordInput = form.elements.password;
   const submit = form.querySelector('.auth-submit');
+  const forgot = form.querySelector('.auth-forgot');
+  const resend = form.querySelector('.auth-resend');
   const message = form.querySelector('.auth-message');
   const switchMode = overlay.querySelector('.auth-switch');
   let registering = false;
@@ -55,6 +58,8 @@ export function openAuthGate(uiRoot, { onAuthenticated }) {
     nicknameRow.classList.toggle('hidden', !registering);
     nicknameInput.required = registering;
     passwordInput.autocomplete = registering ? 'new-password' : 'current-password';
+    forgot.classList.toggle('hidden', registering);
+    resend.classList.add('hidden');
     switchMode.innerHTML = registering ? 'JÁ TEM CONTA? <u>ENTRAR</u>' : 'AINDA NÃO TEM CONTA? <u>CADASTRE-SE</u>';
     setBusy(false);
   });
@@ -77,6 +82,28 @@ export function openAuthGate(uiRoot, { onAuthenticated }) {
     }
   });
 
+  resend.addEventListener('click', async () => {
+    if (!emailInput.checkValidity()) {
+      message.textContent = 'Digite um e-mail válido para reenviar a confirmação.';
+      message.classList.add('error');
+      emailInput.focus();
+      return;
+    }
+    resend.disabled = true;
+    resend.textContent = 'ENVIANDO...';
+    try {
+      await resendConfirmation(emailInput.value);
+      message.classList.remove('error');
+      message.textContent = 'Um novo e-mail de confirmação foi enviado.';
+    } catch (error) {
+      message.classList.add('error');
+      message.textContent = error.message || 'Não foi possível reenviar a confirmação.';
+    } finally {
+      resend.disabled = false;
+      resend.textContent = 'REENVIAR E-MAIL DE CONFIRMAÇÃO';
+    }
+  });
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     setBusy(true);
@@ -87,13 +114,18 @@ export function openAuthGate(uiRoot, { onAuthenticated }) {
       if (account.confirmationRequired) {
         message.classList.remove('error');
         message.textContent = 'Confira seu e-mail para confirmar a conta antes de entrar.';
+        resend.classList.remove('hidden');
         submit.disabled = false;
         submit.textContent = 'PRONTO';
         return;
       }
       await finish(account);
     } catch (error) {
-      setBusy(false, error.message || 'Não foi possível entrar.');
+      const errorMessage = error.message || 'Não foi possível entrar.';
+      setBusy(false, errorMessage);
+      if (!registering && /confirm|confirmed|confirmation/i.test(errorMessage)) {
+        resend.classList.remove('hidden');
+      }
     }
   });
 
