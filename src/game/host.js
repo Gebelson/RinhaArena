@@ -77,6 +77,8 @@ export class GameHost {
     this.sim = createSim({ level: LEVELS[levelId], mode: MODES[modeId], config: this.config });
     this.inputs = new Map();
     this.brains = new Map();
+    this.temporaryBrains = new Set();
+    this.humanLastActive = new Map();
     this.acc = 0;
     this.botSequence = 0;
     this.botNames = [...BOT_NAMES].sort(() => Math.random() - 0.5);
@@ -100,7 +102,9 @@ export class GameHost {
         const bot = this.sim.state.players.find((p) => p.bot);
         if (bot) this.remove(bot.id);
       }
-      return addPlayer(this.sim, { participantId, type: ParticipantType.HUMAN, userId, displayName: validName, team: 'free', cos, spawnIndex });
+      const id = addPlayer(this.sim, { participantId, type: ParticipantType.HUMAN, userId, displayName: validName, team: 'free', cos, spawnIndex });
+      this.humanLastActive.set(id, Date.now());
+      return id;
     }
 
     const maxRed = this.teamLimits?.red ?? this.teamSize;
@@ -125,7 +129,9 @@ export class GameHost {
       const bot = this.sim.state.players.find((p) => p.team === team && p.bot);
       if (bot) this.remove(bot.id);
     }
-    return addPlayer(this.sim, { participantId, type: ParticipantType.HUMAN, userId, displayName: validName, team, cos, spawnIndex });
+    const id = addPlayer(this.sim, { participantId, type: ParticipantType.HUMAN, userId, displayName: validName, team, cos, spawnIndex });
+    this.humanLastActive.set(id, Date.now());
+    return id;
   }
 
   addBot(team = 'red') {
@@ -155,6 +161,8 @@ export class GameHost {
         const brain = this.sim.mode.createBrain?.(id) ?? createBotBrain(id);
         if (!brain?.think) throw new Error(`[MATCH] BOT ${participant.botId} has no AI controller`);
         this.brains.set(id, adjustBotDifficulty(brain, this.config.rules.botDifficulty));
+      } else {
+        this.humanLastActive.set(id, Date.now());
       }
       console.info(`[SPAWN] match participant=${participant.participantId} type=${participant.type} name=${participant.displayName} spawnIndex=${participant.spawnIndex}`);
     }
@@ -176,6 +184,8 @@ export class GameHost {
   remove(id) {
     this.inputs.delete(id);
     this.brains.delete(id);
+    this.temporaryBrains.delete(id);
+    this.humanLastActive.delete(id);
     removePlayer(this.sim, id);
   }
 
@@ -198,15 +208,70 @@ export class GameHost {
     const player = this.sim.state.players.find((candidate) => candidate.id === id);
     if (!player || player.type !== ParticipantType.HUMAN) return false;
     player.connected = false;
+    this.attachTemporaryBot(id);
+    return true;
+  }
+
+  attachTemporaryBot(id) {
+    const player = this.sim.state.players.find((candidate) => candidate.id === id);
+    if (!player || player.type !== ParticipantType.HUMAN || this.temporaryBrains.has(id)) return false;
+    const brain = this.sim.mode.createBrain?.(id) ?? createBotBrain(id);
+    if (!brain?.think) return false;
+    this.brains.set(id, adjustBotDifficulty(brain, this.config.rules.botDifficulty));
+    this.temporaryBrains.add(id);
+    console.info(`[AFK] bot assumed participant=${id}`);
+    return true;
+  }
+
+  reconnectHuman(id) {
+    const player = this.sim.state.players.find((candidate) => candidate.id === id);
+    if (!player || player.type !== ParticipantType.HUMAN) return false;
+    player.connected = true;
+    if (this.temporaryBrains.delete(id)) this.brains.delete(id);
+    this.humanLastActive.set(id, Date.now());
     this.inputs.set(id, { mx: 0, mz: 0, ax: 0, az: 0, run: 0 });
     return true;
   }
 
+  exportAuthorityState() {
+    return {
+      state: structuredClone(this.sim.state),
+      nextId: this.sim.nextId,
+      spawnIdx: structuredClone(this.sim.spawnIdx),
+      lastPowerup: this.sim.lastPowerup,
+    };
+  }
+
+  restoreAuthorityState(snapshot) {
+    if (!snapshot?.state?.players) return false;
+    this.sim.state = structuredClone(snapshot.state);
+    this.sim.nextId = Number(snapshot.nextId) || this.sim.nextId;
+    this.sim.spawnIdx = structuredClone(snapshot.spawnIdx || this.sim.spawnIdx);
+    this.sim.lastPowerup = snapshot.lastPowerup ?? null;
+    this.prevPlayers = null;
+    this.prevBombs = null;
+    return true;
+  }
+
   setInput(id, input) {
+    const active = Math.hypot(input?.mx || 0, input?.mz || 0) > 0.05
+      || input?.jump || input?.punch || input?.throw || input?.grab || input?.dash;
+    if (active) {
+      if (this.temporaryBrains.has(id)) this.reconnectHuman(id);
+      this.humanLastActive.set(id, Date.now());
+    }
+    if (this.temporaryBrains.has(id)) return;
     this.inputs.set(id, input);
   }
 
   step(dtWall) {
+    const now = Date.now();
+    for (const player of this.sim.state.players) {
+      if (player.type === ParticipantType.HUMAN && !this.temporaryBrains.has(player.id)
+        && now - (this.humanLastActive.get(player.id) ?? now) >= 30_000) {
+        this.attachTemporaryBot(player.id);
+      }
+    }
     this.acc = Math.min(this.acc + dtWall, 0.25);
     while (this.acc >= this.dt) {
       this.prevPlayers = this.sim.state.players.map((p) => ({

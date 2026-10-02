@@ -113,6 +113,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
     let lastSent = 0;
     let welcomeTimer = null;
     let touchTimer = null;
+    let presenceTimer = null;
     let renderTick = null;
     const snaps = [];
     const eventQ = [];
@@ -130,6 +131,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
     let readyTimer = null;
     let isHost = requestedHost;
     let hostTransferReceived = false;
+    let authorityTransferred = false;
 
     let level = LEVELS[config.levelId] || LEVELS[DEFAULT_LEVEL];
     const playerCfg = config.config?.player || CONFIG.player;
@@ -206,11 +208,14 @@ export async function connectOnline({ room, password, team, profile, host: reque
       }
       matchInfo = message.match;
       hostGame = new GameHost({ ...roomOptions(config), participants: matchInfo.participants });
+      hostGame.restoreAuthorityState(message.authorityState);
+      if (message.departedUserId) hostGame.disconnectHuman(`human:${message.departedUserId}`);
+      matchStart = message.matchStart || matchStart;
       for (const participant of matchInfo.participants) {
         if (participant.type === 'HUMAN') readyUsers.add(participant.userId);
       }
       channel.send('match-found', { match: matchInfo });
-      maybeStartMatch(true);
+      if (!matchStart) maybeStartMatch(true);
       console.info(`[MATCH] authority transferred match=${matchInfo.id} successor=${profile.playerId}`);
     });
     channel.on('welcome', (message) => {
@@ -243,6 +248,11 @@ export async function connectOnline({ room, password, team, profile, host: reque
         matchInfo.startedAt = message.startAt;
       }
       while (startWaiters.length) startWaiters.shift()(message);
+    });
+    channel.on('presence-ping', (message) => {
+      if (!isHost) return;
+      const player = clientPlayers.get(message?.clientId);
+      if (player) player.lastSeenAt = Date.now();
     });
     channel.on('error', (message) => {
       if (message?.target === clientId) fail(new Error(message.reason || 'Não foi possível entrar na sala'));
@@ -375,15 +385,31 @@ export async function connectOnline({ room, password, team, profile, host: reque
         clientPlayers.delete(reconnect.clientId);
         reconnect.clientId = message.clientId;
         reconnect.connected = true;
+        reconnect.lastSeenAt = Date.now();
         clientPlayers.set(message.clientId, reconnect);
         if (hostGame && reconnect.participantId) {
           const player = hostGame.sim.state.players.find((candidate) => candidate.participantId === reconnect.participantId);
-          if (player) player.connected = true;
+          if (player) hostGame.reconnectHuman(reconnect.participantId);
         }
         channel.send('welcome', { target: message.clientId, playerId: reconnect.participantId ?? null, players: lobbyPlayers, queueEndsAt: remoteQueueEndsAt });
         if (matchInfo) channel.send('match-found', { target: message.clientId, match: matchInfo });
         if (matchStart) channel.send('match-start', { ...matchStart, target: message.clientId });
         broadcastQueue();
+        return;
+      }
+      const returningParticipant = matchInfo?.participants.find((participant) => participant.type === 'HUMAN' && participant.userId === message.userId);
+      if (returningParticipant && matchStart) {
+        const record = {
+          clientId: message.clientId, userId: message.userId, displayName,
+          characterId: returningParticipant.characterId, cos: returningParticipant.cos,
+          team: returningParticipant.team, connected: true,
+          participantId: returningParticipant.participantId, lastSeenAt: Date.now(),
+        };
+        clientPlayers.set(message.clientId, record);
+        hostGame?.reconnectHuman(returningParticipant.participantId);
+        channel.send('welcome', { target: message.clientId, playerId: returningParticipant.participantId, players: lobbyPlayers, queueEndsAt: remoteQueueEndsAt });
+        channel.send('match-found', { target: message.clientId, match: matchInfo });
+        channel.send('match-start', { ...matchStart, target: message.clientId });
         return;
       }
       if (clientPlayers.size >= maxPlayers(config)) {
@@ -397,6 +423,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       const record = {
         clientId: message.clientId, userId: message.userId, displayName,
         characterId: 'capivara', cos: message.cos, team: message.team, connected: true, participantId: null,
+        lastSeenAt: Date.now(),
       };
       clientPlayers.set(message.clientId, record);
       session.players.set(record.userId, record);
@@ -418,9 +445,11 @@ export async function connectOnline({ room, password, team, profile, host: reque
       if (!isHost) return;
       const player = clientPlayers.get(message?.clientId);
       if (!player) return;
-      clientPlayers.delete(message.clientId);
-      if (session?.status === MatchmakingStatus.WAITING) session.players.delete(player.userId);
-      else if (player.participantId && matchInfo && !matchStart) {
+      if (session?.status === MatchmakingStatus.WAITING) {
+        clientPlayers.delete(message.clientId);
+        session.players.delete(player.userId);
+      } else if (player.participantId && matchInfo && !matchStart) {
+        clientPlayers.delete(message.clientId);
         const index = matchInfo.participants.findIndex((participant) => participant.type === 'HUMAN' && participant.userId === player.userId);
         if (index >= 0) {
           replaceHumanParticipantWithBot(matchInfo, player.userId);
@@ -428,7 +457,10 @@ export async function connectOnline({ room, password, team, profile, host: reque
           channel.send('match-found', { match: matchInfo });
           maybeStartMatch();
         }
-      } else if (player.participantId) hostGame?.disconnectHuman(player.participantId);
+      } else if (player.participantId) {
+        player.connected = false;
+        hostGame?.disconnectHuman(player.participantId);
+      }
       broadcastQueue();
       touchRoom(roomCode, hostToken, clientPlayers.size);
     });
@@ -553,6 +585,13 @@ export async function connectOnline({ room, password, team, profile, host: reque
       },
       update(dt) {
         if (isHost && hostGame) {
+          const now = Date.now();
+          for (const record of clientPlayers.values()) {
+            if (record.clientId !== clientId && record.connected !== false && now - (record.lastSeenAt || now) > 6_000) {
+              record.connected = false;
+              if (record.participantId) hostGame.disconnectHuman(record.participantId);
+            }
+          }
           hostGame.step(dt);
           snapAccumulator += dt;
           if (snapAccumulator >= SNAPSHOT_INTERVAL) {
@@ -731,24 +770,66 @@ export async function connectOnline({ room, password, team, profile, host: reque
         }
       },
       drainChatMessages() { return chatMessages.splice(0, chatMessages.length); },
+      resumeInfo() {
+        if (!matchInfo || matchInfo.status === 'FINISHED') return null;
+        return {
+          room: roomCode, matchId: matchInfo.id, expiresAt: Date.now() + 30 * 60_000,
+          ...(isHost ? {
+            host: true, hostToken, roomConfig: config, match: matchInfo, matchStart,
+            authorityState: hostGame?.exportAuthorityState?.() ?? null,
+          } : {}),
+        };
+      },
+      restoreHostedMatch(saved) {
+        if (!isHost || !saved?.match || saved.match.id !== saved.matchId) return false;
+        matchInfo = saved.match;
+        config.levelId = matchInfo.mapId;
+        config.modeId = matchInfo.mode;
+        level = LEVELS[config.levelId] || LEVELS[DEFAULT_LEVEL];
+        hostGame = new GameHost({ ...roomOptions(config), participants: matchInfo.participants });
+        hostGame.restoreAuthorityState(saved.authorityState);
+        matchStart = saved.matchStart || { matchId: matchInfo.id, startAt: Date.now() };
+        myId = `human:${profile.playerId}`;
+        const hostRecord = clientPlayers.get(clientId);
+        if (hostRecord) hostRecord.participantId = myId;
+        hostGame.reconnectHuman(myId);
+        channel.send('match-found', { match: matchInfo });
+        channel.send('match-start', matchStart);
+        return true;
+      },
+      notifyDisconnect() {
+        if (isHost) return transferAuthority();
+        channel.send('leave', { clientId, temporary: true });
+        return false;
+      },
       dispose() {
         closed = true;
         clearInterval(welcomeTimer);
         clearInterval(touchTimer);
+        clearInterval(presenceTimer);
         clearTimeout(readyTimer);
         if (isHost) {
-          const remaining = [...clientPlayers.values()].filter((entry) => entry.userId !== profile.playerId && entry.connected !== false);
-          if (matchInfo && !matchStart && remaining.length) {
-            replaceHumanParticipantWithBot(matchInfo, profile.playerId);
-            const successorUserId = remaining.map((entry) => entry.userId).sort()[0];
-            channel.send('host-transfer', { successorUserId, players: remaining, match: matchInfo });
-          }
+          transferAuthority();
           channel.send('host-left', { clientId, userId: profile.playerId });
           if (hostToken) touchRoom(roomCode, hostToken, 0);
         } else channel.send('leave', { clientId });
         channel.close();
       },
     };
+
+    function transferAuthority() {
+      if (!isHost || authorityTransferred || !matchInfo) return false;
+      const remaining = [...clientPlayers.values()].filter((entry) => entry.userId !== profile.playerId && entry.connected !== false);
+      if (!remaining.length) return false;
+      authorityTransferred = true;
+      const successorUserId = remaining.map((entry) => entry.userId).sort()[0];
+      channel.send('host-transfer', {
+        successorUserId, players: remaining, match: matchInfo,
+        matchStart, departedUserId: profile.playerId,
+        authorityState: hostGame?.exportAuthorityState?.() ?? null,
+      });
+      return true;
+    }
 
     if (requestedHost) {
       const capacity = maxPlayers(config);
@@ -763,7 +844,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       remoteQueueEndsAt = session.deadlineAt;
       const hostRecord = {
         clientId, userId: profile.playerId, displayName: officialName,
-        characterId: 'capivara', cos: { ...profile.cos }, team, connected: true, participantId: null,
+        characterId: 'capivara', cos: { ...profile.cos }, team, connected: true, participantId: null, lastSeenAt: Date.now(),
       };
       clientPlayers.set(clientId, hostRecord);
       session.players.set(hostRecord.userId, hostRecord);
@@ -776,6 +857,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
     } else {
       sendJoin();
       welcomeTimer = setInterval(sendJoin, 1000);
+      presenceTimer = setInterval(() => channel.send('presence-ping', { clientId }), 2_000);
       setTimeout(() => fail(new Error('O criador da sala não está conectado')), 10_000);
     }
   });

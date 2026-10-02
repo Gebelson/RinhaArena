@@ -93,7 +93,7 @@ export function createHud(uiRoot, { onExit, onMute, onSendChat, muted }) {
     chatInput.value = '';
   });
   const onChatKey = (event) => {
-    if (event.code === 'Escape' && chat.contains(document.activeElement)) {
+    if (event.code === 'Escape' && !chat.classList.contains('hidden')) {
       event.preventDefault();
       event.stopImmediatePropagation();
       chat.classList.add('hidden');

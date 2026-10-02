@@ -57,6 +57,7 @@ const profile = (() => {
 profile.save();
 
 let match = null;
+const ACTIVE_MATCH_KEY = 'blast.activeMatch';
 
 const prepareOnlineMatch = (opts) => {
   const room = typeof opts === 'string' ? opts : opts?.room || 'main';
@@ -181,10 +182,28 @@ function startMatch(transport) {
     ? createLabPanel(uiRoot, transport)
     : null;
 
-  const onKey = (e) => {
-    if (e.code === 'Escape' && !/INPUT|TEXTAREA/.test(e.target?.tagName)) exit();
+  const resumeInfo = transport.resumeInfo?.();
+  if (resumeInfo) localStorage.setItem(ACTIVE_MATCH_KEY, JSON.stringify(resumeInfo));
+  const persistTimer = window.setInterval(() => {
+    const current = transport.resumeInfo?.();
+    if (current) localStorage.setItem(ACTIVE_MATCH_KEY, JSON.stringify(current));
+  }, 1_000);
+  const onPageHide = () => {
+    const transferred = transport.notifyDisconnect?.();
+    if (transferred) {
+      const current = transport.resumeInfo?.();
+      if (current) {
+        delete current.host;
+        delete current.hostToken;
+        delete current.roomConfig;
+        delete current.match;
+        delete current.matchStart;
+        delete current.authorityState;
+        localStorage.setItem(ACTIVE_MATCH_KEY, JSON.stringify(current));
+      }
+    }
   };
-  window.addEventListener('keydown', onKey);
+  window.addEventListener('pagehide', onPageHide);
 
   let raf = 0;
   let roundExitTimer = 0;
@@ -245,6 +264,7 @@ function startMatch(transport) {
       const { rank } = getRankProgress(profile.rankXp);
       if (event.ranked) console.info(`[rank] ${gainedPoints >= 0 ? '+' : ''}${gainedPoints} PTS · ${rank.name}`);
       clearTimeout(roundExitTimer);
+      localStorage.removeItem(ACTIVE_MATCH_KEY);
       roundExitTimer = window.setTimeout(exit, Math.max(0, CONFIG.rules.overTime * 1000 - 150));
     }
     world.handleEvents(events, myPos);
@@ -264,8 +284,10 @@ function startMatch(transport) {
   function exit(reason) {
     cancelAnimationFrame(raf);
     clearTimeout(roundExitTimer);
-    window.removeEventListener('keydown', onKey);
+    clearInterval(persistTimer);
+    window.removeEventListener('pagehide', onPageHide);
     bgm.pause({ fade: true });
+    loading.hide();
     transport.dispose?.();
     input.dispose();
     labPanel?.dispose();
@@ -276,12 +298,39 @@ function startMatch(transport) {
     match = null;
     window.__blast = null;
     menu.show();
+    if (!reason) localStorage.removeItem(ACTIVE_MATCH_KEY);
     if (reason) console.warn('[blast] left match:', reason);
   }
 
   match = { exit };
   window.__blast = { transport, input, world, step, renderer }; // dev/debug hook
 }
+
+async function resumeActiveMatch() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(ACTIVE_MATCH_KEY)); } catch { saved = null; }
+  if (!saved?.room || !saved?.matchId || Number(saved.expiresAt) <= Date.now()) {
+    localStorage.removeItem(ACTIVE_MATCH_KEY);
+    return;
+  }
+  try {
+    const transport = await prepareOnlineMatch({
+      room: saved.room, password: saved.password,
+      host: !!saved.host, hostToken: saved.hostToken,
+      roomConfig: saved.host ? saved.roomConfig : null,
+    });
+    if (saved.host) transport.restoreHostedMatch?.(saved);
+    const active = await transport.waitForMatch();
+    if (active?.id !== saved.matchId || active.status === 'FINISHED') throw new Error('A partida já terminou');
+    await transport.clientReadyAndWaitForStart();
+    await startMatch(transport, { title: 'VOLTANDO À PARTIDA...' });
+  } catch (error) {
+    localStorage.removeItem(ACTIVE_MATCH_KEY);
+    console.warn('[MATCH] não foi possível retomar:', error?.message || error);
+  }
+}
+
+setTimeout(resumeActiveMatch, 0);
 
 window.addEventListener('keydown', (e) => {
   if (!/INPUT|TEXTAREA/.test(e.target?.tagName)) {

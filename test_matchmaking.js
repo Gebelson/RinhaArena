@@ -76,6 +76,22 @@ const humansOnlyHost = new GameHost({ levelId: humansOnly.mapId, modeId: humansO
 assert.equal(humansOnlyHost.sim.state.players.length, 2);
 assert.equal(humansOnlyHost.brains.size, 0);
 
+// Inactive/disconnected humans keep their identity while AI controls them temporarily.
+{
+  const host = new GameHost({ levelId: humansOnly.mapId, modeId: humansOnly.mode, teamLimits: room.teamLimits, participants: humansOnly.participants });
+  const id = humansOnly.participants[0].participantId;
+  host.humanLastActive.set(id, Date.now() - 30_001);
+  host.step(1 / 60);
+  assert(host.temporaryBrains.has(id));
+  assert.equal(host.sim.state.players.find((player) => player.id === id).type, ParticipantType.HUMAN);
+  host.setInput(id, { mx: 1, mz: 0 });
+  assert(!host.temporaryBrains.has(id));
+  host.disconnectHuman(id);
+  assert(host.temporaryBrains.has(id));
+  host.reconnectHuman(id);
+  assert(!host.temporaryBrains.has(id));
+}
+
 // Invariant failures.
 assert.throws(() => assertParticipants([{ participantId: 'x' }, { participantId: 'x' }]), /spawnIndex|displayName|duplicate/);
 
