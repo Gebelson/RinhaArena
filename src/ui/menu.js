@@ -1065,6 +1065,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   function createMatchmakingOverlay(selection) {
     const capacity = queueCapacity(selection);
     const modeLabel = selection.matchType === 'ranked' ? 'RANQUEADA' : 'NORMAL GAME';
+    const ownAvatar = AVATARS.includes(profile.cos?.avatar) ? profile.cos.avatar : AVATARS[0];
     const overlay = document.createElement('div');
     overlay.className = 'matchmaking-overlay';
     overlay.innerHTML = `
@@ -1073,12 +1074,14 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         <div class="matchmaking-kicker">BUSCANDO JOGADORES</div>
         <div class="matchmaking-heading">
           <h2>${modeLabel}</h2>
-          <strong class="matchmaking-timer">00:30</strong>
+          <strong class="matchmaking-timer">00:00</strong>
         </div>
         <div class="matchmaking-slots" aria-label="Jogadores aceitos">
           ${Array.from({ length: capacity }, (_, index) => `
             <div class="matchmaking-slot${index === 0 ? ' is-accepted' : ''}" aria-label="${index === 0 ? 'Jogador aceito' : 'Aguardando jogador'}">
-              <span>${index === 0 ? '●' : '?'}</span>
+              ${index === 0
+                ? `<img src="./assets/ui/avatars/${ownAvatar}" alt="${escapeHtml(profile.name || 'Jogador')}" />`
+                : '<span>?</span>'}
             </div>
           `).join('')}
         </div>
@@ -1099,23 +1102,31 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     const slots = [...overlay.querySelectorAll('.matchmaking-slot')];
     const cancelButton = overlay.querySelector('.matchmaking-cancel');
     const capacity = queueCapacity(selection);
-    const deadline = Date.now() + 30_000;
+    const startedAt = Date.now();
+    const deadline = startedAt + 30_000;
     let transport = null;
     let pollTimer = null;
     let finished = false;
     let cancelled = false;
 
-    const updateAccepted = (count) => {
-      const accepted = Math.max(1, Math.min(capacity, count));
+    const updateAccepted = (playersOrCount) => {
+      const players = Array.isArray(playersOrCount) ? playersOrCount : [];
+      const accepted = Math.max(1, Math.min(capacity, players.length || Number(playersOrCount) || 1));
       countEl.textContent = `${accepted} / ${capacity} ACEITOS`;
       slots.forEach((slot, index) => {
         slot.classList.toggle('is-accepted', index < accepted);
-        slot.querySelector('span').textContent = index < accepted ? '●' : '?';
+        const player = players[index];
+        const avatar = AVATARS.includes(player?.cos?.avatar) ? player.cos.avatar : (index === 0 ? (AVATARS.includes(profile.cos?.avatar) ? profile.cos.avatar : AVATARS[0]) : null);
+        slot.innerHTML = index < accepted && avatar
+          ? `<img src="./assets/ui/avatars/${avatar}" alt="${escapeHtml(player?.name || (index === 0 ? profile.name : 'Jogador'))}" />`
+          : '<span>?</span>';
       });
     };
-    const humanCount = () => {
+    const humanPlayers = () => {
+      const lobby = transport?.lobbyPlayers?.();
+      if (Array.isArray(lobby) && lobby.length) return lobby;
       const players = transport?.view?.()?.players || [];
-      return Math.max(1, players.filter((player) => !player.bot).length);
+      return players.filter((player) => !player.bot);
     };
     const cleanup = () => {
       if (pollTimer) clearInterval(pollTimer);
@@ -1144,13 +1155,13 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
 
     pollTimer = setInterval(() => {
       if (cancelled || finished) return;
-      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-      timerEl.textContent = `00:${String(remaining).padStart(2, '0')}`;
-      const accepted = humanCount();
-      updateAccepted(accepted);
-      if (accepted >= 2) {
+      const elapsed = Math.min(30, Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+      timerEl.textContent = `00:${String(elapsed).padStart(2, '0')}`;
+      const players = humanPlayers();
+      updateAccepted(players);
+      if (players.length >= 2) {
         startPrepared();
-      } else if (remaining <= 0 && transport) {
+      } else if (Date.now() >= deadline && transport) {
         statusEl.textContent = 'Completando a partida com bots...';
         startPrepared();
       }
@@ -1173,7 +1184,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
           transport?.dispose?.();
           return;
         }
-        updateAccepted(2);
+        updateAccepted(transport.lobbyPlayers?.() || 2);
         startPrepared();
         return;
       }
@@ -1194,7 +1205,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         transport = await onPrepareOnline({ room: code });
         if (cancelled) transport?.dispose?.();
         else {
-          updateAccepted(2);
+          updateAccepted(transport.lobbyPlayers?.() || 2);
           startPrepared();
         }
         return;

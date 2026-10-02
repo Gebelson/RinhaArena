@@ -114,6 +114,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
     const eventQ = [];
     const hostEventQ = [];
     const clientPlayers = new Map();
+    let lobbyPlayers = [];
 
     const level = LEVELS[config.levelId] || LEVELS[DEFAULT_LEVEL];
     const playerCfg = config.config?.player || CONFIG.player;
@@ -157,6 +158,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
     channel.on('welcome', (message) => {
       if (requestedHost || message?.target !== clientId || settled) return;
       myId = message.playerId;
+      lobbyPlayers = Array.isArray(message.players) ? message.players : [];
       clearInterval(welcomeTimer);
       settled = true;
       resolve(transport);
@@ -246,7 +248,13 @@ export async function connectOnline({ room, password, team, profile, host: reque
       }
       const playerId = hostGame.addHuman({ name: String(message.name || 'Player').slice(0, 12), team: message.team, cos: message.cos });
       clientPlayers.set(message.clientId, playerId);
-      channel.send('welcome', { target: message.clientId, playerId });
+      channel.send('welcome', {
+        target: message.clientId,
+        playerId,
+        players: hostGame.sim.state.players
+          .filter((player) => !player.bot)
+          .map((player) => ({ id: player.id, name: player.name, cos: player.cos })),
+      });
       touchRoom(roomCode, hostToken, clientPlayers.size);
     });
     channel.on('input', (message) => {
@@ -291,6 +299,10 @@ export async function connectOnline({ room, password, team, profile, host: reque
       get myId() { return myId; },
       get levelId() { return config.levelId; },
       get modeId() { return config.modeId; },
+      lobbyPlayers() {
+        if (requestedHost) return hostGame?.sim.state.players.filter((player) => !player.bot) ?? [];
+        return lobbyPlayers;
+      },
       setInput(input) {
         if (requestedHost && hostGame) {
           hostGame.setInput(myId, input);

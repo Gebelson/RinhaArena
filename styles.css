@@ -2008,8 +2008,8 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
   place-items: center;
   padding: 24px;
   background:
-    radial-gradient(circle at 50% 48%, #68ff9c35 0 18%, #07130be8 60%),
-    #020806e8;
+    radial-gradient(circle at 50% 48%, #168dff38 0 20%, #02091eea 64%),
+    #020617e8;
   backdrop-filter: blur(9px);
   -webkit-backdrop-filter: blur(9px);
 }
@@ -2019,14 +2019,14 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
   width: min(720px, calc(100vw - 36px));
   overflow: hidden;
   padding: 28px 34px 30px;
-  border: 2px solid #57f5a0;
-  border-radius: 10px;
-  color: #effff5;
+  border: 3px solid #23c9ff;
+  border-radius: 24px;
+  color: #f5f8ff;
   text-align: center;
   background:
-    linear-gradient(135deg, #a8ffc40d, transparent 42%),
-    linear-gradient(180deg, #101916f5, #050b09f7);
-  box-shadow: 0 0 0 5px #04100bcc, 0 0 28px #51ff9a85, inset 0 0 28px #45ff8e18;
+    linear-gradient(135deg, #ffffff12, transparent 42%),
+    linear-gradient(180deg, #102a63f8, #061536fa);
+  box-shadow: 0 0 0 7px #030b24e8, 0 0 34px #168dff85, inset 0 2px 0 #87dcff88, inset 0 -5px 0 #02081e;
 }
 .matchmaking-window::before,
 .matchmaking-window::after {
@@ -2035,7 +2035,7 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
   z-index: -1;
   width: 140px;
   height: 140px;
-  border: 1px solid #67fda25c;
+  border: 2px solid #ffd45c70;
   transform: rotate(45deg);
 }
 .matchmaking-window::before { top: -105px; left: -70px; }
@@ -2045,11 +2045,11 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: .18;
-  background: repeating-linear-gradient(0deg, transparent 0 4px, #9fffcf14 5px);
+  opacity: .13;
+  background: repeating-linear-gradient(0deg, transparent 0 4px, #8bdcff18 5px);
 }
 .matchmaking-kicker {
-  color: #a6bbae;
+  color: #ffd45c;
   font: 800 12px/1.1 var(--font-display, sans-serif);
   letter-spacing: .18em;
 }
@@ -2065,11 +2065,11 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
   color: #fff;
   font: 1000 clamp(28px, 5vw, 48px)/1 var(--font-display, sans-serif);
   letter-spacing: .06em;
-  text-shadow: 0 3px 0 #173924;
+  text-shadow: 0 4px 0 #03102f, 0 0 18px #30aaff66;
 }
 .matchmaking-timer {
   min-width: 72px;
-  color: #75ffad;
+  color: #31e9ff;
   font: 900 20px/1 monospace;
 }
 .matchmaking-slots {
@@ -2083,33 +2083,35 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
   place-items: center;
   width: clamp(35px, 6.5vw, 56px);
   aspect-ratio: 1;
-  border: 2px solid #27332d;
-  border-radius: 5px;
-  color: #53625a;
-  background: #111714;
+  overflow: hidden;
+  border: 2px solid #27477e;
+  border-radius: 9px;
+  color: #6981aa;
+  background: #07132f;
   box-shadow: inset 0 0 10px #000a;
   font: 1000 clamp(16px, 3vw, 25px)/1 var(--font-display, sans-serif);
   transition: .2s ease;
 }
 .matchmaking-slot.is-accepted {
-  border-color: #b6ffd0;
+  border-color: #67dcff;
   color: #fff;
-  background: linear-gradient(180deg, #30c76f, #12813f);
-  box-shadow: 0 0 14px #5aff9b80, inset 0 0 0 2px #ffffff30;
+  background: linear-gradient(180deg, #174da4, #092766);
+  box-shadow: 0 0 15px #24cfff90, inset 0 0 0 2px #ffffff30;
 }
+.matchmaking-slot img { width: 100%; height: 100%; object-fit: cover; }
 .matchmaking-summary {
   display: flex;
   justify-content: flex-end;
   max-width: 640px;
   margin: auto;
-  color: #c7d7cd;
+  color: #c9d8f3;
   font: 800 12px/1 var(--font-display, sans-serif);
   letter-spacing: .08em;
 }
 .matchmaking-status {
   min-height: 20px;
   margin: 20px 0 14px;
-  color: #b9c9bf;
+  color: #b9cae7;
   font: 700 13px/1.3 var(--font-ui, sans-serif);
 }
 .matchmaking-cancel {
@@ -2125,7 +2127,7 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
   cursor: pointer;
 }
 .matchmaking-cancel:hover { filter: brightness(1.18); transform: translateY(-1px); }
-.matchmaking-overlay.is-found .matchmaking-window { border-color: #ffd65e; box-shadow: 0 0 34px #ffd65e80; }
+.matchmaking-overlay.is-found .matchmaking-window { border-color: #ffd65e; box-shadow: 0 0 0 7px #030b24e8, 0 0 38px #ffd65e80; }
 .matchmaking-overlay.is-found .matchmaking-cancel { visibility: hidden; }
 
 @media (max-width: 700px), (max-height: 520px) {
