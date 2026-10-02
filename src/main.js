@@ -39,7 +39,7 @@ const profile = (() => {
   try { data = JSON.parse(localStorage.getItem('blast.profile')) ?? {}; } catch { data = {}; }
   return {
     playerId: data.playerId || crypto.randomUUID(),
-    name: data.name || 'Player',
+    name: data.name || '',
     gold: Math.max(0, Number(data.gold) || 0),
     cos: { ...DEFAULT_COS, ...data.cos },
     friendlyFire: data.friendlyFire ?? false,
@@ -266,9 +266,11 @@ function startMatch(transport) {
     input.dispose();
     labPanel?.dispose();
     hud.dispose();
+    world.dispose();
     renderer.dispose();
     canvas.classList.add('hidden');
     match = null;
+    window.__blast = null;
     menu.show();
     if (reason) console.warn('[blast] left match:', reason);
   }

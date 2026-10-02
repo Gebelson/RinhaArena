@@ -94,7 +94,7 @@ async function loadAccount(user, session) {
   });
   let playerProfile = rows?.[0];
   if (!playerProfile) {
-    const nickname = String(user.user_metadata?.nickname || user.email?.split('@')[0] || 'Jogador').slice(0, 12);
+    const nickname = String(user.user_metadata?.nickname || user.email?.split('@')[0] || '').trim().slice(0, 12);
     const created = await request('/rest/v1/player_profiles', {
       method: 'POST', token: session.access_token,
       headers: { Prefer: 'return=representation' },

@@ -9,6 +9,7 @@ import { MODES, DEFAULT_MODE } from './modes/index.js';
 import { createSim, addPlayer, removePlayer, step } from './sim.js';
 import { createBotBrain } from './bots.js';
 import { BOT_NAMES, randomCos } from '../content/cosmetics.js';
+import { assertParticipants, ParticipantType, validDisplayName } from './matchmaking.js';
 
 function adjustBotDifficulty(brain, difficulty = 'medium') {
   if (difficulty === 'medium') return brain;
@@ -47,6 +48,7 @@ export class GameHost {
     teamLimits = null,
     respawnTime = null,
     friendlyFire = null,
+    participants = null,
   } = {}) {
     this.levelId = levelId;
     this.modeId = modeId;
@@ -76,7 +78,9 @@ export class GameHost {
     this.inputs = new Map();
     this.brains = new Map();
     this.acc = 0;
+    this.botSequence = 0;
     this.botNames = [...BOT_NAMES].sort(() => Math.random() - 0.5);
+    if (participants) this.spawnParticipants(participants);
   }
 
   teamCount(team) {
@@ -87,14 +91,16 @@ export class GameHost {
     return this.sim.state.players.filter((p) => p.team === team && !p.bot).length;
   }
 
-  addHuman({ name, cos, team: requestedTeam }) {
+  addHuman({ name, displayName = name, userId, participantId, cos, team: requestedTeam, spawnIndex }) {
+    const validName = validDisplayName(displayName);
+    if (!validName) throw new Error('[MATCH] refusing HUMAN without a valid profile name');
     if (this.modeId === 'ffa') {
       const maxPlayers = this.teamLimits?.ffa ?? (this.teamSize * 2);
       if (this.sim.state.players.length >= maxPlayers) {
         const bot = this.sim.state.players.find((p) => p.bot);
         if (bot) this.remove(bot.id);
       }
-      return addPlayer(this.sim, { name: name || 'Player', team: 'free', bot: false, cos });
+      return addPlayer(this.sim, { participantId, type: ParticipantType.HUMAN, userId, displayName: validName, team: 'free', cos, spawnIndex });
     }
 
     const maxRed = this.teamLimits?.red ?? this.teamSize;
@@ -119,17 +125,40 @@ export class GameHost {
       const bot = this.sim.state.players.find((p) => p.team === team && p.bot);
       if (bot) this.remove(bot.id);
     }
-    return addPlayer(this.sim, { name: name || 'Player', team, bot: false, cos });
+    return addPlayer(this.sim, { participantId, type: ParticipantType.HUMAN, userId, displayName: validName, team, cos, spawnIndex });
   }
 
   addBot(team = 'red') {
     const assignedTeam = this.modeId === 'ffa' ? 'free' : team;
     const name = this.sim.mode.variant === 'doll' ? 'Doll' : (this.botNames.pop() ?? 'Bot-' + this.sim.nextId);
-    const id = addPlayer(this.sim, { name, team: assignedTeam, bot: true, cos: randomCos() });
+    const botId = `local-${++this.botSequence}`;
+    const id = addPlayer(this.sim, {
+      participantId: `local:${botId}`, type: ParticipantType.BOT, botId,
+      displayName: name, team: assignedTeam, cos: randomCos(),
+    });
     // modes may supply their own bot brains (sandbox doll/fighter/ffa)
     const brain = this.sim.mode.createBrain?.(id) ?? createBotBrain(id);
     this.brains.set(id, adjustBotDifficulty(brain, this.config.rules.botDifficulty));
     return id;
+  }
+
+  spawnParticipants(participants) {
+    if (this.sim.state.players.length) throw new Error('[MATCH] participants can only spawn into an empty simulation');
+    assertParticipants(participants, participants.length);
+    for (const participant of participants) {
+      const id = addPlayer(this.sim, {
+        id: participant.participantId,
+        ...participant,
+        bot: participant.type === ParticipantType.BOT,
+      });
+      if (participant.type === ParticipantType.BOT) {
+        const brain = this.sim.mode.createBrain?.(id) ?? createBotBrain(id);
+        if (!brain?.think) throw new Error(`[MATCH] BOT ${participant.botId} has no AI controller`);
+        this.brains.set(id, adjustBotDifficulty(brain, this.config.rules.botDifficulty));
+      }
+      console.info(`[SPAWN] match participant=${participant.participantId} type=${participant.type} name=${participant.displayName} spawnIndex=${participant.spawnIndex}`);
+    }
+    if (this.sim.state.players.length !== participants.length) throw new Error('[MATCH] participant/entity count mismatch after spawn');
   }
 
   fillBots() {
@@ -163,6 +192,14 @@ export class GameHost {
     }
     const maxForTeam = team === 'red' ? (this.teamLimits?.red ?? this.teamSize) : (this.teamLimits?.blue ?? this.teamSize);
     if (this.teamCount(team) < maxForTeam) this.addBot(team);
+  }
+
+  disconnectHuman(id) {
+    const player = this.sim.state.players.find((candidate) => candidate.id === id);
+    if (!player || player.type !== ParticipantType.HUMAN) return false;
+    player.connected = false;
+    this.inputs.set(id, { mx: 0, mz: 0, ax: 0, az: 0, run: 0 });
+    return true;
   }
 
   setInput(id, input) {

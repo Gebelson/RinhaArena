@@ -11,6 +11,9 @@ import { joinRoom, touchRoom } from './rooms.js';
 import { SupabaseRealtimeChannel } from './supabase.js';
 import { integrateBody, overFloor } from '../game/physics.js';
 import { LEVELS, DEFAULT_LEVEL } from '../content/levels/index.js';
+import {
+  createMatchmakingSession, finalizeMatchmakingSession, MatchmakingStatus, validDisplayName,
+} from '../game/matchmaking.js';
 
 const TICK_RATE = CONFIG.tickRate || 60;
 const SNAPSHOT_INTERVAL = 1 / 30; // 30 Hz broadcasts from host
@@ -116,8 +119,15 @@ export async function connectOnline({ room, password, team, profile, host: reque
     const clientPlayers = new Map();
     let lobbyPlayers = [];
     let remoteQueueEndsAt = Number(config.queueEndsAt) || null;
+    let matchInfo = null;
+    let session = null;
+    const matchWaiters = [];
+    const readyUsers = new Set();
+    const startWaiters = [];
+    let matchStart = null;
+    let readyTimer = null;
 
-    const level = LEVELS[config.levelId] || LEVELS[DEFAULT_LEVEL];
+    let level = LEVELS[config.levelId] || LEVELS[DEFAULT_LEVEL];
     const playerCfg = config.config?.player || CONFIG.player;
     const worldCfg = config.config?.world || CONFIG.world;
     const matPlayer = CONFIG.physics.materials.player;
@@ -147,7 +157,28 @@ export async function connectOnline({ room, password, team, profile, host: reque
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     };
-    const sendJoin = () => channel.send('join', { clientId, name: profile.name, cos: profile.cos, team });
+    const officialName = validDisplayName(profile.name);
+    if (!profile.playerId || !officialName) {
+      fail(new Error('Seu perfil precisa de uma identificação e nickname válidos para jogar online'));
+      return;
+    }
+    const sendJoin = () => channel.send('join', {
+      clientId, userId: profile.playerId, displayName: officialName, cos: profile.cos, team,
+    });
+    const resolveMatch = (payload) => {
+      if (!payload?.id || !Array.isArray(payload.participants)) return;
+      matchInfo = payload;
+      config.levelId = payload.mapId;
+      config.modeId = payload.mode;
+      level = LEVELS[payload.mapId] || LEVELS[DEFAULT_LEVEL];
+      const mine = payload.participants.find((participant) => participant.type === 'HUMAN' && participant.userId === profile.playerId);
+      if (!mine) {
+        fail(new Error('MATCH_FOUND não contém o participante deste usuário'));
+        return;
+      }
+      myId = mine.participantId;
+      while (matchWaiters.length) matchWaiters.shift()(payload);
+    };
 
     channel.on('disconnect', () => {
       if (settled && !closed) onDropped?.();
@@ -164,6 +195,28 @@ export async function connectOnline({ room, password, team, profile, host: reque
       clearInterval(welcomeTimer);
       settled = true;
       resolve(transport);
+    });
+    channel.on('queue-update', (message) => {
+      if (Array.isArray(message?.players)) lobbyPlayers = message.players;
+      remoteQueueEndsAt = Number(message?.deadlineAt) || remoteQueueEndsAt;
+    });
+    channel.on('match-found', (message) => resolveMatch(message?.match));
+    channel.on('match-client-ready', (message) => {
+      if (!requestedHost || !matchInfo || !message?.userId) return;
+      if (matchInfo.participants.some((participant) => participant.type === 'HUMAN' && participant.userId === message.userId)) {
+        readyUsers.add(message.userId);
+        maybeStartMatch();
+      }
+    });
+    channel.on('match-start', (message) => {
+      if (!message?.matchId) return;
+      if (matchInfo && message.matchId !== matchInfo.id) return;
+      matchStart = message;
+      if (matchInfo) {
+        matchInfo.status = 'PLAYING';
+        matchInfo.startedAt = message.startAt;
+      }
+      while (startWaiters.length) startWaiters.shift()(message);
     });
     channel.on('error', (message) => {
       if (message?.target === clientId) fail(new Error(message.reason || 'Não foi possível entrar na sala'));
@@ -237,40 +290,91 @@ export async function connectOnline({ room, password, team, profile, host: reque
         }
       }
     });
+    const broadcastQueue = () => channel.send('queue-update', {
+      players: [...clientPlayers.values()].map(({ userId, displayName, cos }) => ({ userId, name: displayName, displayName, cos })),
+      deadlineAt: remoteQueueEndsAt,
+    });
+    const maybeStartMatch = (force = false) => {
+      if (!requestedHost || !matchInfo || matchStart) return;
+      const humanIds = matchInfo.participants.filter((participant) => participant.type === 'HUMAN').map((participant) => participant.userId);
+      if (!force && !humanIds.every((userId) => readyUsers.has(userId))) return;
+      clearTimeout(readyTimer);
+      matchInfo.status = 'STARTING';
+      matchStart = { matchId: matchInfo.id, startAt: Date.now() + 500 };
+      matchInfo.startedAt = matchStart.startAt;
+      channel.send('match-start', matchStart);
+      while (startWaiters.length) startWaiters.shift()(matchStart);
+    };
     channel.on('join', (message) => {
-      if (!requestedHost || !hostGame || !message?.clientId || message.clientId === clientId) return;
+      if (!requestedHost || !message?.clientId || message.clientId === clientId) return;
+      const displayName = validDisplayName(message.displayName);
+      if (!message.userId || !displayName) {
+        channel.send('error', { target: message.clientId, reason: 'Perfil multiplayer inválido' });
+        return;
+      }
       const existing = clientPlayers.get(message.clientId);
       if (existing) {
-        channel.send('welcome', { target: message.clientId, playerId: existing });
+        channel.send('welcome', {
+          target: message.clientId, playerId: existing.participantId ?? null,
+          players: [...clientPlayers.values()].map((entry) => ({ userId: entry.userId, name: entry.displayName, displayName: entry.displayName, cos: entry.cos })),
+          queueEndsAt: remoteQueueEndsAt,
+        });
+        if (matchInfo) channel.send('match-found', { target: message.clientId, match: matchInfo });
+        if (matchStart) channel.send('match-start', { ...matchStart, target: message.clientId });
+        return;
+      }
+      const reconnect = [...clientPlayers.values()].find((entry) => entry.userId === message.userId);
+      if (reconnect) {
+        clientPlayers.delete(reconnect.clientId);
+        reconnect.clientId = message.clientId;
+        reconnect.connected = true;
+        clientPlayers.set(message.clientId, reconnect);
+        if (hostGame && reconnect.participantId) {
+          const player = hostGame.sim.state.players.find((candidate) => candidate.participantId === reconnect.participantId);
+          if (player) player.connected = true;
+        }
+        channel.send('welcome', { target: message.clientId, playerId: reconnect.participantId ?? null, players: lobbyPlayers, queueEndsAt: remoteQueueEndsAt });
+        if (matchInfo) channel.send('match-found', { target: message.clientId, match: matchInfo });
+        if (matchStart) channel.send('match-start', { ...matchStart, target: message.clientId });
+        broadcastQueue();
         return;
       }
       if (clientPlayers.size >= maxPlayers(config)) {
         channel.send('error', { target: message.clientId, reason: 'A sala está cheia!' });
         return;
       }
-      const playerId = hostGame.addHuman({ name: String(message.name || 'Player').slice(0, 12), team: message.team, cos: message.cos });
-      clientPlayers.set(message.clientId, playerId);
+      if (session?.status !== MatchmakingStatus.WAITING) {
+        channel.send('error', { target: message.clientId, reason: 'A partida já está iniciando' });
+        return;
+      }
+      const record = {
+        clientId: message.clientId, userId: message.userId, displayName,
+        characterId: 'capivara', cos: message.cos, team: message.team, connected: true, participantId: null,
+      };
+      clientPlayers.set(message.clientId, record);
+      session.players.set(record.userId, record);
       channel.send('welcome', {
         target: message.clientId,
-        playerId,
-        players: hostGame.sim.state.players
-          .filter((player) => !player.bot)
-          .map((player) => ({ id: player.id, name: player.name, cos: player.cos })),
+        playerId: null,
+        players: [...clientPlayers.values()].map((entry) => ({ userId: entry.userId, name: entry.displayName, displayName: entry.displayName, cos: entry.cos })),
         queueEndsAt: remoteQueueEndsAt,
       });
+      broadcastQueue();
       touchRoom(roomCode, hostToken, clientPlayers.size);
     });
     channel.on('input', (message) => {
       if (!requestedHost || !hostGame) return;
-      const playerId = clientPlayers.get(message?.clientId);
-      if (playerId) hostGame.setInput(playerId, message.input ?? {});
+      const player = clientPlayers.get(message?.clientId);
+      if (player?.participantId && hostGame) hostGame.setInput(player.participantId, message.input ?? {});
     });
     channel.on('leave', (message) => {
-      if (!requestedHost || !hostGame) return;
-      const playerId = clientPlayers.get(message?.clientId);
-      if (!playerId) return;
+      if (!requestedHost) return;
+      const player = clientPlayers.get(message?.clientId);
+      if (!player) return;
       clientPlayers.delete(message.clientId);
-      hostGame.replaceWithBot(playerId);
+      if (session?.status === MatchmakingStatus.WAITING) session.players.delete(player.userId);
+      else if (player.participantId) hostGame?.disconnectHuman(player.participantId);
+      broadcastQueue();
       touchRoom(roomCode, hostToken, clientPlayers.size);
     });
 
@@ -303,10 +407,48 @@ export async function connectOnline({ room, password, team, profile, host: reque
       get levelId() { return config.levelId; },
       get modeId() { return config.modeId; },
       lobbyPlayers() {
-        if (requestedHost) return hostGame?.sim.state.players.filter((player) => !player.bot) ?? [];
+        if (requestedHost) return [...clientPlayers.values()].map((entry) => ({
+          userId: entry.userId, name: entry.displayName, displayName: entry.displayName, cos: entry.cos,
+        }));
         return lobbyPlayers;
       },
       matchmakingEndsAt() { return remoteQueueEndsAt; },
+      isMatchReady() { return !!matchInfo; },
+      match() { return matchInfo; },
+      waitForMatch() {
+        if (matchInfo) return Promise.resolve(matchInfo);
+        return new Promise((resolve) => matchWaiters.push(resolve));
+      },
+      clientReadyAndWaitForStart() {
+        if (!matchInfo) return Promise.reject(new Error('MATCH_CLIENT_READY antes de MATCH_FOUND'));
+        if (requestedHost) {
+          readyUsers.add(profile.playerId);
+          maybeStartMatch();
+        } else {
+          channel.send('match-client-ready', { matchId: matchInfo.id, userId: profile.playerId });
+        }
+        if (matchStart) return Promise.resolve(matchStart);
+        return new Promise((resolve) => startWaiters.push(resolve));
+      },
+      finalizeMatchmaking() {
+        if (!requestedHost) return matchInfo;
+        if (matchInfo) return matchInfo;
+        const match = finalizeMatchmakingSession(session, config);
+        hostGame = new GameHost({ ...roomOptions(config), participants: match.participants });
+        matchInfo = match;
+        for (const record of clientPlayers.values()) {
+          record.participantId = `human:${record.userId}`;
+        }
+        myId = `human:${profile.playerId}`;
+        console.info(`[MATCH] creating match=${match.id} session=${session.id} map=${match.mapId} seed=${match.mapSeed} humans=${session.players.size} bots=${match.participants.filter((p) => p.type === 'BOT').length} participants=${match.participants.length}`);
+        for (const participant of match.participants) {
+          console.info(`[MATCH PARTICIPANT] id=${participant.participantId} type=${participant.type} userId=${participant.userId ?? '-'} botId=${participant.botId ?? '-'} name=${participant.displayName} spawn=${participant.spawnIndex}`);
+        }
+        channel.send('match-found', { match });
+        readyTimer = setTimeout(() => maybeStartMatch(true), 10_000);
+        while (matchWaiters.length) matchWaiters.shift()(match);
+        return match;
+      },
       setInput(input) {
         if (requestedHost && hostGame) {
           hostGame.setInput(myId, input);
@@ -517,6 +659,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
         closed = true;
         clearInterval(welcomeTimer);
         clearInterval(touchTimer);
+        clearTimeout(readyTimer);
         if (requestedHost) {
           channel.send('host-left', { clientId });
           touchRoom(roomCode, hostToken, 0);
@@ -526,10 +669,24 @@ export async function connectOnline({ room, password, team, profile, host: reque
     };
 
     if (requestedHost) {
-      hostGame = new GameHost(roomOptions(config));
-      myId = hostGame.addHuman({ name: profile.name, team, cos: { ...profile.cos } });
-      clientPlayers.set(clientId, myId);
-      hostGame.fillBots();
+      const capacity = maxPlayers(config);
+      session = createMatchmakingSession({
+        id: `queue:${roomCode}`,
+        queueKey: config.config?.rules?.ranked ? `${config.modeId}:ranked` : `${config.modeId}:normal`,
+        mode: config.modeId,
+        ranked: !!config.config?.rules?.ranked,
+        maxPlayers: capacity,
+        createdAt: remoteQueueEndsAt ? remoteQueueEndsAt - 30_000 : Date.now(),
+      });
+      remoteQueueEndsAt = session.deadlineAt;
+      const hostRecord = {
+        clientId, userId: profile.playerId, displayName: officialName,
+        characterId: 'capivara', cos: { ...profile.cos }, team, connected: true, participantId: null,
+      };
+      clientPlayers.set(clientId, hostRecord);
+      session.players.set(hostRecord.userId, hostRecord);
+      console.info(`[QUEUE] created session=${session.id}`);
+      console.info(`[QUEUE] user=${hostRecord.userId} joined session=${session.id}`);
       touchRoom(roomCode, hostToken, 1);
       touchTimer = setInterval(() => touchRoom(roomCode, hostToken, clientPlayers.size), 30_000);
       settled = true;

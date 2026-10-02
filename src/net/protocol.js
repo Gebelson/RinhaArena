@@ -17,7 +17,11 @@ export function packState(st) {
     winner: st.winner,
     lab: st.lab ?? null,
     players: st.players.map((p) => ({
-      id: p.id, name: p.name, team: p.team, bot: p.bot, cos: p.cos,
+      id: p.id, participantId: p.participantId, matchId: p.matchId, type: p.type,
+      userId: p.userId ?? null, botId: p.botId ?? null,
+      displayName: p.displayName, name: p.displayName,
+      characterId: p.characterId, spawnIndex: p.spawnIndex,
+      connected: p.connected !== false, team: p.team, bot: p.type === 'BOT', cos: p.cos,
       x: r2(p.x), z: r2(p.z), y: r2(p.y),
       vx: r2(p.vx), vz: r2(p.vz), face: r2(p.face), spd: r2(p.spd),
       hp: Math.round(p.hp), state: p.state,

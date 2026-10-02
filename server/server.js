@@ -18,6 +18,7 @@ import path from 'node:path';
 import { GameHost } from '../src/game/host.js';
 import { packState } from '../src/net/protocol.js';
 import { CONFIG } from '../src/core/config.js';
+import { validDisplayName } from '../src/game/matchmaking.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PORT = Number(process.env.PORT) || 8090;
@@ -326,6 +327,12 @@ server.on('upgrade', (req, socket) => {
       let msg;
       try { msg = JSON.parse(text); } catch { return; }
       if (msg.t === 'join' && !conn.playerId) {
+        const displayName = validDisplayName(msg.displayName ?? msg.name);
+        const userId = String(msg.userId ?? '').trim();
+        if (!displayName || !userId) {
+          socket.write(encodeFrame(JSON.stringify({ t: 'error', reason: 'Perfil multiplayer inválido' })));
+          return close();
+        }
         const reqLevel = url.searchParams.get('level');
         const room = getRoom(roomCode, reqLevel);
         const pass = msg.password || url.searchParams.get('password');
@@ -350,7 +357,9 @@ server.on('upgrade', (req, socket) => {
 
         conn.room = room;
         conn.playerId = room.host.addHuman({
-          name: String(msg.name ?? 'Player').slice(0, 12),
+          displayName,
+          userId,
+          participantId: `human:${userId}`,
           team: msg.team || url.searchParams.get('team') || null,
           cos: {
             hat: String(msg.cos?.hat ?? 'none').slice(0, 16),

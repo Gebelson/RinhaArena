@@ -57,14 +57,27 @@ export class World {
 
     const seen = new Set();
     for (const p of view.players) {
-      seen.add(p.id);
-      let cv = this.chars.get(p.id);
+      if (!p?.participantId || !p?.displayName) {
+        console.error('[SPAWN] rejected entity without participant identity', p);
+        continue;
+      }
+      if (seen.has(p.participantId)) {
+        console.error(`[SPAWN] duplicate participant entity ${p.participantId}`);
+        continue;
+      }
+      if (p.id !== p.participantId) {
+        console.error(`[SPAWN] entity id mismatch id=${p.id} participant=${p.participantId}`);
+        continue;
+      }
+      seen.add(p.participantId);
+      let cv = this.chars.get(p.participantId);
       if (!cv) {
         cv = new CharacterView(this.scene, p, p.id === myId);
-        this.chars.set(p.id, cv);
+        this.chars.set(p.participantId, cv);
       }
       cv.update(p, dt);
     }
+    if (this.chars.size !== seen.size) console.error(`[SPAWN] entity invariant failed rendered=${this.chars.size} participants=${seen.size}`);
     for (const [id, cv] of this.chars) {
       if (!seen.has(id)) {
         cv.dispose();
@@ -211,5 +224,17 @@ export class World {
 
   get shake() {
     return this.effects.shakeAmp;
+  }
+
+  dispose() {
+    for (const view of this.chars.values()) view.dispose();
+    for (const view of this.bombViews.values()) view.dispose();
+    for (const view of this.powerupViews.values()) view.dispose();
+    for (const view of Object.values(this.flagViews)) view.dispose?.();
+    this.chars.clear();
+    this.bombViews.clear();
+    this.powerupViews.clear();
+    this.scene.remove(this.reticle);
+    this.scene.remove(this.levelGroup);
   }
 }

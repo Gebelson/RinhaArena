@@ -98,10 +98,26 @@ export const emit = (sim, ev) => sim.events.push(ev);
 export const overFloor = (level, x, z) =>
   Math.abs(x) <= level.bounds.w / 2 && Math.abs(z) <= level.bounds.d / 2;
 
-export function addPlayer(sim, { name, team, bot = false, cos }) {
-  const id = 'p' + sim.nextId++;
+export function addPlayer(sim, {
+  id: explicitId, participantId, matchId, type, userId, botId, displayName, name,
+  characterId = 'capivara', spawnIndex, connected = true, team, bot = false, cos,
+}) {
+  const resolvedName = String(displayName ?? name ?? '').trim();
+  const resolvedType = type || (bot ? 'BOT' : 'HUMAN');
+  const resolvedParticipantId = participantId || explicitId || `local:${sim.nextId}`;
+  if (!resolvedName) throw new Error(`[SPAWN] missing displayName participant=${resolvedParticipantId}`);
+  if (resolvedType === 'HUMAN' && !userId && !String(resolvedParticipantId).startsWith('local:')) {
+    throw new Error(`[SPAWN] HUMAN missing userId participant=${resolvedParticipantId}`);
+  }
+  if (resolvedType === 'BOT' && !botId && !String(resolvedParticipantId).startsWith('local:')) {
+    throw new Error(`[SPAWN] BOT missing botId participant=${resolvedParticipantId}`);
+  }
+  const id = explicitId || resolvedParticipantId || ('p' + sim.nextId++);
+  sim.nextId += explicitId || participantId ? 0 : 1;
   const p = {
-    id, name, team, bot, cos,
+    id, participantId: resolvedParticipantId, matchId: matchId ?? null, type: resolvedType, userId, botId,
+    displayName: resolvedName, name: resolvedName, characterId, spawnIndex, connected,
+    team, bot: resolvedType === 'BOT', cos,
     x: 0, z: 0, y: 0, vx: 0, vz: 0, vy: 0,
     face: team === 'red' ? Math.PI / 2 : -Math.PI / 2, // face the enemy base
     hp: sim.config.player.hp,
@@ -144,12 +160,13 @@ function placeAtSpawn(sim, p) {
   sim.spawnIdx = sim.spawnIdx || {};
   const sKey = p.team || 'all';
   sim.spawnIdx[sKey] = sim.spawnIdx[sKey] || 0;
-  const s = list[sim.spawnIdx[sKey]++ % list.length];
-  const jitterX = (Math.random() - 0.5) * 0.5;
-  const jitterZ = (Math.random() - 0.5) * 0.5;
+  const assignedIndex = Number.isInteger(p.spawnIndex) ? p.spawnIndex : sim.spawnIdx[sKey]++;
+  const s = list[assignedIndex % list.length];
+  const jitterX = (((assignedIndex * 37) % 11) / 10 - 0.5) * 0.5;
+  const jitterZ = (((assignedIndex * 53) % 13) / 12 - 0.5) * 0.5;
   p.x = s.x + jitterX; p.z = s.z + jitterZ; p.y = 0;
   p.vx = 0; p.vz = 0; p.vy = 0;
-  p.face = p.team === 'red' ? Math.PI / 2 : (p.team === 'blue' ? -Math.PI / 2 : Math.random() * Math.PI * 2);
+  p.face = p.team === 'red' ? Math.PI / 2 : (p.team === 'blue' ? -Math.PI / 2 : (assignedIndex % 8) * Math.PI / 4);
 }
 
 const getP = (sim, id) => sim.state.players.find((p) => p.id === id);

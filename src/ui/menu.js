@@ -118,7 +118,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       <section class="player-card" aria-label="Perfil do jogador">
         <button class="player-avatar" type="button" aria-label="Trocar ícone do perfil"><img src="./assets/ui/avatars/${profile.cos.avatar}" alt="Ícone do perfil" /></button>
         <div class="player-summary">
-          <input class="name-input player-name" maxlength="12" aria-label="Nome do jogador" value="${profile.name || 'Player'}" />
+          <input class="name-input player-name" maxlength="12" aria-label="Nome do jogador" value="${profile.name || ''}" />
           <div class="player-progress-row">
             <div class="level-badge"><img src="./assets/ui/levels/${getLevelBadgeAsset(initialLevel.level)}" alt="Nível ${initialLevel.level}" /><b>${initialLevel.level}</b></div>
             <div class="xp-wrap"><div class="xp-track"><i style="width:${initialLevel.progress * 100}%"></i><strong>${initialLevel.isMax ? 'NÍVEL MÁXIMO' : `${initialLevel.xp} / ${initialLevel.required} XP`}</strong></div></div>
@@ -150,7 +150,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       <div class="quick-config hidden" aria-label="Configurações da partida">
         <div class="quick-config-head"><strong>CONFIGURAÇÕES</strong><button class="quick-config-close" aria-label="Fechar">✕</button></div>
         <label>NOME DO JOGADOR</label>
-        <div class="config-name-mirror">${profile.name || 'Player'}</div>
+        <div class="config-name-mirror">${profile.name || 'SEM NICK'}</div>
         <label>CHAPÉU</label>
         <div class="hat-row">${HATS.map((h, i) => `<button class="hat-btn ${profile.hat === h.id ? 'sel' : ''}" data-hat="${h.id}" title="${h.name}"><img src="./assets/ui/hat_${i}.png" alt="${h.name}" class="hat-img" /></button>`).join('')}</div>
         <label>PELE</label>
@@ -203,7 +203,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                 <circle cx="12" cy="7" r="4"/>
               </svg>
-              <input class="name-input" maxlength="12" placeholder="Player" value="${profile.name || 'Player'}" />
+              <input class="name-input" maxlength="12" placeholder="Digite seu nick" value="${profile.name || ''}" />
             </div>
           </div>
 
@@ -507,9 +507,9 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
 
   // ------------------------------------------------------------ Event listeners
   // Name input
-  nameInput.value = profile.name || 'Player';
+  nameInput.value = profile.name || '';
   nameInput.addEventListener('input', () => {
-    profile.name = nameInput.value.trim() || 'Player';
+    profile.name = nameInput.value.trim();
     profile.save();
     const mirror = el.querySelector('.config-name-mirror');
     if (mirror) mirror.textContent = profile.name;
@@ -1140,16 +1140,24 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       overlay.remove();
       btnPlayBots.disabled = false;
     };
-    const startPrepared = () => {
+    const startPrepared = async () => {
       if (finished || cancelled || !transport) return;
       finished = true;
       statusEl.textContent = 'Partida encontrada! Preparando arena...';
       overlay.classList.add('is-found');
-      setTimeout(() => {
+      try {
+        transport.finalizeMatchmaking?.();
+        await transport.waitForMatch?.();
+        await transport.clientReadyAndWaitForStart?.();
         if (cancelled) return;
+        await new Promise((resolve) => setTimeout(resolve, 500));
         cleanup();
         onStartPrepared(transport);
-      }, 500);
+      } catch (cause) {
+        cleanup();
+        errBox.textContent = cause.message || 'Não foi possível criar a partida.';
+        errBox.classList.remove('hidden');
+      }
     };
     const cancel = () => {
       if (finished || cancelled) return;
@@ -1168,7 +1176,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       if (players.length >= 2 && Date.now() < deadline) {
         statusEl.textContent = 'Jogadores encontrados. Aguardando o fim da fila...';
       }
-      if (Date.now() >= deadline && transport) {
+      if ((players.length >= capacity || Date.now() >= deadline || transport?.isMatchReady?.()) && transport) {
         statusEl.textContent = players.length >= 2
           ? 'Jogadores encontrados! Preparando arena...'
           : 'Completando a partida com bots...';
@@ -1228,6 +1236,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       data.room.config = matchConfig;
       data.room.matchType = selection.matchType;
       data.room.queueEndsAt = deadline;
+      data.room.levelId = roomLevelId;
       transport = await onPrepareOnline({ room: data.code, host: true, hostToken: data.hostToken, roomConfig: data.room });
       if (cancelled) {
         transport?.dispose?.();

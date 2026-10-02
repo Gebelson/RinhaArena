@@ -9,6 +9,7 @@
     "test": "node test_combat_redesign.js",
     "test:cloud": "node scripts/test-supabase.mjs",
     "test:prediction": "node test_multiplayer_prediction.mjs",
+    "test:matchmaking": "node test_matchmaking.js",
     "smoke": "node scripts/smoke.js",
     "vendor": "node scripts/vendor.js",
     "tune": "node scripts/tune.js"

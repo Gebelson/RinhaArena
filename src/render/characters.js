@@ -541,7 +541,13 @@ export class CharacterView {
     }
 
     // name tag + local-player ground marker
-    this.name = makeNameSprite(p.name, team.color);
+    if (!p.participantId || !p.displayName) {
+      throw new Error(`[RENDER] refusing character without participant identity id=${p.id ?? '(missing)'}`);
+    }
+    this.participantId = p.participantId;
+    this.matchId = p.matchId ?? null;
+    this.participantType = p.type;
+    this.name = makeNameSprite(p.displayName, team.color);
     this.name.position.y = 2.45;
     this.group.add(this.name);
     if (isMe) {
