@@ -278,7 +278,7 @@ function makeEmoteSprite() {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
-  sprite.scale.set(1.15, 1.15, 1);
+  sprite.scale.set(1.5, 1.5, 1);
   sprite.visible = false;
   sprite.userData.canvas = canvas;
   return sprite;
@@ -768,17 +768,13 @@ export class CharacterView {
     const canvas = this.emote.userData.canvas;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.beginPath();
-    ctx.arc(64, 64, 53, 0, Math.PI * 2);
-    ctx.fillStyle = '#081630ee'; ctx.fill();
-    ctx.lineWidth = 6; ctx.strokeStyle = '#36d9ff'; ctx.stroke();
     const image = new Image();
     const requested = value;
     this.pendingEmote = requested;
     image.onload = () => {
       if (this.pendingEmote !== requested) return;
-      ctx.save(); ctx.beginPath(); ctx.arc(64, 64, 49, 0, Math.PI * 2); ctx.clip();
-      ctx.drawImage(image, 15, 15, 98, 98); ctx.restore();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 2, 2, 124, 124);
       this.emote.material.map.needsUpdate = true;
       this.emote.material.opacity = 1;
       this.emote.visible = true;

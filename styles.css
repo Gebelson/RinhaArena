@@ -2026,7 +2026,7 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
 .emote-wheel-overlay { position:fixed; inset:0; z-index:95; display:none; pointer-events:none; background:radial-gradient(circle at center,#07162a44 0 18%,#02071399 55%,#01040bbb); }
 .emote-wheel-overlay.open { display:grid; place-items:center; }
 .emote-wheel { position:relative; width:min(420px,70vmin); aspect-ratio:1; border:3px solid #39d8ff; border-radius:50%; background:radial-gradient(circle,#071226 0 27%,transparent 28%),conic-gradient(from -22.5deg,#173f79,#0c2755 12.5%,#173f79 25%,#0c2755 37.5%,#173f79 50%,#0c2755 62.5%,#173f79 75%,#0c2755 87.5%,#173f79); box-shadow:0 0 0 10px #020817cc,0 0 45px #22bfff66,inset 0 0 35px #020817; }
-.emote-wheel-center { position:absolute; inset:39%; display:grid; place-items:center; align-content:center; border:2px solid #2b70ae; border-radius:50%; color:#fff; background:#071630; font:900 24px/1 'Barlow Condensed',sans-serif; box-shadow:0 0 15px #000a; }
+.emote-wheel-center { display:none; }
 .emote-wheel-center span { margin-top:3px; color:#62ddff; font-size:8px; letter-spacing:.13em; }
 .emote-wheel-empty { display:none; position:absolute; inset:31% 22%; place-items:center; margin:0; color:#ffd34d; font:900 12px/1.2 'Barlow Condensed',sans-serif; text-align:center; }
 .emote-wheel-overlay.empty .emote-wheel-empty { display:grid; }
