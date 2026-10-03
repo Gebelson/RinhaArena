@@ -312,7 +312,7 @@ export function getPorcoModel() {
   if (!porcoPromise) {
     const loader = new GLTFLoader();
     porcoPromise = new Promise((resolve) => {
-      loader.load('./models/porco.glb', (gltf) => {
+      loader.load('./models/porco.glb?v=2', (gltf) => {
         const root = gltf.scene;
         const box = new THREE.Box3().setFromObject(root);
         const size = box.getSize(new THREE.Vector3());
@@ -350,7 +350,7 @@ export function getPatoModel() {
   if (!patoPromise) {
     const loader = new GLTFLoader();
     patoPromise = new Promise((resolve) => {
-      loader.load('./models/pato.glb', (gltf) => {
+      loader.load('./models/pato.glb?v=2', (gltf) => {
         const root = gltf.scene;
         const box = new THREE.Box3().setFromObject(root);
         const size = box.getSize(new THREE.Vector3());
