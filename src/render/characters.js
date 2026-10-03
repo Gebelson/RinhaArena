@@ -181,6 +181,8 @@ let crocodiloTemplate = null;
 let crocodiloPromise = null;
 let porcoTemplate = null;
 let porcoPromise = null;
+let patoTemplate = null;
+let patoPromise = null;
 let blueCapivaraTex = null;
 let blueCapivaraMat = null;
 let redCapivaraMat = null;
@@ -343,6 +345,41 @@ export function getPorcoModel() {
   return porcoPromise;
 }
 
+export function getPatoModel() {
+  if (patoTemplate) return Promise.resolve(patoTemplate);
+  if (!patoPromise) {
+    const loader = new GLTFLoader();
+    patoPromise = new Promise((resolve) => {
+      loader.load('./models/pato.glb', (gltf) => {
+        const root = gltf.scene;
+        const box = new THREE.Box3().setFromObject(root);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        root.position.set(-center.x, -box.min.y + 0.05, -center.z);
+        const inner = new THREE.Group();
+        inner.name = 'pato_inner';
+        inner.add(root);
+        inner.rotation.y = -Math.PI / 2;
+        const wrapper = new THREE.Group();
+        wrapper.name = 'pato_wrapper';
+        wrapper.add(inner);
+        wrapper.scale.setScalar(2.2 / (size.y || 1));
+        wrapper.traverse((object) => {
+          if (!object.isMesh) return;
+          object.castShadow = true;
+          object.receiveShadow = false;
+        });
+        patoTemplate = wrapper;
+        resolve(wrapper);
+      }, undefined, (error) => {
+        console.error('Failed to load pato model:', error);
+        resolve(null);
+      });
+    });
+  }
+  return patoPromise;
+}
+
 function makeCapivaraGlove(isLeft = false) {
   const g = new THREE.Group();
   const redMat = toonMat('#e0372a', { emissive: '#440a08' });
@@ -365,7 +402,7 @@ export class CharacterView {
   constructor(scene, p, isMe) {
     const team = TEAMS[p.team];
     this.team = p.team;
-    this.characterId = ['crocodilo', 'porco'].includes(p.characterId) ? p.characterId : 'capivara';
+    this.characterId = ['crocodilo', 'porco', 'pato'].includes(p.characterId) ? p.characterId : 'capivara';
     this.scene = scene;
     this.phase = Math.random() * 10;
     this.blinkAt = 2 + Math.random() * 3;
@@ -551,8 +588,8 @@ export class CharacterView {
       }
     };
 
-    const characterTemplates = { capivara: capivaraTemplate, crocodilo: crocodiloTemplate, porco: porcoTemplate };
-    const characterLoaders = { capivara: getCapivaraModel, crocodilo: getCrocodiloModel, porco: getPorcoModel };
+    const characterTemplates = { capivara: capivaraTemplate, crocodilo: crocodiloTemplate, porco: porcoTemplate, pato: patoTemplate };
+    const characterLoaders = { capivara: getCapivaraModel, crocodilo: getCrocodiloModel, porco: getPorcoModel, pato: getPatoModel };
     const characterTemplate = characterTemplates[this.characterId];
     const characterLoader = characterLoaders[this.characterId];
     if (characterTemplate) {

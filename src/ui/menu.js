@@ -101,7 +101,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   if (!profile.hat) profile.hat = 'crown';
   if (!profile.skin) profile.skin = REFERENCE_SKINS[6];
   if (!AVATARS.includes(profile.cos.avatar)) profile.cos.avatar = AVATARS[0];
-  profile.cos.characterId = ['crocodilo', 'porco'].includes(profile.cos.characterId) ? profile.cos.characterId : 'capivara';
+  profile.cos.characterId = ['crocodilo', 'porco', 'pato'].includes(profile.cos.characterId) ? profile.cos.characterId : 'capivara';
   profile.cos.ownedCharacters = [...new Set(['capivara', ...(profile.cos.ownedCharacters || [])])];
 
   let selectedMode = 'ctf';
@@ -690,7 +690,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     const renderCharacters = () => {
       const owned = new Set(profile.cos.ownedCharacters || ['capivara']);
       grid.innerHTML = SHOP_CHARACTERS.map((character) => {
-        const available = ['capivara', 'crocodilo', 'porco'].includes(character.id);
+        const available = ['capivara', 'crocodilo', 'porco', 'pato'].includes(character.id);
         const acquired = owned.has(character.id);
         const selected = profile.cos.characterId === character.id;
         const canAfford = Number(profile.gold) >= CHARACTER_PRICE;
@@ -721,7 +721,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       const characterId = button.dataset.character;
       const owned = new Set(profile.cos.ownedCharacters || ['capivara']);
       if (!owned.has(characterId)) {
-        if (!['crocodilo', 'porco'].includes(characterId) || Number(profile.gold) < CHARACTER_PRICE) return;
+        if (!['crocodilo', 'porco', 'pato'].includes(characterId) || Number(profile.gold) < CHARACTER_PRICE) return;
         profile.gold = Math.max(0, Number(profile.gold) - CHARACTER_PRICE);
         owned.add(characterId);
         profile.cos.ownedCharacters = [...owned];
