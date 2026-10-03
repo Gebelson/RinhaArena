@@ -144,6 +144,8 @@ export async function saveAccountProfile(profile) {
       avatar: profile.cos?.avatar || 'avatar-1.webp',
       hat: profile.hat || profile.cos?.hat || 'crown',
       skin: profile.skin || profile.cos?.skin || '#bdaee6',
+      owned_characters: [...new Set(['capivara', ...(profile.cos?.ownedCharacters || [])])],
+      selected_character: profile.cos?.characterId || 'capivara',
       friendly_fire: Boolean(profile.friendlyFire),
       updated_at: new Date().toISOString(),
     },

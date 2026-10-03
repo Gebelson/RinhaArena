@@ -17,6 +17,7 @@ import { openAuthGate } from './auth.js';
 import { applySettings, getSettings, keyLabel, saveSettings } from '../settings.js';
 import { CONFIG } from '../core/config.js';
 import { claimMission, ensureMissions, missionProgress } from '../game/missions.js';
+import { createCharacterTrade, giftFriendResource, listCharacterTrades, listFriendRequests, listFriends, respondCharacterTrade, respondFriendRequest, searchPlayers, sendFriendRequest } from '../net/social.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -651,6 +652,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         avatar: AVATARS.includes(saved.avatar) ? saved.avatar : AVATARS[0],
         hat: profile.hat,
         skin: profile.skin,
+        characterId: saved.selected_character || profile.cos.characterId || 'capivara',
+        ownedCharacters: [...new Set(['capivara', ...(saved.owned_characters || []), ...(profile.cos.ownedCharacters || [])])],
       };
 
       let saveTimer = 0;
@@ -667,6 +670,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       nameInput.value = profile.name;
       const mirror = el.querySelector('.config-name-mirror');
       if (mirror) mirror.textContent = profile.name;
+      profile.save();
       syncUI();
       el.classList.remove('auth-pending');
       await submitPlayerRanking(profile).catch(() => {});
@@ -1653,6 +1657,72 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   }
 
   async function openLobbyModal() {
+    onClickSound?.();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay social-modal-overlay';
+    modal.innerHTML = `<div class="modal-window social-modal-window" role="dialog" aria-modal="true" aria-label="Amigos">
+      <div class="modal-header social-header"><div><span>RINHA ARENA</span><div class="modal-title">AMIGOS</div></div><button class="modal-close" aria-label="Fechar">✕</button></div>
+      <div class="social-layout">
+        <aside class="social-add"><h3>ADICIONAR AMIGO</h3><small>SEU ID</small><code>${escapeHtml(profile.playerId)}</code><div class="social-search"><input maxlength="40" placeholder="ID ou nickname"><button>BUSCAR</button></div><div class="social-search-results"></div></aside>
+        <section class="social-content"><nav class="social-tabs"><button class="active" data-tab="friends">AMIGOS</button><button data-tab="requests">SOLICITAÇÕES</button><button data-tab="trades">TROCAS</button></nav><div class="social-status"></div><div class="social-list"></div></section>
+      </div>
+      <div class="social-action-panel hidden"><div class="social-action-title"></div><div class="social-action-fields"></div><button class="social-action-confirm">CONFIRMAR</button><button class="social-action-cancel">CANCELAR</button></div>
+    </div>`;
+    uiRoot.appendChild(modal);
+    const list = modal.querySelector('.social-list');
+    const status = modal.querySelector('.social-status');
+    const panel = modal.querySelector('.social-action-panel');
+    let friends = [];
+    const names = Object.fromEntries(SHOP_CHARACTERS.map((item) => [item.id, item.name]));
+    const setStatus = (text, error = false) => { status.textContent = text; status.classList.toggle('error', error); };
+    const closePanel = () => panel.classList.add('hidden');
+    const friendCard = (friend) => `<article class="social-friend-card"><img src="./assets/ui/avatars/${AVATARS.includes(friend.avatar) ? friend.avatar : AVATARS[0]}" alt=""><div><strong>${escapeHtml(friend.nickname)}</strong><small>${friend.rank_points} PONTOS DE RANK</small></div><div class="social-friend-actions"><button data-gift="gold" data-id="${friend.id}" data-name="${escapeHtml(friend.nickname)}">DAR GOLD</button><button data-gift="rank" data-id="${friend.id}" data-name="${escapeHtml(friend.nickname)}">DAR RANK</button><button data-trade="${friend.id}" data-name="${escapeHtml(friend.nickname)}">TROCAR</button></div></article>`;
+    const loadTab = async (tab) => {
+      closePanel(); list.innerHTML = '<div class="social-empty">CARREGANDO...</div>'; setStatus('');
+      try {
+        if (tab === 'friends') { friends = await listFriends(); list.innerHTML = friends.length ? friends.map(friendCard).join('') : '<div class="social-empty">ADICIONE AMIGOS PELO ID OU NICKNAME.</div>'; }
+        if (tab === 'requests') { const rows = await listFriendRequests(); list.innerHTML = rows.length ? rows.map((row) => `<article class="social-friend-card"><img src="./assets/ui/avatars/${AVATARS.includes(row.avatar) ? row.avatar : AVATARS[0]}" alt=""><div><strong>${escapeHtml(row.nickname)}</strong><small>QUER SER SEU AMIGO</small></div><div class="social-friend-actions"><button data-request="${row.id}" data-accept="1">ACEITAR</button><button class="danger" data-request="${row.id}" data-accept="0">RECUSAR</button></div></article>`).join('') : '<div class="social-empty">NENHUMA SOLICITAÇÃO PENDENTE.</div>'; }
+        if (tab === 'trades') { const rows = await listCharacterTrades(); list.innerHTML = rows.length ? rows.map((row) => `<article class="social-friend-card"><div class="social-trade-icon">⇄</div><div><strong>${escapeHtml(row.nickname)}</strong><small>OFERECE ${escapeHtml(names[row.offered_character] || row.offered_character)} POR ${escapeHtml(names[row.requested_character] || row.requested_character)}</small></div><div class="social-friend-actions"><button data-trade-request="${row.id}" data-accept="1">ACEITAR</button><button class="danger" data-trade-request="${row.id}" data-accept="0">RECUSAR</button></div></article>`).join('') : '<div class="social-empty">NENHUMA PROPOSTA DE TROCA.</div>'; }
+      } catch (error) { list.innerHTML = ''; setStatus(error.message, true); }
+    };
+    modal.querySelectorAll('.social-tabs button').forEach((button) => button.addEventListener('click', () => { modal.querySelectorAll('.social-tabs button').forEach((item) => item.classList.toggle('active', item === button)); loadTab(button.dataset.tab); }));
+    modal.querySelector('.social-search button').addEventListener('click', async () => {
+      const query = modal.querySelector('.social-search input').value.trim(); if (!query) return;
+      const output = modal.querySelector('.social-search-results'); output.innerHTML = 'BUSCANDO...';
+      try { const rows = await searchPlayers(query); output.innerHTML = rows.length ? rows.map((row) => `<div><span>${escapeHtml(row.nickname)}</span><button data-add="${row.id}">ADICIONAR</button></div>`).join('') : 'NENHUM JOGADOR ENCONTRADO'; } catch (error) { output.textContent = error.message; }
+    });
+    modal.querySelector('.social-search-results').addEventListener('click', async (event) => { const button = event.target.closest('[data-add]'); if (!button) return; button.disabled = true; try { await sendFriendRequest(button.dataset.add); button.textContent = 'ENVIADO'; } catch (error) { setStatus(error.message, true); button.disabled = false; } });
+    list.addEventListener('click', async (event) => {
+      const request = event.target.closest('[data-request]'); const tradeRequest = event.target.closest('[data-trade-request]');
+      if (request) { await respondFriendRequest(request.dataset.request, request.dataset.accept === '1').catch((error) => setStatus(error.message, true)); return loadTab('requests'); }
+      if (tradeRequest) { await respondCharacterTrade(tradeRequest.dataset.tradeRequest, tradeRequest.dataset.accept === '1').catch((error) => setStatus(error.message, true)); return loadTab('trades'); }
+      const gift = event.target.closest('[data-gift]'); const trade = event.target.closest('[data-trade]');
+      if (gift) {
+        panel.classList.remove('hidden'); panel.dataset.action = 'gift'; panel.dataset.id = gift.dataset.id; panel.dataset.kind = gift.dataset.gift;
+        panel.querySelector('.social-action-title').textContent = `${gift.dataset.gift === 'gold' ? 'DAR GOLD' : 'DAR PONTOS DE RANK'} PARA ${gift.dataset.name}`;
+        panel.querySelector('.social-action-fields').innerHTML = '<input class="social-amount" type="number" min="1" step="1" placeholder="Quantidade">';
+      } else if (trade) {
+        const friend = friends.find((item) => item.id === trade.dataset.trade); const mine = (profile.cos.ownedCharacters || []).filter((id) => id !== 'capivara'); const theirs = (friend?.owned_characters || []).filter((id) => id !== 'capivara');
+        panel.classList.remove('hidden'); panel.dataset.action = 'trade'; panel.dataset.id = trade.dataset.trade;
+        panel.querySelector('.social-action-title').textContent = `PROPOR TROCA COM ${trade.dataset.name}`;
+        panel.querySelector('.social-action-fields').innerHTML = `<label>VOCÊ OFERECE<select class="social-offer">${mine.map((id) => `<option value="${id}">${escapeHtml(names[id] || id)}</option>`).join('')}</select></label><label>VOCÊ QUER<select class="social-request">${theirs.map((id) => `<option value="${id}">${escapeHtml(names[id] || id)}</option>`).join('')}</select></label>`;
+        panel.querySelector('.social-action-confirm').disabled = !mine.length || !theirs.length;
+      }
+    });
+    panel.querySelector('.social-action-cancel').addEventListener('click', closePanel);
+    panel.querySelector('.social-action-confirm').addEventListener('click', async (event) => {
+      event.currentTarget.disabled = true;
+      try {
+        if (panel.dataset.action === 'gift') { const amount = Math.floor(Number(panel.querySelector('.social-amount').value)); await giftFriendResource(panel.dataset.id, panel.dataset.kind, amount); if (panel.dataset.kind === 'gold') profile.gold -= amount; else profile.rankXp -= amount; profile.save(); syncUI(); }
+        else await createCharacterTrade(panel.dataset.id, panel.querySelector('.social-offer').value, panel.querySelector('.social-request').value);
+        setStatus(panel.dataset.action === 'gift' ? 'PRESENTE ENVIADO!' : 'PROPOSTA DE TROCA ENVIADA!'); closePanel();
+      } catch (error) { setStatus(error.message, true); event.currentTarget.disabled = false; }
+    });
+    const close = () => modal.remove(); modal.querySelector('.modal-close').addEventListener('click', close); modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    loadTab('friends');
+  }
+
+  async function openRoomsLegacyModal() {
     onClickSound?.();
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
