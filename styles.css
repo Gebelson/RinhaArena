@@ -2544,6 +2544,39 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
 .auth-message.error { color: #c72d20; }
 .auth-switch { margin-top: auto; align-self: center; color: #111; }
 
+.missions-modal-window { width: min(850px, 94vw); height: min(760px, 90dvh); background: linear-gradient(155deg, #142751, #070d20 72%); border: 3px solid #32caff; box-shadow: 0 18px 70px #000c, 0 0 28px #1dbcf955; }
+.missions-header { background: linear-gradient(90deg, #07132f, #132b61); border-bottom: 1px solid #38cfff66; }
+.missions-kicker { color: #36d7ff; font: 900 10px/1 'Barlow Condensed', sans-serif; letter-spacing: .22em; }
+.missions-count { margin-left: auto; color: #ffd34d; font: 900 12px/1 'Barlow Condensed', sans-serif; letter-spacing: .1em; }
+.missions-list { display: grid; gap: 9px; padding: 14px; overflow-y: auto; }
+.mission-card { display: grid; grid-template-columns: 42px minmax(0,1fr) 145px 118px; align-items: center; gap: 12px; min-height: 76px; padding: 9px 12px; border: 1px solid #284d89; border-radius: 11px; background: linear-gradient(100deg, #101d3b, #0b142b); box-shadow: inset 0 1px #ffffff0d, 0 5px 13px #0005; }
+.mission-card.complete { border-color: #ffd34d; box-shadow: inset 0 0 18px #ffc92816, 0 0 12px #ffc92825; }
+.mission-number { color: #4cdcff; font: 900 23px/1 'Barlow Condensed', sans-serif; text-align: center; }
+.mission-main { min-width: 0; }
+.mission-main > strong { display: block; overflow: hidden; color: #f4f7ff; font: 900 17px/1.1 'Barlow Condensed', sans-serif; text-transform: uppercase; text-overflow: ellipsis; white-space: nowrap; }
+.mission-progress { position: relative; height: 17px; margin-top: 9px; overflow: hidden; border: 2px solid #071023; border-radius: 8px; background: #050a16; box-shadow: inset 0 1px 4px #000b; }
+.mission-progress i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #15a9ed, #35e7ff); box-shadow: 0 0 10px #2cdcff88; }
+.mission-card.complete .mission-progress i { background: linear-gradient(90deg, #ffad1f, #ffe05e); }
+.mission-progress span { position: absolute; inset: 0; color: #fff; font: 900 11px/13px sans-serif; text-align: center; text-shadow: 0 1px 3px #000; }
+.mission-rewards { display: flex; justify-content: center; gap: 7px; flex-wrap: wrap; }
+.mission-rewards span { display: flex; align-items: center; gap: 3px; padding: 5px 7px; border: 1px solid #66531e; border-radius: 7px; background: #221c0c; color: #ffd755; font: 900 12px/1 sans-serif; }
+.mission-rewards img { width: 20px; height: 20px; object-fit: contain; }
+.mission-rewards .mission-xp { border-color: #256f9d; background: #0c2840; color: #50d9ff; }
+.mission-claim { padding: 11px 8px; border: 1px solid #e49c1f; border-radius: 8px; background: linear-gradient(#ffe16a, #eea91d); color: #10162a; font: 900 13px/1 'Barlow Condensed', sans-serif; cursor: pointer; }
+.mission-claim:disabled { border-color: #41516c; background: linear-gradient(#4b5870, #303a4d); color: #aab5ca; cursor: default; opacity: .75; }
+@media (max-width: 760px), (orientation: landscape) and (max-height: 560px) {
+  .missions-modal-window { width: 97vw; height: 94dvh; }
+  .missions-list { gap: 6px; padding: 8px; }
+  .mission-card { grid-template-columns: 30px minmax(0,1fr) 116px 94px; min-height: 58px; gap: 7px; padding: 6px 8px; }
+  .mission-number { font-size: 17px; }
+  .mission-main > strong { font-size: 13px; }
+  .mission-progress { height: 14px; margin-top: 5px; }
+  .mission-progress span { font-size: 9px; line-height: 10px; }
+  .mission-rewards span { padding: 3px 5px; font-size: 10px; }
+  .mission-rewards img { width: 15px; height: 15px; }
+  .mission-claim { padding: 8px 4px; font-size: 10px; }
+}
+
 @media (orientation: landscape) and (max-height: 700px) {
   .auth-overlay { padding: 4dvh 4vw; }
   .auth-window { width: min(900px, 92vw); height: 90dvh; min-height: 0; border-width: 3px; border-radius: 13px; box-shadow: 0 12px 45px #000e, 0 0 0 12px #000; }

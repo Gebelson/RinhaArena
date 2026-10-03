@@ -16,6 +16,7 @@ import { getPlayerDiscipline } from '../net/discipline.js';
 import { openAuthGate } from './auth.js';
 import { applySettings, getSettings, keyLabel, saveSettings } from '../settings.js';
 import { CONFIG } from '../core/config.js';
+import { claimMission, ensureMissions, missionProgress } from '../game/missions.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -628,7 +629,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   el.querySelector('.player-avatar').addEventListener('click', () => openAvatarModal());
   el.querySelector('.rank-badge-wrap').addEventListener('click', () => openRankProgressModal());
   el.querySelector('.btn-ranking').addEventListener('click', () => openLeaderboardModal());
-  el.querySelector('.btn-missions').addEventListener('click', () => openHowToPlayModal());
+  el.querySelector('.btn-missions').addEventListener('click', () => openMissionsModal());
 
   // Initial Sync
   syncUI();
@@ -657,6 +658,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         localStorage.setItem('blast.profile', JSON.stringify({
           playerId: this.playerId, name: this.name, gold: this.gold, cos: this.cos,
           friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats,
+          missionStats: this.missionStats, missions: this.missions,
         }));
         clearTimeout(saveTimer);
         saveTimer = window.setTimeout(() => saveAccountProfile(this).catch((error) => console.warn('[profile] sync failed:', error.message)), 350);
@@ -1097,6 +1099,52 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       hash = Math.imul(hash, 16777619);
     }
     return `q${(hash >>> 0).toString(36)}`.slice(0, 12);
+  }
+
+  function openMissionsModal() {
+    onClickSound?.();
+    ensureMissions(profile);
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay missions-modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-window missions-modal-window" role="dialog" aria-modal="true" aria-label="Missões">
+        <div class="modal-header missions-header">
+          <div><span class="missions-kicker">ARENA ONLINE</span><div class="modal-title">MISSÕES</div></div>
+          <div class="missions-count">10 MISSÕES ATIVAS</div>
+          <button class="modal-close" aria-label="Fechar">✕</button>
+        </div>
+        <div class="missions-list"></div>
+      </div>`;
+    uiRoot.appendChild(modal);
+    const list = modal.querySelector('.missions-list');
+    const render = () => {
+      list.innerHTML = profile.missions.map((mission, index) => {
+        const progress = missionProgress(profile, mission);
+        const complete = progress >= mission.target;
+        const percent = Math.round((progress / mission.target) * 100);
+        return `<article class="mission-card ${complete ? 'complete' : ''}">
+          <div class="mission-number">${String(index + 1).padStart(2, '0')}</div>
+          <div class="mission-main"><strong>${escapeHtml(mission.title)}</strong><div class="mission-progress"><i style="width:${percent}%"></i><span>${progress}/${mission.target}</span></div></div>
+          <div class="mission-rewards"><span><img src="./assets/ui/capicoin.png" alt="Gold">+${mission.gold}</span><span class="mission-xp">XP +${mission.xp}</span></div>
+          <button class="mission-claim" data-mission="${mission.id}" ${complete ? '' : 'disabled'}>${complete ? 'RESGATAR' : 'EM PROGRESSO'}</button>
+        </article>`;
+      }).join('');
+    };
+    render();
+    const close = () => modal.remove();
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    list.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-mission]');
+      if (!button || button.disabled) return;
+      const reward = claimMission(profile, button.dataset.mission);
+      if (!reward) return;
+      profile.save();
+      syncUI();
+      onClickSound?.();
+      render();
+    });
+    profile.save();
   }
 
   function queueCapacity(selection) {

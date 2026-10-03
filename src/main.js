@@ -21,6 +21,7 @@ import { getRankProgress } from './content/ranks.js';
 import { submitPlayerRanking } from './net/ranking.js';
 import { registerPlayerAbandon } from './net/discipline.js';
 import { applySettings, getSettings } from './settings.js';
+import { recordMissionMatch } from './game/missions.js';
 
 const isTouch = navigator.maxTouchPoints > 0
   || matchMedia('(pointer: coarse)').matches
@@ -51,8 +52,10 @@ const profile = (() => {
       wins: Math.max(0, Number(data.rankStats?.wins) || 0),
       losses: Math.max(0, Number(data.rankStats?.losses) || 0),
     },
+    missionStats: data.missionStats || {},
+    missions: Array.isArray(data.missions) ? data.missions : [],
     save() {
-      localStorage.setItem('blast.profile', JSON.stringify({ playerId: this.playerId, name: this.name, gold: this.gold, cos: this.cos, friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats }));
+      localStorage.setItem('blast.profile', JSON.stringify({ playerId: this.playerId, name: this.name, gold: this.gold, cos: this.cos, friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats, missionStats: this.missionStats, missions: this.missions }));
     },
   };
 })();
@@ -329,6 +332,7 @@ function startMatch(transport) {
       profile.rankStats.matches += 1;
       if (won) profile.rankStats.wins += 1;
       else if (!draw) profile.rankStats.losses += 1;
+      recordMissionMatch(profile, { won, draw, ranked: event.ranked, modeId: view.modeId, gold: gainedGold });
       profile.save();
       submitPlayerRanking(profile).catch((error) => console.warn('[rank] sync failed:', error.message));
       const { rank } = getRankProgress(profile.rankXp);
