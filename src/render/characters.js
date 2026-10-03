@@ -184,7 +184,7 @@ let redCapivaraMat = null;
 export function getBlueCapivaraTexture() {
   if (!blueCapivaraTex) {
     const loader = new THREE.TextureLoader();
-    blueCapivaraTex = loader.load('./models/Color_blue_v3.jpg');
+    blueCapivaraTex = loader.load('./models/Color_blue_v5.jpg');
     blueCapivaraTex.flipY = false;
     blueCapivaraTex.colorSpace = THREE.SRGBColorSpace;
   }
@@ -206,7 +206,7 @@ export function getCapivaraModel() {
     const loader = new GLTFLoader();
     capivaraPromise = new Promise((resolve) => {
       loader.load(
-        './models/capivara_2_color_v2.glb',
+        './models/capivara_2_color_v4.glb',
         (gltf) => {
           const root = gltf.scene;
 
@@ -428,7 +428,7 @@ export class CharacterView {
       // Team colors: Blue team capivaras wear the stylish Blue jacket!
       if (this.team === 'blue') {
         capivara.traverse((o) => {
-          if (o.isMesh && o.material) {
+          if (o.isMesh && o.name === 'capivara_jacket' && o.material) {
             o.material = getBlueCapivaraMaterial(o.material);
           }
         });
@@ -604,7 +604,7 @@ export class CharacterView {
       if (this.capivara) {
         const isBlue = this.team === 'blue';
         this.capivara.traverse((o) => {
-          if (o.isMesh && o.material) {
+          if (o.isMesh && o.name === 'capivara_jacket' && o.material) {
             o.material = isBlue ? getBlueCapivaraMaterial(o.material) : (redCapivaraMat || o.material);
           }
         });
