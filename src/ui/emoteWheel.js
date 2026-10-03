@@ -44,7 +44,8 @@ export function createEmoteWheel(uiRoot, { onSelect, getOwnedEmotes } = {}) {
     if (open || /INPUT|TEXTAREA|SELECT/.test(event.target?.tagName)) return;
     open = true;
     selected = -1;
-    activeEmotes = [...new Set((getOwnedEmotes?.() || []).filter((id) => getEmote(id)))].slice(0, 8);
+    const owned = new Set((getOwnedEmotes?.() || []).filter((id) => getEmote(id)));
+    activeEmotes = items.map((item) => item.dataset.id).filter((id) => owned.has(id)).slice(0, 8);
     root.classList.toggle('empty', activeEmotes.length === 0);
     root.classList.add('open');
     document.body.classList.add('emote-wheel-open');
