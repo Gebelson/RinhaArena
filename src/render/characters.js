@@ -11,6 +11,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { TEAMS } from '../core/config.js';
 import { clamp, lerp } from '../core/math.js';
+import { getEmote } from '../content/emotes.js';
 
 let gradTex = null;
 export function toonGradient() {
@@ -762,6 +763,8 @@ export class CharacterView {
   }
 
   showEmote(value) {
+    const emote = getEmote(value);
+    if (!emote) return;
     const canvas = this.emote.userData.canvas;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -769,13 +772,19 @@ export class CharacterView {
     ctx.arc(64, 64, 53, 0, Math.PI * 2);
     ctx.fillStyle = '#081630ee'; ctx.fill();
     ctx.lineWidth = 6; ctx.strokeStyle = '#36d9ff'; ctx.stroke();
-    ctx.font = '64px \"Segoe UI Emoji\", sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(String(value || '').slice(0, 8), 64, 67);
-    this.emote.material.map.needsUpdate = true;
-    this.emote.material.opacity = 1;
-    this.emote.visible = true;
-    this.emoteTime = 2.5;
+    const image = new Image();
+    const requested = value;
+    this.pendingEmote = requested;
+    image.onload = () => {
+      if (this.pendingEmote !== requested) return;
+      ctx.save(); ctx.beginPath(); ctx.arc(64, 64, 49, 0, Math.PI * 2); ctx.clip();
+      ctx.drawImage(image, 15, 15, 98, 98); ctx.restore();
+      this.emote.material.map.needsUpdate = true;
+      this.emote.material.opacity = 1;
+      this.emote.visible = true;
+      this.emoteTime = 2.5;
+    };
+    image.src = emote.image;
   }
 
   update(p, dt) {

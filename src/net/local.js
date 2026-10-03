@@ -35,8 +35,8 @@ export function createLocalGame({ profile, levelId, modeId, config, teamSize, te
     drainChatMessages() { return chatMessages.splice(0, chatMessages.length); },
     drainControlEvents() { return controlEvents.splice(0, controlEvents.length); },
     sendEmote(emote) {
-      const value = String(emote || '').slice(0, 8);
-      if (value) controlEvents.push({ type: 'emote', participantId: myId, emote: value });
+      const value = String(emote || '').slice(0, 40);
+      if (value && (profile.cos?.ownedEmotes || []).includes(value)) controlEvents.push({ type: 'emote', participantId: myId, emote: value });
     },
     requestSurrender() {
       const me = host.sim.state.players.find((player) => player.id === myId);

@@ -18,6 +18,7 @@ import { applySettings, getSettings, keyLabel, saveSettings } from '../settings.
 import { CONFIG } from '../core/config.js';
 import { claimMission, ensureMissions, missionProgress } from '../game/missions.js';
 import { createCharacterTrade, giftFriendResource, listCharacterTrades, listFriendRequests, listFriends, respondCharacterTrade, respondFriendRequest, searchPlayers, sendFriendRequest } from '../net/social.js';
+import { EMOTES, EMOTE_PRICE } from '../content/emotes.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -105,6 +106,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   if (!AVATARS.includes(profile.cos.avatar)) profile.cos.avatar = AVATARS[0];
   profile.cos.characterId = ['crocodilo', 'porco', 'pato', 'gato'].includes(profile.cos.characterId) ? profile.cos.characterId : 'capivara';
   profile.cos.ownedCharacters = [...new Set(['capivara', ...(profile.cos.ownedCharacters || [])])];
+  profile.cos.ownedEmotes = [...new Set(profile.cos.ownedEmotes || [])];
 
   let selectedMode = 'ctf';
   let selectedLevel = DEFAULT_LEVEL in MAP_DATA ? DEFAULT_LEVEL : 'foundry';
@@ -654,6 +656,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         skin: profile.skin,
         characterId: saved.selected_character || profile.cos.characterId || 'capivara',
         ownedCharacters: [...new Set(['capivara', ...(saved.owned_characters || []), ...(profile.cos.ownedCharacters || [])])],
+        ownedEmotes: [...new Set([...(saved.owned_emotes || []), ...(profile.cos.ownedEmotes || [])])],
       };
 
       let saveTimer = 0;
@@ -684,15 +687,17 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     modal.innerHTML = `
       <div class="modal-window shop-modal-window" role="dialog" aria-modal="true" aria-label="Loja de personagens">
         <div class="modal-header">
-          <div class="modal-title">LOJA DE PERSONAGENS</div>
+          <div class="modal-title">LOJA</div>
           <div class="shop-balance"><img src="./assets/ui/capicoin.png" alt=""><strong>${Math.max(0, Number(profile.gold) || 0).toLocaleString('pt-BR')}</strong></div>
           <button class="modal-close" aria-label="Fechar">✕</button>
         </div>
+        <div class="shop-tabs"><button class="active" data-shop-tab="characters">PERSONAGENS</button><button data-shop-tab="emotes">EMOTES</button></div>
         <div class="shop-character-grid"></div>
       </div>`;
     uiRoot.appendChild(modal);
 
     const grid = modal.querySelector('.shop-character-grid');
+    let shopTab = 'characters';
     const renderCharacters = () => {
       const owned = new Set(profile.cos.ownedCharacters || ['capivara']);
       grid.innerHTML = SHOP_CHARACTERS.map((character) => {
@@ -715,13 +720,46 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
             </article>`;
       }).join('');
     };
-    renderCharacters();
+    const renderEmotes = () => {
+      const owned = new Set(profile.cos.ownedEmotes || []);
+      grid.innerHTML = EMOTES.map((emote) => {
+        const acquired = owned.has(emote.id);
+        const canAfford = Number(profile.gold) >= EMOTE_PRICE;
+        return `<article class="shop-character-card shop-emote-card ${acquired ? 'acquired' : 'available'}">
+          <div class="shop-character-art"><img src="${emote.image}" alt="${emote.name}"></div>
+          <div class="shop-character-info"><strong>${emote.name}</strong><span class="shop-price"><img src="./assets/ui/capicoin.png" alt="Gold">${EMOTE_PRICE}</span></div>
+          <button class="shop-character-action" type="button" data-emote="${emote.id}" ${(acquired || !canAfford) ? 'disabled' : ''}>${acquired ? 'ADQUIRIDO' : canAfford ? 'COMPRAR' : 'SALDO INSUFICIENTE'}</button>
+        </article>`;
+      }).join('');
+    };
+    const renderShop = () => shopTab === 'emotes' ? renderEmotes() : renderCharacters();
+    renderShop();
 
     const close = () => modal.remove();
     const closeButton = modal.querySelector('.modal-close');
     closeButton.addEventListener('click', close);
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    modal.querySelector('.shop-tabs').addEventListener('click', (event) => {
+      const tab = event.target.closest('[data-shop-tab]');
+      if (!tab) return;
+      shopTab = tab.dataset.shopTab;
+      modal.querySelectorAll('[data-shop-tab]').forEach((button) => button.classList.toggle('active', button === tab));
+      renderShop();
+    });
     grid.addEventListener('click', (event) => {
+      const emoteButton = event.target.closest('[data-emote]');
+      if (emoteButton && !emoteButton.disabled) {
+        const ownedEmotes = new Set(profile.cos.ownedEmotes || []);
+        if (!ownedEmotes.has(emoteButton.dataset.emote) && Number(profile.gold) >= EMOTE_PRICE) {
+          profile.gold = Math.max(0, Number(profile.gold) - EMOTE_PRICE);
+          ownedEmotes.add(emoteButton.dataset.emote);
+          profile.cos.ownedEmotes = [...ownedEmotes];
+          profile.save(); onClickSound?.(); syncUI();
+          modal.querySelector('.shop-balance strong').textContent = Number(profile.gold).toLocaleString('pt-BR');
+          renderEmotes();
+        }
+        return;
+      }
       const button = event.target.closest('[data-character]');
       if (!button || button.disabled) return;
       const characterId = button.dataset.character;

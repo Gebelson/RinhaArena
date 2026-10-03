@@ -184,7 +184,10 @@ function startMatch(transport) {
     muted: sfx.muted,
   });
   const input = createInput({ uiRoot, isTouch });
-  const emoteWheel = createEmoteWheel(uiRoot, { onSelect: (emote) => transport.sendEmote?.(emote) });
+  const emoteWheel = createEmoteWheel(uiRoot, {
+    onSelect: (emote) => transport.sendEmote?.(emote),
+    getOwnedEmotes: () => profile.cos.ownedEmotes || [],
+  });
   const labPanel = transport.modeId?.startsWith('sandbox')
     ? createLabPanel(uiRoot, transport)
     : null;
