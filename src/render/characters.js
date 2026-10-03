@@ -723,7 +723,7 @@ export class CharacterView {
     this.name.position.y = 2.45;
     this.group.add(this.name);
     this.emote = makeEmoteSprite();
-    this.emote.position.y = 3.15;
+    this.emote.position.y = 3.9;
     this.group.add(this.emote);
     this.emoteTime = 0;
     if (isMe) {
@@ -788,7 +788,7 @@ export class CharacterView {
     if (this.emoteTime > 0) {
       this.emoteTime = Math.max(0, this.emoteTime - dt);
       this.emote.visible = this.emoteTime > 0;
-      this.emote.position.y = 3.15 + Math.sin(this.time * 4) * 0.06;
+      this.emote.position.y = 3.9 + Math.sin(this.time * 4) * 0.06;
       this.emote.material.opacity = Math.min(1, this.emoteTime * 2);
     }
 
