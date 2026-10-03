@@ -194,9 +194,7 @@ export function getBlueCapivaraTexture() {
 export function getBlueCapivaraMaterial(baseMat) {
   if (!blueCapivaraMat && baseMat) {
     blueCapivaraMat = baseMat.clone();
-    // Keep the model's own UV texture. The previous team texture belonged to
-    // the old mesh and produced overlapping red/blue fragments on this model.
-    blueCapivaraMat.color.set('#b8d8ff');
+    blueCapivaraMat.map = getBlueCapivaraTexture();
     blueCapivaraMat.needsUpdate = true;
   }
   return blueCapivaraMat;
@@ -208,7 +206,7 @@ export function getCapivaraModel() {
     const loader = new GLTFLoader();
     capivaraPromise = new Promise((resolve) => {
       loader.load(
-        './models/capivara_2_rigged.glb',
+        './models/capivara_2_color_v2.glb',
         (gltf) => {
           const root = gltf.scene;
 
