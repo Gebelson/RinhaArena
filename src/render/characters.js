@@ -184,7 +184,7 @@ let redCapivaraMat = null;
 export function getBlueCapivaraTexture() {
   if (!blueCapivaraTex) {
     const loader = new THREE.TextureLoader();
-    blueCapivaraTex = loader.load('./models/Color_blue_v2.jpg');
+    blueCapivaraTex = loader.load('./models/Color_blue_v3.jpg');
     blueCapivaraTex.flipY = false;
     blueCapivaraTex.colorSpace = THREE.SRGBColorSpace;
   }
