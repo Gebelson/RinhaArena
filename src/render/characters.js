@@ -194,7 +194,9 @@ export function getBlueCapivaraTexture() {
 export function getBlueCapivaraMaterial(baseMat) {
   if (!blueCapivaraMat && baseMat) {
     blueCapivaraMat = baseMat.clone();
-    blueCapivaraMat.map = getBlueCapivaraTexture();
+    // Keep the model's own UV texture. The previous team texture belonged to
+    // the old mesh and produced overlapping red/blue fragments on this model.
+    blueCapivaraMat.color.set('#b8d8ff');
     blueCapivaraMat.needsUpdate = true;
   }
   return blueCapivaraMat;
@@ -1008,9 +1010,9 @@ export class CharacterView {
         // --- 4. ARMS, ELBOWS & HANDS (DYNAMIC MASCOT POSTURE) ---
         // Natural mascot stance: arms are angled down-forward (not glued to sides),
         // with elbows bent ~65° so cute paws are held in front of chest/belly.
-        const armDrop = 0.72; // ~41° drop from horizontal
+        const armDrop = 0.45; // keep the bulkier model's shoulders open
         const armFwd = -0.28; // ~16° forward angle
-        const elbowBend = -1.10; // ~63° elbow flexion forward
+        const elbowBend = -0.55; // avoid folding the forearms into the torso
 
         if (ko || knocked) {
           // Splayed limp ragdoll arms
