@@ -27,6 +27,7 @@ const SHOP_CHARACTERS = [
   ['macaco', 'Macaco'], ['pato', 'Pato'], ['pavao', 'Pavão'], ['porco', 'Porco'],
   ['tartaruga', 'Tartaruga'], ['tubarao', 'Tubarão'],
 ].map(([id, name]) => ({ id, name, acquired: id === 'capivara' }));
+const CHARACTER_PRICE = 900;
 
 export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepareOnline, onStartPrepared, onPlayLab, onClickSound }) {
   const el = document.createElement('div');
@@ -100,6 +101,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   if (!profile.hat) profile.hat = 'crown';
   if (!profile.skin) profile.skin = REFERENCE_SKINS[6];
   if (!AVATARS.includes(profile.cos.avatar)) profile.cos.avatar = AVATARS[0];
+  profile.cos.characterId = profile.cos.characterId === 'crocodilo' ? 'crocodilo' : 'capivara';
+  profile.cos.ownedCharacters = [...new Set(['capivara', ...(profile.cos.ownedCharacters || [])])];
 
   let selectedMode = 'ctf';
   let selectedLevel = DEFAULT_LEVEL in MAP_DATA ? DEFAULT_LEVEL : 'foundry';
@@ -679,28 +682,57 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
           <div class="shop-balance"><img src="./assets/ui/capicoin.png" alt=""><strong>${Math.max(0, Number(profile.gold) || 0).toLocaleString('pt-BR')}</strong></div>
           <button class="modal-close" aria-label="Fechar">✕</button>
         </div>
-        <div class="shop-character-grid">
-          ${SHOP_CHARACTERS.map((character) => `
-            <article class="shop-character-card ${character.acquired ? 'acquired' : 'locked'}">
-              <div class="shop-character-art">
-                <img src="./assets/ui/shop/${character.id}.webp" alt="${character.acquired ? character.name : 'Personagem oculto'}">
-                ${character.acquired ? '' : '<span class="shop-lock" aria-hidden="true">🔒</span>'}
-              </div>
-              <div class="shop-character-info">
-                <strong>${character.acquired ? character.name : '???'}</strong>
-                <span class="shop-price"><img src="./assets/ui/capicoin.png" alt="Capycoins">900</span>
-              </div>
-              <button class="shop-character-action" type="button" disabled>${character.acquired ? 'ADQUIRIDO' : 'INDISPONÍVEL'}</button>
-            </article>`).join('')}
-        </div>
+        <div class="shop-character-grid"></div>
       </div>`;
     uiRoot.appendChild(modal);
 
+    const grid = modal.querySelector('.shop-character-grid');
+    const renderCharacters = () => {
+      const owned = new Set(profile.cos.ownedCharacters || ['capivara']);
+      grid.innerHTML = SHOP_CHARACTERS.map((character) => {
+        const available = character.id === 'capivara' || character.id === 'crocodilo';
+        const acquired = owned.has(character.id);
+        const selected = profile.cos.characterId === character.id;
+        const canAfford = Number(profile.gold) >= CHARACTER_PRICE;
+        const label = selected ? 'SELECIONADO' : acquired ? 'USAR' : available ? (canAfford ? 'COMPRAR' : 'SALDO INSUFICIENTE') : 'INDISPONÍVEL';
+        return `
+            <article class="shop-character-card ${acquired ? 'acquired' : available ? 'available' : 'locked'} ${selected ? 'selected' : ''}">
+              <div class="shop-character-art">
+                <img src="./assets/ui/shop/${character.id}.webp" alt="${available ? character.name : 'Personagem oculto'}">
+                ${available ? '' : '<span class="shop-lock" aria-hidden="true">🔒</span>'}
+              </div>
+              <div class="shop-character-info">
+                <strong>${available ? character.name : '???'}</strong>
+                <span class="shop-price"><img src="./assets/ui/capicoin.png" alt="Capycoins">${CHARACTER_PRICE}</span>
+              </div>
+              <button class="shop-character-action" type="button" data-character="${character.id}" ${(!available || selected || (!acquired && !canAfford)) ? 'disabled' : ''}>${label}</button>
+            </article>`;
+      }).join('');
+    };
+    renderCharacters();
+
     const close = () => modal.remove();
     const closeButton = modal.querySelector('.modal-close');
-    const grid = modal.querySelector('.shop-character-grid');
     closeButton.addEventListener('click', close);
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    grid.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-character]');
+      if (!button || button.disabled) return;
+      const characterId = button.dataset.character;
+      const owned = new Set(profile.cos.ownedCharacters || ['capivara']);
+      if (!owned.has(characterId)) {
+        if (characterId !== 'crocodilo' || Number(profile.gold) < CHARACTER_PRICE) return;
+        profile.gold = Math.max(0, Number(profile.gold) - CHARACTER_PRICE);
+        owned.add(characterId);
+        profile.cos.ownedCharacters = [...owned];
+      }
+      profile.cos.characterId = characterId;
+      profile.save();
+      onClickSound?.();
+      modal.querySelector('.shop-balance strong').textContent = Number(profile.gold).toLocaleString('pt-BR');
+      syncUI();
+      renderCharacters();
+    });
     closeButton.focus({ preventScroll: true });
     grid.scrollTop = 0;
     requestAnimationFrame(() => { grid.scrollTop = 0; });

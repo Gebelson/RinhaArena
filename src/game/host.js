@@ -93,7 +93,7 @@ export class GameHost {
     return this.sim.state.players.filter((p) => p.team === team && !p.bot).length;
   }
 
-  addHuman({ name, displayName = name, userId, participantId, cos, team: requestedTeam, spawnIndex }) {
+  addHuman({ name, displayName = name, userId, participantId, cos, characterId = cos?.characterId || 'capivara', team: requestedTeam, spawnIndex }) {
     const validName = validDisplayName(displayName);
     if (!validName) throw new Error('[MATCH] refusing HUMAN without a valid profile name');
     if (this.modeId === 'ffa') {
@@ -102,7 +102,7 @@ export class GameHost {
         const bot = this.sim.state.players.find((p) => p.bot);
         if (bot) this.remove(bot.id);
       }
-      const id = addPlayer(this.sim, { participantId, type: ParticipantType.HUMAN, userId, displayName: validName, team: 'free', cos, spawnIndex });
+      const id = addPlayer(this.sim, { participantId, type: ParticipantType.HUMAN, userId, displayName: validName, characterId, team: 'free', cos, spawnIndex });
       this.humanLastActive.set(id, Date.now());
       return id;
     }
@@ -129,7 +129,7 @@ export class GameHost {
       const bot = this.sim.state.players.find((p) => p.team === team && p.bot);
       if (bot) this.remove(bot.id);
     }
-    const id = addPlayer(this.sim, { participantId, type: ParticipantType.HUMAN, userId, displayName: validName, team, cos, spawnIndex });
+    const id = addPlayer(this.sim, { participantId, type: ParticipantType.HUMAN, userId, displayName: validName, characterId, team, cos, spawnIndex });
     this.humanLastActive.set(id, Date.now());
     return id;
   }

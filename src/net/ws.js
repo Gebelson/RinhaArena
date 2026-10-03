@@ -517,7 +517,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       }
       const record = {
         clientId: message.clientId, userId: message.userId, displayName,
-        characterId: 'capivara', cos: message.cos, team: message.team, connected: true, participantId: null,
+        characterId: message.cos?.characterId === 'crocodilo' ? 'crocodilo' : 'capivara', cos: message.cos, team: message.team, connected: true, participantId: null,
         lastSeenAt: Date.now(),
       };
       clientPlayers.set(message.clientId, record);
@@ -959,7 +959,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       remoteQueueEndsAt = session.deadlineAt;
       const hostRecord = {
         clientId, userId: profile.playerId, displayName: officialName,
-        characterId: 'capivara', cos: { ...profile.cos }, team, connected: true, participantId: null, lastSeenAt: Date.now(),
+        characterId: profile.cos?.characterId === 'crocodilo' ? 'crocodilo' : 'capivara', cos: { ...profile.cos }, team, connected: true, participantId: null, lastSeenAt: Date.now(),
       };
       clientPlayers.set(clientId, hostRecord);
       session.players.set(hostRecord.userId, hostRecord);

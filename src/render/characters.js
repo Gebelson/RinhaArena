@@ -177,6 +177,8 @@ function getStarMaterial() {
 // --- capivara 3d model loader & team textures --------------------------
 let capivaraTemplate = null;
 let capivaraPromise = null;
+let crocodiloTemplate = null;
+let crocodiloPromise = null;
 let blueCapivaraTex = null;
 let blueCapivaraMat = null;
 let redCapivaraMat = null;
@@ -263,6 +265,44 @@ export function getCapivaraModel() {
   return capivaraPromise;
 }
 
+export function getCrocodiloModel() {
+  if (crocodiloTemplate) return Promise.resolve(crocodiloTemplate);
+  if (!crocodiloPromise) {
+    const loader = new GLTFLoader();
+    crocodiloPromise = new Promise((resolve) => {
+      loader.load('./models/crocodilo.glb', (gltf) => {
+        const root = gltf.scene;
+        const box = new THREE.Box3().setFromObject(root);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        root.position.set(-center.x, -box.min.y + 0.05, -center.z);
+
+        const inner = new THREE.Group();
+        inner.name = 'crocodilo_inner';
+        inner.add(root);
+        inner.rotation.y = -Math.PI / 2;
+
+        const wrapper = new THREE.Group();
+        wrapper.name = 'crocodilo_wrapper';
+        wrapper.add(inner);
+        const scale = 2.2 / (size.y || 1);
+        wrapper.scale.setScalar(scale);
+        wrapper.traverse((object) => {
+          if (!object.isMesh) return;
+          object.castShadow = true;
+          object.receiveShadow = false;
+        });
+        crocodiloTemplate = wrapper;
+        resolve(wrapper);
+      }, undefined, (error) => {
+        console.error('Failed to load crocodilo model:', error);
+        resolve(null);
+      });
+    });
+  }
+  return crocodiloPromise;
+}
+
 function makeCapivaraGlove(isLeft = false) {
   const g = new THREE.Group();
   const redMat = toonMat('#e0372a', { emissive: '#440a08' });
@@ -285,6 +325,7 @@ export class CharacterView {
   constructor(scene, p, isMe) {
     const team = TEAMS[p.team];
     this.team = p.team;
+    this.characterId = p.characterId === 'crocodilo' ? 'crocodilo' : 'capivara';
     this.scene = scene;
     this.phase = Math.random() * 10;
     this.blinkAt = 2 + Math.random() * 3;
@@ -426,7 +467,7 @@ export class CharacterView {
       this.capivara = capivara;
 
       // Team colors: Blue team capivaras wear the stylish Blue jacket!
-      if (this.team === 'blue') {
+      if (this.characterId === 'capivara' && this.team === 'blue') {
         capivara.traverse((o) => {
           if (o.isMesh && o.name === 'capivara_jacket' && o.material) {
             o.material = getBlueCapivaraMaterial(o.material);
@@ -470,11 +511,13 @@ export class CharacterView {
       }
     };
 
-    if (capivaraTemplate) {
+    const characterTemplate = this.characterId === 'crocodilo' ? crocodiloTemplate : capivaraTemplate;
+    const characterLoader = this.characterId === 'crocodilo' ? getCrocodiloModel : getCapivaraModel;
+    if (characterTemplate) {
       // Synchronously attach immediately with ZERO latency / no flash!
-      attachCapivara(capivaraTemplate);
+      attachCapivara(characterTemplate);
     } else {
-      getCapivaraModel().then(attachCapivara);
+      characterLoader().then(attachCapivara);
     }
 
     if (typeof window !== 'undefined') {
