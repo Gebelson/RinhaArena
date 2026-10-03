@@ -605,7 +605,10 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   });
 
   // Online Multiplayer Modals
-  btnLobby.addEventListener('click', () => openGameOptionsModal('rooms'));
+  btnLobby.addEventListener('click', () => {
+    onClickSound?.();
+    openLobbyModal();
+  });
   btnCustomCreate.addEventListener('click', () => openCustomCreateModal());
 
   // How to play modal
