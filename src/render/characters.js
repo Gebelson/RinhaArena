@@ -217,7 +217,7 @@ export function getCapivaraModel() {
     const loader = new GLTFLoader();
     capivaraPromise = new Promise((resolve) => {
       loader.load(
-        './models/capivara_2_color_v5.glb',
+        './models/capivara_2_color_v5.glb?v=6',
         (gltf) => {
           const root = gltf.scene;
 
