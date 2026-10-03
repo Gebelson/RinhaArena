@@ -437,7 +437,7 @@ export function getCachorroModel() {
   if (!cachorroPromise) {
     const loader = new GLTFLoader();
     cachorroPromise = new Promise((resolve) => {
-      loader.load('./models/cachorro.glb?v=5', (gltf) => {
+      loader.load('./models/cachorro.glb?v=6', (gltf) => {
         const root = gltf.scene;
         const box = new THREE.Box3().setFromObject(root);
         const size = box.getSize(new THREE.Vector3());
