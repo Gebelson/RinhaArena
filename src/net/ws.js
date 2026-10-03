@@ -21,6 +21,7 @@ const SNAPSHOT_INTERVAL = 1 / 30; // 30 Hz broadcasts from host
 const INPUT_INTERVAL_MS = 25; // 40 Hz periodic input updates for steady movement
 const MIN_INPUT_SEND_INTERVAL_MS = 10; // minimum interval for immediate edge-trigger sends
 const TARGET_BUFFER_TICKS = 3; // ~50ms buffer at 60 ticks/s for smooth time-based interpolation
+const ALLOWED_EMOTES = new Set(['👍', '😂', '❤️', '😡', '👋', '😎', '💥', '❓']);
 
 function interpPlayers(aList, bList, t) {
   const byIdA = new Map(aList.map((p) => [p.id, p]));
@@ -441,6 +442,20 @@ export async function connectOnline({ room, password, team, profile, host: reque
       const text = String(message?.text || '').trim().slice(0, 100);
       if (!participant || participant.type !== 'HUMAN' || participant.displayName !== message.displayName || !text) return;
       chatMessages.push({ ...message, text, own: participant.userId === profile.playerId });
+    });
+    channel.on('emote-send', (message) => {
+      if (!isHost || !matchInfo || message?.matchId !== matchInfo.id || !ALLOWED_EMOTES.has(message?.emote)) return;
+      const sender = clientPlayers.get(message?.clientId);
+      const participant = matchInfo.participants.find((entry) => entry.participantId === sender?.participantId && entry.type === 'HUMAN');
+      if (!participant) return;
+      const payload = { matchId: matchInfo.id, participantId: participant.participantId, emote: message.emote };
+      controlEvents.push({ type: 'emote', ...payload });
+      channel.send('emote-show', payload);
+    });
+    channel.on('emote-show', (message) => {
+      if (isHost || !matchInfo || message?.matchId !== matchInfo.id || !ALLOWED_EMOTES.has(message?.emote)) return;
+      const participant = matchInfo.participants.find((entry) => entry.participantId === message?.participantId);
+      if (participant) controlEvents.push({ type: 'emote', participantId: participant.participantId, emote: message.emote });
     });
     const broadcastQueue = () => channel.send('queue-update', {
       players: [...clientPlayers.values()].map(({ userId, displayName, cos }) => ({ userId, name: displayName, displayName, cos })),
@@ -866,6 +881,12 @@ export async function connectOnline({ room, password, team, profile, host: reque
       },
       drainChatMessages() { return chatMessages.splice(0, chatMessages.length); },
       drainControlEvents() { return controlEvents.splice(0, controlEvents.length); },
+      sendEmote(emote) {
+        if (!matchInfo || !ALLOWED_EMOTES.has(emote)) return false;
+        if (isHost) channel.emit('emote-send', { clientId, matchId: matchInfo.id, emote });
+        else channel.send('emote-send', { clientId, matchId: matchInfo.id, emote });
+        return true;
+      },
       requestSurrender() {
         if (!matchInfo) return false;
         if (isHost) channel.emit('surrender-start', { clientId });

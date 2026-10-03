@@ -226,6 +226,10 @@ export class World {
     return this.effects.shakeAmp;
   }
 
+  showEmote(participantId, emote) {
+    this.chars.get(participantId)?.showEmote(emote);
+  }
+
   dispose() {
     for (const view of this.chars.values()) view.dispose();
     for (const view of this.bombViews.values()) view.dispose();

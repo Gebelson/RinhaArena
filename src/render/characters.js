@@ -271,6 +271,18 @@ export function getCapivaraModel() {
   return capivaraPromise;
 }
 
+function makeEmoteSprite() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 128;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
+  sprite.scale.set(1.15, 1.15, 1);
+  sprite.visible = false;
+  sprite.userData.canvas = canvas;
+  return sprite;
+}
+
 export function getCrocodiloModel() {
   if (crocodiloTemplate) return Promise.resolve(crocodiloTemplate);
   if (!crocodiloPromise) {
@@ -709,6 +721,10 @@ export class CharacterView {
     this.name = makeNameSprite(p.displayName, team.color);
     this.name.position.y = 2.45;
     this.group.add(this.name);
+    this.emote = makeEmoteSprite();
+    this.emote.position.y = 3.15;
+    this.group.add(this.emote);
+    this.emoteTime = 0;
     if (isMe) {
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(0.62, 0.78, 28),
@@ -745,8 +761,31 @@ export class CharacterView {
     this.blinkT = 0.28;
   }
 
+  showEmote(value) {
+    const canvas = this.emote.userData.canvas;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.beginPath();
+    ctx.arc(64, 64, 53, 0, Math.PI * 2);
+    ctx.fillStyle = '#081630ee'; ctx.fill();
+    ctx.lineWidth = 6; ctx.strokeStyle = '#36d9ff'; ctx.stroke();
+    ctx.font = '64px \"Segoe UI Emoji\", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(value || '').slice(0, 8), 64, 67);
+    this.emote.material.map.needsUpdate = true;
+    this.emote.material.opacity = 1;
+    this.emote.visible = true;
+    this.emoteTime = 2.5;
+  }
+
   update(p, dt) {
     this.time += dt;
+    if (this.emoteTime > 0) {
+      this.emoteTime = Math.max(0, this.emoteTime - dt);
+      this.emote.visible = this.emoteTime > 0;
+      this.emote.position.y = 3.15 + Math.sin(this.time * 4) * 0.06;
+      this.emote.material.opacity = Math.min(1, this.emoteTime * 2);
+    }
 
     if ((p.punchedT ?? 0) > this.punchedT) {
       this.punchedT = p.punchedT;
@@ -1491,6 +1530,8 @@ export class CharacterView {
     }
     this.name.material.map?.dispose();
     this.name.material.dispose();
+    this.emote.material.map?.dispose();
+    this.emote.material.dispose();
     this.shieldMat.dispose();
     this.iceMat.dispose();
     this.curseMat.dispose();

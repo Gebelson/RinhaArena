@@ -14,6 +14,7 @@ import { createInput } from './input/input.js';
 import { createHud } from './ui/hud.js';
 import { createMenu } from './ui/menu.js';
 import { createLabPanel } from './ui/labPanel.js';
+import { createEmoteWheel } from './ui/emoteWheel.js';
 import { createSfx } from './audio/sfx.js';
 import { createBgm } from './audio/music.js';
 import { makeLabConfig } from './game/modes/sandbox.js';
@@ -183,6 +184,7 @@ function startMatch(transport) {
     muted: sfx.muted,
   });
   const input = createInput({ uiRoot, isTouch });
+  const emoteWheel = createEmoteWheel(uiRoot, { onSelect: (emote) => transport.sendEmote?.(emote) });
   const labPanel = transport.modeId?.startsWith('sandbox')
     ? createLabPanel(uiRoot, transport)
     : null;
@@ -238,6 +240,7 @@ function startMatch(transport) {
     if (event.code !== 'Escape' || /INPUT|TEXTAREA|SELECT/.test(event.target?.tagName)) return;
     event.preventDefault();
     if (hud.isChatOpen()) { hud.closeChat(); return; }
+    if (emoteWheel.isOpen()) { emoteWheel.close(); return; }
     if (actionDialog) { closeActionDialog(); return; }
     if (settingsPanel?.modal?.isConnected) { settingsPanel.close(); settingsPanel = null; }
     else openInGameSettings();
@@ -301,7 +304,7 @@ function startMatch(transport) {
     const myPos = me ? { x: me.x, z: me.z } : { x: 0, z: 0 };
 
     const sampled = input.sample({ myPos, screenToGround: renderer.screenToGround });
-    const controlsBlocked = Boolean(settingsPanel?.modal?.isConnected || actionDialog || document.querySelector('.surrender-vote-overlay'));
+    const controlsBlocked = Boolean(emoteWheel.isOpen() || settingsPanel?.modal?.isConnected || actionDialog || document.querySelector('.surrender-vote-overlay'));
     transport.setInput(controlsBlocked
       ? { mx: 0, mz: 0, ax: 0, az: 0, run: 0, jump: false, punch: false, throw: false, grab: false, dash: false }
       : sampled.input);
@@ -312,6 +315,7 @@ function startMatch(transport) {
 
     const events = transport.drainEvents();
     for (const control of transport.drainControlEvents?.() || []) {
+      if (control.type === 'emote') world.showEmote(control.participantId, control.emote);
       if (control.type === 'surrender-update') showSurrenderVote(control);
       if (control.type === 'surrender-result') {
         const voteOverlay = document.querySelector('.surrender-vote-overlay');
@@ -364,6 +368,7 @@ function startMatch(transport) {
     bgm.pause({ fade: true });
     transport.dispose?.();
     input.dispose();
+    emoteWheel.dispose();
     labPanel?.dispose();
     hud.dispose();
     world.dispose();
