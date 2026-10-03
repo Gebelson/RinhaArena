@@ -179,6 +179,8 @@ let capivaraTemplate = null;
 let capivaraPromise = null;
 let crocodiloTemplate = null;
 let crocodiloPromise = null;
+let porcoTemplate = null;
+let porcoPromise = null;
 let blueCapivaraTex = null;
 let blueCapivaraMat = null;
 let redCapivaraMat = null;
@@ -303,6 +305,44 @@ export function getCrocodiloModel() {
   return crocodiloPromise;
 }
 
+export function getPorcoModel() {
+  if (porcoTemplate) return Promise.resolve(porcoTemplate);
+  if (!porcoPromise) {
+    const loader = new GLTFLoader();
+    porcoPromise = new Promise((resolve) => {
+      loader.load('./models/porco.glb', (gltf) => {
+        const root = gltf.scene;
+        const box = new THREE.Box3().setFromObject(root);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        root.position.set(-center.x, -box.min.y + 0.05, -center.z);
+
+        const inner = new THREE.Group();
+        inner.name = 'porco_inner';
+        inner.add(root);
+        inner.rotation.y = -Math.PI / 2;
+
+        const wrapper = new THREE.Group();
+        wrapper.name = 'porco_wrapper';
+        wrapper.add(inner);
+        const scale = 2.2 / (size.y || 1);
+        wrapper.scale.setScalar(scale);
+        wrapper.traverse((object) => {
+          if (!object.isMesh) return;
+          object.castShadow = true;
+          object.receiveShadow = false;
+        });
+        porcoTemplate = wrapper;
+        resolve(wrapper);
+      }, undefined, (error) => {
+        console.error('Failed to load porco model:', error);
+        resolve(null);
+      });
+    });
+  }
+  return porcoPromise;
+}
+
 function makeCapivaraGlove(isLeft = false) {
   const g = new THREE.Group();
   const redMat = toonMat('#e0372a', { emissive: '#440a08' });
@@ -325,7 +365,7 @@ export class CharacterView {
   constructor(scene, p, isMe) {
     const team = TEAMS[p.team];
     this.team = p.team;
-    this.characterId = p.characterId === 'crocodilo' ? 'crocodilo' : 'capivara';
+    this.characterId = ['crocodilo', 'porco'].includes(p.characterId) ? p.characterId : 'capivara';
     this.scene = scene;
     this.phase = Math.random() * 10;
     this.blinkAt = 2 + Math.random() * 3;
@@ -511,8 +551,10 @@ export class CharacterView {
       }
     };
 
-    const characterTemplate = this.characterId === 'crocodilo' ? crocodiloTemplate : capivaraTemplate;
-    const characterLoader = this.characterId === 'crocodilo' ? getCrocodiloModel : getCapivaraModel;
+    const characterTemplates = { capivara: capivaraTemplate, crocodilo: crocodiloTemplate, porco: porcoTemplate };
+    const characterLoaders = { capivara: getCapivaraModel, crocodilo: getCrocodiloModel, porco: getPorcoModel };
+    const characterTemplate = characterTemplates[this.characterId];
+    const characterLoader = characterLoaders[this.characterId];
     if (characterTemplate) {
       // Synchronously attach immediately with ZERO latency / no flash!
       attachCapivara(characterTemplate);
