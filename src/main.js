@@ -23,6 +23,7 @@ import { submitPlayerRanking } from './net/ranking.js';
 import { registerPlayerAbandon } from './net/discipline.js';
 import { applySettings, getSettings } from './settings.js';
 import { recordMissionMatch } from './game/missions.js';
+import { startAutoUpdate } from './autoUpdate.js';
 
 const isTouch = navigator.maxTouchPoints > 0
   || matchMedia('(pointer: coarse)').matches
@@ -32,6 +33,7 @@ const uiRoot = document.getElementById('ui');
 const sfx = createSfx();
 const bgm = createBgm();
 applySettings();
+startAutoUpdate();
 
 // Unlock audio context on initial user interaction so audio assets load early
 window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
