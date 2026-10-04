@@ -509,8 +509,11 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     const rankProgress = getRankProgress(profile.rankXp);
     const levelProgress = getLevelProgress(profile.rankStats);
     levelText.textContent = levelProgress.level;
-    levelBadge.src = `./assets/ui/levels/${getLevelBadgeAsset(levelProgress.level)}`;
-    levelBadge.alt = `Nível ${levelProgress.level}`;
+    const levelBadgeAsset = getLevelBadgeAsset(levelProgress.level);
+    const levelBadgeUrl = `./assets/ui/levels/${levelBadgeAsset}?level=${levelProgress.level}`;
+    if (!levelBadge.src.endsWith(levelBadgeUrl.replace('./', '/'))) levelBadge.src = levelBadgeUrl;
+    levelBadge.alt = `Emblema do nível ${levelProgress.level}`;
+    levelBadge.closest('.level-badge')?.setAttribute('data-level', String(levelProgress.level));
     xpFill.style.width = `${levelProgress.progress * 100}%`;
     xpText.textContent = levelProgress.isMax ? 'NÍVEL MÁXIMO' : `${levelProgress.xp} / ${levelProgress.required} XP`;
     rankShield.src = `./assets/ui/ranks/${rankProgress.rank.asset}`;
