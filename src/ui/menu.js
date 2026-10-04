@@ -450,6 +450,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   const rankShield = el.querySelector('.rank-shield');
   const playerAvatar = el.querySelector('.player-avatar img');
   const lobbyVideo = el.querySelector('.lobby-bg-video');
+  let authenticated = false;
   const lobbyMusic = new Audio('./audio/lobby-theme.m4a');
   lobbyMusic.loop = true;
   lobbyMusic.preload = 'auto';
@@ -458,6 +459,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
 
   const playLobbyMedia = () => {
     lobbyVideo.play().catch(() => {});
+    if (!authenticated) { lobbyMusic.pause(); return; }
     lobbyMusic.muted = localStorage.getItem('blast.muted') === '1';
     lobbyMusic.play().catch(() => {});
   };
@@ -690,6 +692,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       lastRemoteSnapshot = accountSnapshot(saved);
       syncUI();
       el.classList.remove('auth-pending');
+      authenticated = true;
+      playLobbyMedia();
       clearInterval(accountSyncTimer);
       const syncAccountFromCloud = async () => {
         if (accountSyncBusy || Date.now() - lastLocalSaveAt < 2500) return;
