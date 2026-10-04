@@ -712,7 +712,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         return `
             <article class="shop-character-card ${acquired ? 'acquired' : available ? 'available' : 'locked'} ${selected ? 'selected' : ''}">
               <div class="shop-character-art">
-                <img src="./assets/ui/shop/${character.id}.webp?v=2" alt="${available ? character.name : 'Personagem oculto'}">
+                <img src="./assets/ui/shop/${character.id}.webp?v=3" alt="${available ? character.name : 'Personagem oculto'}">
                 ${available ? '' : '<span class="shop-lock" aria-hidden="true">🔒</span>'}
               </div>
               <div class="shop-character-info">
