@@ -21,7 +21,7 @@ const TICK_RATE = CONFIG.tickRate || 60;
 const SNAPSHOT_INTERVAL = 1 / 30; // 30 Hz broadcasts from host
 const INPUT_INTERVAL_MS = 25; // 40 Hz periodic input updates for steady movement
 const MIN_INPUT_SEND_INTERVAL_MS = 10; // minimum interval for immediate edge-trigger sends
-const TARGET_BUFFER_TICKS = 3; // ~50ms buffer at 60 ticks/s for smooth time-based interpolation
+const TARGET_BUFFER_TICKS = 6; // ~100ms keeps remote players smooth under normal Realtime jitter
 
 function interpPlayers(aList, bList, t) {
   const byIdA = new Map(aList.map((p) => [p.id, p]));
@@ -355,6 +355,8 @@ export async function connectOnline({ room, password, team, profile, host: reque
     });
     channel.on('snap', (message) => {
       if (isHost || !message?.state) return;
+      const lastSnapshot = snaps[snaps.length - 1];
+      if (lastSnapshot && Number(message.state.tick) <= Number(lastSnapshot.tick)) return;
       snaps.push(message.state);
       if (snaps.length > 40) snaps.shift();
       if (message.events?.length) eventQ.push(...message.events);
@@ -400,18 +402,19 @@ export async function connectOnline({ room, password, team, profile, host: reque
               const errX = authP.x - pred.x;
               const errZ = authP.z - pred.z;
               const errDist = Math.hypot(errX, errZ);
-              if (errDist > 2.5) {
-                // Large snap (e.g. explosive impulse)
+              if (errDist > 4.0) {
+                // Only teleport for a truly large divergence (spawn, blast or recovery).
                 pred.x = authP.x;
                 pred.z = authP.z;
                 pred.vx = authP.vx;
                 pred.vz = authP.vz;
-              } else if (errDist > 0.01) {
-                // Smooth error decay
-                pred.x += errX * 0.25;
-                pred.z += errZ * 0.25;
-                pred.vx = lerp(pred.vx, authP.vx, 0.2);
-                pred.vz = lerp(pred.vz, authP.vz, 0.2);
+              } else if (errDist > 0.15) {
+                // The host snapshot is naturally behind the predicted client.
+                // Correct only meaningful drift and do it gently to avoid rubber-banding.
+                pred.x += errX * 0.08;
+                pred.z += errZ * 0.08;
+                pred.vx = lerp(pred.vx, authP.vx, 0.08);
+                pred.vz = lerp(pred.vz, authP.vz, 0.08);
               }
               if (Math.abs(authP.y - pred.y) > 0.4) {
                 pred.y = authP.y;
@@ -842,14 +845,14 @@ export async function connectOnline({ room, password, team, profile, host: reque
           if (secondLatest && latest && latest.tick > secondLatest.tick) {
             const span = latest.tick - secondLatest.tick;
             const t = (target - secondLatest.tick) / span;
-            const clampedT = clamp(t, 1, 2.0);
+            const clampedT = clamp(t, 0, 1);
             result = interpState(secondLatest, latest, clampedT);
           } else {
             result = latest;
           }
         } else {
           const span = b.tick - a.tick || 1;
-          const t = clamp((target - a.tick) / span, 0, 1.5);
+          const t = clamp((target - a.tick) / span, 0, 1);
           result = interpState(a, b, t);
         }
 
