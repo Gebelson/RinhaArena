@@ -100,6 +100,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
   const roomCode = String(room || 'main').trim().toLowerCase();
   const config = roomConfig ?? await joinRoom(roomCode, password);
   if (!config?.ok) throw new Error(config?.error || 'Sala não encontrada');
+  const autoFinalizeCustomRoom = !Number(config.queueEndsAt) && !config.matchType;
 
   const clientId = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
   const channel = new SupabaseRealtimeChannel(`arena:${roomCode}`);
@@ -114,6 +115,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
     let lastSent = 0;
     let welcomeTimer = null;
     let touchTimer = null;
+    let autoFinalizeTimer = null;
     let presenceTimer = null;
     let renderTick = null;
     const snaps = [];
@@ -545,6 +547,10 @@ export async function connectOnline({ room, password, team, profile, host: reque
       });
       broadcastQueue();
       touchRoom(roomCode, hostToken, clientPlayers.size);
+      if (autoFinalizeCustomRoom && clientPlayers.size >= 2) {
+        clearTimeout(autoFinalizeTimer);
+        queueMicrotask(() => transport.finalizeMatchmaking());
+      }
     });
     channel.on('input', (message) => {
       if (!isHost || !hostGame) return;
@@ -940,6 +946,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
         closed = true;
         clearInterval(welcomeTimer);
         clearInterval(touchTimer);
+        clearTimeout(autoFinalizeTimer);
         clearInterval(presenceTimer);
         clearTimeout(readyTimer);
         for (const vote of surrenderVotes.values()) clearTimeout(vote.timer);
@@ -990,6 +997,9 @@ export async function connectOnline({ room, password, team, profile, host: reque
       touchTimer = setInterval(() => touchRoom(roomCode, hostToken, clientPlayers.size), 30_000);
       settled = true;
       resolve(transport);
+      if (autoFinalizeCustomRoom) {
+        autoFinalizeTimer = setTimeout(() => transport.finalizeMatchmaking(), 10_000);
+      }
     } else {
       sendJoin();
       welcomeTimer = setInterval(sendJoin, 1000);
