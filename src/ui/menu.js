@@ -19,6 +19,7 @@ import { CONFIG } from '../core/config.js';
 import { claimMission, ensureMissions, missionProgress } from '../game/missions.js';
 import { createCharacterTrade, giftFriendResource, listCharacterTrades, listFriendRequests, listFriends, respondCharacterTrade, respondFriendRequest, searchPlayers, sendFriendRequest } from '../net/social.js';
 import { EMOTES, EMOTE_PRICE } from '../content/emotes.js';
+import { SupabaseRealtimeChannel } from '../net/supabase.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -1388,6 +1389,129 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     }
   }
 
+  let inviteChannelPromise = null;
+  const ensureInviteChannel = () => {
+    if (inviteChannelPromise) return inviteChannelPromise;
+    inviteChannelPromise = (async () => {
+      const channel = new SupabaseRealtimeChannel(`player:${profile.playerId}`);
+      channel.on('room-invite', (invite) => {
+        if (!invite?.room || invite.fromId === profile.playerId) return;
+        const popup = document.createElement('div');
+        popup.className = 'room-invite-popup';
+        popup.innerHTML = `<strong>CONVITE PARA SALA</strong><span>${escapeHtml(invite.fromName)} convidou você para “${escapeHtml(invite.name)}”.</span><div><button data-decline>RECUSAR</button><button data-accept>ENTRAR</button></div>`;
+        uiRoot.appendChild(popup);
+        popup.querySelector('[data-decline]').onclick = () => popup.remove();
+        popup.querySelector('[data-accept]').onclick = async (event) => {
+          event.currentTarget.disabled = true;
+          try {
+            const transport = await onPrepareOnline({ room: invite.room, password: invite.password });
+            popup.remove();
+            openRoomStaging({ selection: invite.selection, data: { code: invite.room, room: invite.roomConfig }, transport, isHost: false });
+          } catch (error) {
+            popup.querySelector('span').textContent = error.message || 'Não foi possível entrar na sala.';
+            event.currentTarget.disabled = false;
+          }
+        };
+        setTimeout(() => popup.remove(), 30_000);
+      });
+      await channel.connect();
+      return channel;
+    })().catch((error) => { inviteChannelPromise = null; console.warn('[invite]', error.message); return null; });
+    return inviteChannelPromise;
+  };
+  ensureInviteChannel();
+
+  async function sendRoomInvite(friend, payload) {
+    const channel = new SupabaseRealtimeChannel(`player:${friend.id}`);
+    await channel.connect();
+    channel.send('room-invite', { ...payload, fromId: profile.playerId, fromName: profile.name });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    channel.close();
+  }
+
+  function openRoomStaging({ selection, data, transport, isHost }) {
+    const previous = document.querySelector('.custom-room-lobby-overlay');
+    previous?.remove();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay custom-room-lobby-overlay';
+    const modeId = selection.modeId;
+    const teamSize = Number(selection.teamSize) || 1;
+    const totalSlots = modeId === 'ffa' ? Number(selection.ffaSize) || 2 : teamSize * 2;
+    const botTeams = [];
+    let starting = false;
+    modal.innerHTML = `<section class="custom-room-lobby">
+      <header><div><small>RINHA ARENA · SALA ${escapeHtml(data.code)}</small><h2>${escapeHtml(selection.name || 'SALA PERSONALIZADA')}</h2></div><button class="lobby-invite" ${isHost ? '' : 'disabled'}>CONVIDAR AMIGO</button><button class="lobby-close">✕</button></header>
+      <div class="custom-room-columns"></div>
+      <footer><span class="lobby-status">${isHost ? 'Configure as vagas e inicie quando estiver pronto.' : 'Aguardando o dono iniciar a partida.'}</span>${isHost ? '<button class="lobby-start">INICIAR PARTIDA</button>' : ''}</footer>
+    </section>`;
+    uiRoot.appendChild(modal);
+    const columns = modal.querySelector('.custom-room-columns');
+    const status = modal.querySelector('.lobby-status');
+    const playerTeam = (player, index) => modeId === 'ffa' ? 'free' : (player.team === 'blue' ? 'blue' : player.team === 'red' ? 'red' : (index % 2 ? 'blue' : 'red'));
+    const render = () => {
+      const players = transport.lobbyPlayers?.() || [];
+      const teams = modeId === 'ffa' ? [['free', 'JOGADORES', totalSlots]] : [['red', 'EQUIPE VERMELHA', teamSize], ['blue', 'EQUIPE AZUL', teamSize]];
+      columns.innerHTML = teams.map(([team, label, count]) => {
+        const humans = players.filter((player, index) => playerTeam(player, index) === team);
+        const bots = botTeams.filter((value) => value === team).length;
+        const slots = Array.from({ length: count }, (_, index) => {
+          const human = humans[index];
+          if (human) return `<div class="room-slot occupied"><img src="./assets/ui/avatars/${AVATARS.includes(human.cos?.avatar) ? human.cos.avatar : AVATARS[0]}"><span><b>${escapeHtml(human.displayName || human.name)}</b><small>PLAYER</small></span></div>`;
+          if (index < humans.length + bots) return `<div class="room-slot bot"><span class="room-slot-bot">🤖</span><span><b>BOT</b><small>ADICIONADO</small></span>${isHost ? `<button data-remove-bot="${team}">REMOVER</button>` : ''}</div>`;
+          return `<div class="room-slot empty"><span>VAGA LIVRE</span>${isHost ? `<button data-add-bot="${team}">ADICIONAR BOT</button>` : ''}</div>`;
+        }).join('');
+        return `<section data-team="${team}"><h3>${label}</h3>${slots}</section>`;
+      }).join('');
+    };
+    columns.addEventListener('click', (event) => {
+      const add = event.target.closest('[data-add-bot]');
+      const remove = event.target.closest('[data-remove-bot]');
+      if (add) botTeams.push(add.dataset.addBot);
+      if (remove) {
+        const index = botTeams.lastIndexOf(remove.dataset.removeBot);
+        if (index >= 0) botTeams.splice(index, 1);
+      }
+      render();
+    });
+    const cleanup = () => { clearInterval(poll); modal.remove(); };
+    const enterPrepared = async () => {
+      if (starting) return;
+      starting = true;
+      status.textContent = 'Preparando arena...';
+      try {
+        await transport.waitForMatch?.();
+        await transport.clientReadyAndWaitForStart?.();
+        cleanup();
+        onStartPrepared(transport);
+      } catch (error) { starting = false; status.textContent = error.message; }
+    };
+    modal.querySelector('.lobby-close').onclick = () => { transport.dispose?.(); cleanup(); };
+    modal.querySelector('.lobby-start')?.addEventListener('click', () => {
+      transport.finalizeMatchmaking?.({ botsEnabled: botTeams.length > 0, botTeams: [...botTeams] });
+      enterPrepared();
+    });
+    modal.querySelector('.lobby-invite')?.addEventListener('click', async () => {
+      let panel = modal.querySelector('.lobby-friends-panel');
+      if (panel) { panel.remove(); return; }
+      panel = document.createElement('aside'); panel.className = 'lobby-friends-panel'; panel.innerHTML = '<b>AMIGOS</b><span>Carregando...</span>'; modal.querySelector('.custom-room-lobby').appendChild(panel);
+      try {
+        const friends = await listFriends();
+        panel.innerHTML = `<b>CONVIDAR AMIGO</b>${friends.length ? friends.map((friend) => `<button data-friend="${friend.id}"><img src="./assets/ui/avatars/${AVATARS.includes(friend.avatar) ? friend.avatar : AVATARS[0]}"><span>${escapeHtml(friend.nickname)}</span><em>CONVIDAR</em></button>`).join('') : '<span>Nenhum amigo encontrado.</span>'}`;
+        panel.onclick = async (event) => {
+          const button = event.target.closest('[data-friend]'); if (!button) return;
+          const friend = friends.find((item) => item.id === button.dataset.friend); button.disabled = true;
+          try { await sendRoomInvite(friend, { room: data.code, password: selection.password, name: selection.name, selection, roomConfig: data.room }); button.querySelector('em').textContent = 'ENVIADO'; }
+          catch (error) { button.disabled = false; button.querySelector('em').textContent = 'ERRO'; }
+        };
+      } catch (error) { panel.innerHTML = `<b>AMIGOS</b><span>${escapeHtml(error.message)}</span>`; }
+    });
+    const poll = setInterval(() => {
+      render();
+      if (!isHost && transport.isMatchReady?.()) enterPrepared();
+    }, 300);
+    render();
+  }
+
   async function launchConfirmedGame(selection) {
     onClickSound?.();
     errBox.classList.add('hidden');
@@ -1443,7 +1567,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       if (!data?.ok) throw new Error(data?.error || 'Não foi possível criar a sala.');
       data.room.config = matchConfig;
       data.room.matchType = selection.matchType;
-      await onPlayOnline({ room: data.code, password: selection.password, host: true, hostToken: data.hostToken, roomConfig: data.room });
+      const transport = await onPrepareOnline({ room: data.code, password: selection.password, team: selection.modeId === 'ffa' ? 'free' : 'red', host: true, hostToken: data.hostToken, roomConfig: data.room });
+      openRoomStaging({ selection, data, transport, isHost: true });
     } catch (cause) {
       errBox.textContent = cause.message || 'Não foi possível iniciar a partida.';
       errBox.classList.remove('hidden');
@@ -1654,7 +1779,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       selectedMode = modeId;
       selectedLevel = confirmedGame.chosenMap;
       close();
-      syncUI();
+      if (matchType === 'custom') launchConfirmedGame(confirmedGame);
+      else syncUI();
     });
 
     async function loadGameRooms() {
@@ -1683,7 +1809,16 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
               if (password === null) return;
             }
             close();
-            await onPlayOnline({ room: room.code, password });
+            const selection = {
+              matchType: 'custom', name: room.name, code: room.code, password,
+              modeId: room.modeId, chosenMap: room.levelId,
+              teamSize: Number(room.teamLimits?.red) || 1,
+              ffaSize: Number(room.teamLimits?.ffa) || Number(room.maxPlayers) || 2,
+              respawnTime: room.respawnTime || 5,
+              matchConfig: room.config || CONFIG,
+            };
+            const transport = await onPrepareOnline({ room: room.code, password });
+            openRoomStaging({ selection, data: { code: room.code, room }, transport, isHost: false });
           });
           listNode.appendChild(card);
         });

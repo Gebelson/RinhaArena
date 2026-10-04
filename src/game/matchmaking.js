@@ -66,7 +66,7 @@ function assignTeam(index, modeId) {
   return index % 2 === 0 ? 'red' : 'blue';
 }
 
-export function finalizeMatchmakingSession(session, roomConfig, { now = Date.now(), botsEnabled = true } = {}) {
+export function finalizeMatchmakingSession(session, roomConfig, { now = Date.now(), botsEnabled = true, botTeams = null } = {}) {
   if (session.status !== MatchmakingStatus.WAITING) return session.match ?? null;
   session.status = MatchmakingStatus.STARTING;
   if (session.timer) clearTimeout(session.timer);
@@ -92,7 +92,11 @@ export function finalizeMatchmakingSession(session, roomConfig, { now = Date.now
   });
 
   if (botsEnabled) {
-    for (let index = participants.length; index < maxPlayers; index += 1) {
+    const requestedTeams = Array.isArray(botTeams)
+      ? botTeams.slice(0, Math.max(0, maxPlayers - participants.length))
+      : Array.from({ length: maxPlayers - participants.length }, (_, offset) => assignTeam(participants.length + offset, roomConfig.modeId));
+    for (const requestedTeam of requestedTeams) {
+      const index = participants.length;
       const botId = `${matchId}:${index}`;
       participants.push({
         participantId: `bot:${botId}`,
@@ -102,7 +106,7 @@ export function finalizeMatchmakingSession(session, roomConfig, { now = Date.now
         characterId: 'capivara',
         spawnIndex: index,
         connected: true,
-        team: assignTeam(index, roomConfig.modeId),
+        team: roomConfig.modeId === 'ffa' ? 'free' : (requestedTeam === 'blue' ? 'blue' : 'red'),
         cos: randomCos(),
       });
     }
