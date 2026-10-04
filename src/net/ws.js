@@ -532,7 +532,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       }
       const record = {
         clientId: message.clientId, userId: message.userId, displayName,
-        characterId: ['crocodilo', 'porco', 'pato', 'gato', 'cachorro'].includes(message.cos?.characterId) ? message.cos.characterId : 'capivara', cos: message.cos, team: message.team, connected: true, participantId: null,
+        characterId: ['crocodilo', 'porco', 'pato', 'gato', 'cachorro', 'macaco'].includes(message.cos?.characterId) ? message.cos.characterId : 'capivara', cos: message.cos, team: message.team, connected: true, participantId: null,
         lastSeenAt: Date.now(),
       };
       clientPlayers.set(message.clientId, record);
@@ -980,7 +980,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       remoteQueueEndsAt = session.deadlineAt;
       const hostRecord = {
         clientId, userId: profile.playerId, displayName: officialName,
-        characterId: ['crocodilo', 'porco', 'pato', 'gato', 'cachorro'].includes(profile.cos?.characterId) ? profile.cos.characterId : 'capivara', cos: { ...profile.cos }, team, connected: true, participantId: null, lastSeenAt: Date.now(),
+        characterId: ['crocodilo', 'porco', 'pato', 'gato', 'cachorro', 'macaco'].includes(profile.cos?.characterId) ? profile.cos.characterId : 'capivara', cos: { ...profile.cos }, team, connected: true, participantId: null, lastSeenAt: Date.now(),
       };
       clientPlayers.set(clientId, hostRecord);
       session.players.set(hostRecord.userId, hostRecord);
