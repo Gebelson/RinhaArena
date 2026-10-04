@@ -1,4 +1,4 @@
-﻿/* Blast Arena — UI over the WebGL canvas */
+/* Blast Arena — UI over the WebGL canvas */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body {
@@ -1664,7 +1664,7 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
   transform-origin: center bottom;
 }
 .shop-emote-card .shop-character-art { background:radial-gradient(circle,#153f75 0 25%,#07142c 70%); }
-.shop-emote-card .shop-character-art > img { object-position:center; transform:scale(.94); }
+.shop-emote-card .shop-character-art > img { object-fit:contain; object-position:center; transform:scale(.94); }
 .shop-character-card.locked .shop-character-art > img {
   filter: grayscale(1) brightness(.18) contrast(1.25);
   opacity: .72;
