@@ -11,7 +11,7 @@ import { HATS, SKINS } from '../content/cosmetics.js';
 import { RANKS, getRankProgress, rankSpriteStyle } from '../content/ranks.js';
 import { getLevelBadgeAsset, getLevelProgress } from '../content/levels.js';
 import { listPlayerRankings, submitPlayerRanking } from '../net/ranking.js';
-import { saveAccountProfile, signOut } from '../net/account.js';
+import { fetchAccountProfile, saveAccountProfile, signOut } from '../net/account.js';
 import { getPlayerDiscipline } from '../net/discipline.js';
 import { openAuthGate } from './auth.js';
 import { applySettings, getSettings, keyLabel, saveSettings } from '../settings.js';
@@ -36,6 +36,11 @@ const CHARACTER_PRICE = 900;
 export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepareOnline, onStartPrepared, onPlayLab, onClickSound }) {
   const el = document.createElement('div');
   el.className = 'menu';
+  let accountSyncTimer = 0;
+  let accountSyncBusy = false;
+  let lastLocalSaveAt = 0;
+  let lastRemoteSnapshot = '';
+  const accountSnapshot = (row) => JSON.stringify([row?.nickname, row?.gold, row?.rank_points, row?.matches, row?.wins, row?.losses, row?.avatar, row?.selected_character, row?.owned_characters, row?.owned_emotes, row?.friendly_fire]);
   applySettings();
 
   // Mobile browsers only allow fullscreen after a user gesture. Entering it on
@@ -665,6 +670,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
 
       let saveTimer = 0;
       profile.save = function saveAuthenticatedProfile() {
+        lastLocalSaveAt = Date.now();
         localStorage.setItem('blast.profile', JSON.stringify({
           playerId: this.playerId, name: this.name, gold: this.gold, cos: this.cos,
           friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats,
@@ -678,8 +684,36 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       const mirror = el.querySelector('.config-name-mirror');
       if (mirror) mirror.textContent = profile.name;
       profile.save();
+      lastRemoteSnapshot = accountSnapshot(saved);
       syncUI();
       el.classList.remove('auth-pending');
+      clearInterval(accountSyncTimer);
+      const syncAccountFromCloud = async () => {
+        if (accountSyncBusy || Date.now() - lastLocalSaveAt < 2500) return;
+        accountSyncBusy = true;
+        try {
+          const remote = await fetchAccountProfile(profile.playerId);
+          if (!remote) return;
+          const snapshot = accountSnapshot(remote);
+          if (snapshot === lastRemoteSnapshot) return;
+          lastRemoteSnapshot = snapshot;
+          profile.name = remote.nickname || profile.name;
+          profile.gold = Math.max(0, Number(remote.gold) || 0);
+          profile.rankXp = Math.max(0, Number(remote.rank_points) || 0);
+          profile.rankStats = { matches: Number(remote.matches) || 0, wins: Number(remote.wins) || 0, losses: Number(remote.losses) || 0 };
+          profile.friendlyFire = Boolean(remote.friendly_fire);
+          profile.cos.avatar = AVATARS.includes(remote.avatar) ? remote.avatar : profile.cos.avatar;
+          profile.cos.characterId = remote.selected_character || profile.cos.characterId;
+          profile.cos.ownedCharacters = [...new Set(['capivara', ...(remote.owned_characters || [])])];
+          profile.cos.ownedEmotes = [...new Set(remote.owned_emotes || [])];
+          localStorage.setItem('blast.profile', JSON.stringify({ playerId: profile.playerId, name: profile.name, gold: profile.gold, cos: profile.cos, friendlyFire: profile.friendlyFire, rankXp: profile.rankXp, rankStats: profile.rankStats, missionStats: profile.missionStats, missions: profile.missions }));
+          syncUI();
+          window.dispatchEvent(new CustomEvent('blast:account-sync'));
+        } catch (error) { console.warn('[profile] realtime sync failed:', error.message); }
+        finally { accountSyncBusy = false; }
+      };
+      accountSyncTimer = window.setInterval(syncAccountFromCloud, 1500);
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncAccountFromCloud(); });
       await submitPlayerRanking(profile).catch(() => {});
     },
   });
@@ -737,9 +771,14 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       }).join('');
     };
     const renderShop = () => shopTab === 'emotes' ? renderEmotes() : renderCharacters();
+    const refreshShopFromCloud = () => {
+      modal.querySelector('.shop-balance strong').textContent = Number(profile.gold).toLocaleString('pt-BR');
+      renderShop();
+    };
+    window.addEventListener('blast:account-sync', refreshShopFromCloud);
     renderShop();
 
-    const close = () => modal.remove();
+    const close = () => { window.removeEventListener('blast:account-sync', refreshShopFromCloud); modal.remove(); };
     const closeButton = modal.querySelector('.modal-close');
     closeButton.addEventListener('click', close);
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });

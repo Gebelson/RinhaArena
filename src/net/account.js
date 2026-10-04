@@ -130,6 +130,16 @@ async function loadAccount(user, session) {
   return { user, session, profile: playerProfile };
 }
 
+
+export async function fetchAccountProfile(playerId) {
+  if (!activeSession?.access_token || !playerId) return null;
+  const rows = await request(`/rest/v1/player_profiles?id=eq.${encodeURIComponent(playerId)}&select=*`, {
+    token: activeSession.access_token,
+    headers: { 'cache-control': 'no-cache' },
+  });
+  return rows?.[0] || null;
+}
+
 export async function saveAccountProfile(profile) {
   if (!activeSession?.access_token || !profile?.playerId) return;
   return request(`/rest/v1/player_profiles?id=eq.${encodeURIComponent(profile.playerId)}`, {
