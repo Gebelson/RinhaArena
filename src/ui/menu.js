@@ -301,6 +301,11 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
                 </div>
               </div>
               <!-- Procedural -->
+              <div class="arena-card" data-level="feira_suspensa">
+                <div class="arena-thumb" style="background-image: url('./assets/maps/card_feira_suspensa.png');"></div>
+                <div class="arena-label"><span class="arena-pin">📍</span><span class="arena-name">Feira Suspensa</span></div>
+              </div>
+              <!-- Procedural -->
               <div class="arena-card" data-level="procedural">
                 <div class="arena-thumb" style="background-image: url('./assets/maps/card_procedural.png');"></div>
                 <div class="arena-label">
@@ -354,6 +359,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
                 <div class="map-mini-thumb sel" data-level="foundry" title="Foundry Court" style="background-image: url('./assets/maps/mini_foundry.png');"></div>
                 <div class="map-mini-thumb" data-level="dojo" title="The Dojo" style="background-image: url('./assets/maps/mini_dojo.png');"></div>
                 <div class="map-mini-thumb" data-level="skyhaven" title="Skyhaven" style="background-image: url('./assets/maps/mini_skyhaven.png');"></div>
+                <div class="map-mini-thumb" data-level="feira_suspensa" title="Feira Suspensa" style="background-image: url('./assets/maps/mini_feira_suspensa.png');"></div>
                 <div class="map-mini-thumb" data-level="procedural" title="Procedural" style="background-image: url('./assets/maps/mini_procedural.png');"></div>
               </div>
             </div>
@@ -1670,7 +1676,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
           <div class="game-option-scroll">
             <section class="ranked-summary game-type-section" data-for-type="ranked">
               <div class="competitive-mark">★</div>
-              <div><h3>CONFIGURAÇÃO COMPETITIVA</h3><p>Melhor de 3 partidas, equipes 5v5, bots completando vagas e mapas grandes escolhidos aleatoriamente.</p></div>
+              <div><h3>CONFIGURAÇÃO COMPETITIVA</h3><p>Melhor de 3 partidas, equipes 5v5, bots completando vagas e mapa à escolha.</p></div>
               <div class="competitive-pills"><span>MD3</span><span>5v5</span><span>CTF</span><span>MAPA GRANDE</span></div>
             </section>
 
@@ -1764,8 +1770,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       const ranked = matchType === 'ranked';
       const custom = matchType === 'custom';
       modal.querySelector('.game-common-fields').classList.toggle('hidden', !custom);
-      modal.querySelector('.map-block').classList.toggle('hidden', ranked);
-      if (ranked) chosenMap = 'procedural';
+      modal.querySelector('.map-block').classList.remove('hidden');
       mapButtons.forEach((button) => {
         const allowed = !ranked || ['foundry', 'skyhaven', 'feira_suspensa', 'procedural'].includes(button.dataset.map);
         button.classList.toggle('disabled', !allowed);
@@ -1817,7 +1822,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       const respawnTime = matchType === 'custom' ? Number(modal.querySelector('.go-respawn').value) : 5;
       confirmedGame = {
         matchType,
-        chosenMap: ranked ? 'procedural' : chosenMap,
+        chosenMap,
         modeId,
         teamSize,
         ffaSize,
