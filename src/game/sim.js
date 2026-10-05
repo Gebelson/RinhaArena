@@ -49,6 +49,7 @@ import {
 const HIT_CREDIT = 5; // seconds a recent attacker stays eligible for the kill credit
 
 const EMPTY_INPUT = { mx: 0, mz: 0, ax: 0, az: 0, ad: 7, run: 0, throw: false, grab: false, punch: false, jump: false, dash: false };
+const emptyStats = () => ({ eliminations: 0, deaths: 0, captures: 0, returns: 0 });
 
 export function createSim({ level, mode, config }) {
   const interactiveSolids = [];
@@ -84,6 +85,12 @@ export function createSim({ level, mode, config }) {
       overT: 0,
       scores: { red: 0, blue: 0 },
       modeId: mode.id,
+      mapId: level.id,
+      rules: {
+        captureLimit: config.rules.captureLimit,
+        killsToWin: config.rules.killsToWin,
+        ffaKillsToWin: config.rules.ffaKillsToWin ?? 10,
+      },
       winner: null,
       series: {
         bestOf: Math.max(1, Number(config.rules.bestOf) || 1),
@@ -135,6 +142,7 @@ export function addPlayer(sim, {
     id, participantId: resolvedParticipantId, matchId: matchId ?? null, type: resolvedType, userId, botId,
     displayName: resolvedName, name: resolvedName, characterId, spawnIndex, connected,
     team, bot: resolvedType === 'BOT', cos,
+    stats: emptyStats(),
     x: 0, z: 0, y: 0, vx: 0, vz: 0, vy: 0,
     face: team === 'red' ? Math.PI / 2 : -Math.PI / 2, // face the enemy base
     hp: sim.config.player.hp,
@@ -1239,6 +1247,13 @@ function impactDamage(sim, p, dmg, isDashWall = false) {
 
 function koPlayer(sim, p, cause) {
   if (p.state === 'ko') return;
+  if (sim.state.phase === 'play') {
+    p.stats.deaths++;
+    const killer = p.lastHitByT > 0 ? getP(sim, p.lastHitBy) : null;
+    if (killer && killer.id !== p.id && (sim.mode.id === 'ffa' || killer.team !== p.team)) {
+      killer.stats.eliminations++;
+    }
+  }
   p.state = 'ko';
   p.hp = 0;
   p.koT = 0;
@@ -1320,6 +1335,7 @@ export function resetRound(sim) {
   s.puWave = 0;
   s.puPend = [];
   for (const p of s.players) {
+    p.stats = emptyStats();
     p.state = 'alive';
     p.hp = sim.config.player.hp;
     p.carryFlag = null;

@@ -204,6 +204,7 @@ export const CtfMode = {
 
   returnFlag(sim, f, announce, by) {
     const stand = sim.level.flags[f.team];
+    if (by?.stats && f.st === 'drop' && sim.state.phase === 'play') by.stats.returns++;
     f.st = 'home';
     f.carrier = null;
     f.x = stand.x;
@@ -232,6 +233,7 @@ export const CtfMode = {
   score(sim, c, stolenFlag) {
     const s = sim.state;
     s.scores[c.team]++;
+    if (s.phase === 'play' && c.stats) c.stats.captures++;
     c.carryFlag = null;
     this.returnFlag(sim, stolenFlag, false);
     emit(sim, { t: 'score', id: c.id, name: c.name, team: c.team, scores: { ...s.scores } });

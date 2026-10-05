@@ -276,7 +276,13 @@ export class GameHost {
 
   restoreAuthorityState(snapshot) {
     if (!snapshot?.state?.players) return false;
-    this.sim.state = structuredClone(snapshot.state);
+    const state = structuredClone(snapshot.state);
+    state.mapId ??= this.sim.state.mapId;
+    state.rules = { ...this.sim.state.rules, ...state.rules };
+    for (const player of state.players) {
+      player.stats = { eliminations: 0, deaths: 0, captures: 0, returns: 0, ...player.stats };
+    }
+    this.sim.state = state;
     this.sim.nextId = Number(snapshot.nextId) || this.sim.nextId;
     this.sim.spawnIdx = structuredClone(snapshot.spawnIdx || this.sim.spawnIdx);
     this.sim.lastPowerup = snapshot.lastPowerup ?? null;

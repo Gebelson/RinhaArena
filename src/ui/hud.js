@@ -4,8 +4,9 @@
 
 import { TEAMS } from '../core/config.js';
 import { getSettings, keyLabel } from '../settings.js';
+import { createScoreboard } from './scoreboard.js';
 
-export function createHud(uiRoot, { onExit, onMute, onSendChat, muted }) {
+export function createHud(uiRoot, { onExit, onMute, onSendChat, muted, levelName, modeId, canShowScoreboard }) {
   const el = document.createElement('div');
   el.className = 'hud';
   el.innerHTML = `
@@ -27,6 +28,7 @@ export function createHud(uiRoot, { onExit, onMute, onSendChat, muted }) {
       <div class="hpwrap"><div class="hpbar"></div></div>
     </div>
     <div class="hud-corner">
+      <button class="hud-btn btn-scoreboard" aria-label="Placar da partida" title="Placar da partida — segure Tab">TAB</button>
       <button class="hud-btn btn-chat" aria-label="Abrir chat">💬</button>
       <button class="hud-btn btn-mute">${muted ? '🔇' : '🔊'}</button>
       <button class="hud-btn btn-exit">✕</button>
@@ -61,6 +63,8 @@ export function createHud(uiRoot, { onExit, onMute, onSendChat, muted }) {
   const chat = q('.game-chat');
   const chatLog = q('.game-chat-log');
   const chatInput = q('.game-chat input');
+  const scoreboard = createScoreboard(el, { levelName, modeId, canShow: canShowScoreboard });
+  q('.btn-scoreboard').addEventListener('click', () => scoreboard.toggle());
 
   function appendChatMessage({ displayName, text, own = false } = {}) {
     const safeName = String(displayName || '').trim();
@@ -132,6 +136,7 @@ export function createHud(uiRoot, { onExit, onMute, onSendChat, muted }) {
 
   return {
     update(view, myId) {
+      scoreboard.update(view, myId);
       const isFfa = view.modeId === 'ffa' || !!view.ffaScores;
       if (isFfa) {
         scoreRed.style.display = 'none';
@@ -332,6 +337,7 @@ export function createHud(uiRoot, { onExit, onMute, onSendChat, muted }) {
     },
 
     setConnecting(on) {
+      if (on) scoreboard.hide();
       connecting.classList.toggle('hidden', !on);
     },
 
@@ -343,6 +349,7 @@ export function createHud(uiRoot, { onExit, onMute, onSendChat, muted }) {
     closeChat() { chat.classList.add('hidden'); chatInput.blur(); },
 
     dispose() {
+      scoreboard.dispose();
       clearTimeout(centerTimer);
       window.removeEventListener('keydown', onChatKey);
       el.remove();

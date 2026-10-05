@@ -14,6 +14,9 @@ export function packState(st) {
     scores: st.scores,
     ffaScores: st.ffaScores ?? null,
     modeId: st.modeId ?? null,
+    mapId: st.mapId ?? null,
+    rules: st.rules ?? null,
+    series: st.series ? { bestOf: st.series.bestOf, wins: { ...st.series.wins } } : null,
     winner: st.winner,
     lab: st.lab ?? null,
     players: st.players.map((p) => ({
@@ -22,6 +25,10 @@ export function packState(st) {
       displayName: p.displayName, name: p.displayName,
       characterId: p.characterId, spawnIndex: p.spawnIndex,
       connected: p.connected !== false, team: p.team, bot: p.type === 'BOT', cos: p.cos,
+      stats: {
+        eliminations: p.stats?.eliminations ?? 0, deaths: p.stats?.deaths ?? 0,
+        captures: p.stats?.captures ?? 0, returns: p.stats?.returns ?? 0,
+      },
       x: r2(p.x), z: r2(p.z), y: r2(p.y),
       vx: r2(p.vx), vy: r2(p.vy), vz: r2(p.vz), face: r2(p.face), spd: r2(p.spd),
       hp: Math.round(p.hp), state: p.state,

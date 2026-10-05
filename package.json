@@ -12,6 +12,7 @@
     "test:matchmaking": "node test_matchmaking.js",
     "test:feira": "node scripts/test-feira-suspensa.js",
     "test:macaco": "node scripts/audit-macaco-animation.mjs",
+    "test:scoreboard": "node test_scoreboard_stats.mjs",
     "smoke": "node scripts/smoke.js",
     "vendor": "node scripts/vendor.js",
     "tune": "node scripts/tune.js"

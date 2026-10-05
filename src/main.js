@@ -176,6 +176,9 @@ function startMatch(transport) {
   const renderer = createRenderer(canvas, { touch: isTouch, theme: level.theme });
   const world = new World(renderer.scene, level, { touch: isTouch });
   const hud = createHud(uiRoot, {
+    levelName: level.name,
+    modeId: transport.modeId,
+    canShowScoreboard: () => !document.querySelector('.modal-overlay'),
     onExit: () => exit(),
     onSendChat: (message) => transport.sendChat?.(message),
     onMute: () => {
