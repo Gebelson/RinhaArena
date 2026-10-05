@@ -1691,7 +1691,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
               <h3>MODO E TAMANHO</h3>
               <div class="option-row">
                 <label><span>Modo</span><select class="go-mode"><option value="ctf">Capture the Flag</option><option value="deathmatch">Death Match</option><option value="ffa">Todos contra todos</option></select></label>
-                <label class="go-team-size-wrap"><span>Equipes</span><select class="go-team-size">${[1,2,3,4,5].map((n) => `<option value="${n}" ${n === 2 ? 'selected' : ''}>${n}v${n}</option>`).join('')}</select></label>
+                <label class="go-team-size-wrap"><span>Equipes</span><select class="go-team-size">${[1,2,3,4,5,6,7,8,9,10].map((n) => `<option value="${n}" ${n === 2 ? 'selected' : ''}>${n}v${n}</option>`).join('')}</select></label>
                 <label class="go-ffa-size-wrap hidden"><span>Jogadores</span><select class="go-ffa-size">${[2,3,4,5,6,7,8,9,10].map((n) => `<option value="${n}" ${n === 6 ? 'selected' : ''}>${n} jogadores</option>`).join('')}</select></label>
               </div>
             </section>
@@ -2150,7 +2150,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
 
           <!-- Teams Config (1 to 5 per team, asymmetric support) -->
           <div class="field team-limits-section">
-            <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Jogadores por Equipe (até 5 em cada lado)</span>
+            <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Jogadores por Equipe (até 10 em cada lado)</span>
             <div class="teams-config-box" style="margin-top:6px;">
               <div class="team-stepper-col">
                 <span style="color:#ff8a6e; font-weight:700; font-size:12px;">🔴 Time Vermelho</span>
@@ -2255,13 +2255,13 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       if (redCount > 1) { redCount--; valRed.textContent = redCount; }
     });
     modal.querySelector('.btn-red-plus').addEventListener('click', () => {
-      if (redCount < 5) { redCount++; valRed.textContent = redCount; }
+      if (redCount < 10) { redCount++; valRed.textContent = redCount; }
     });
     modal.querySelector('.btn-blue-minus').addEventListener('click', () => {
       if (blueCount > 1) { blueCount--; valBlue.textContent = blueCount; }
     });
     modal.querySelector('.btn-blue-plus').addEventListener('click', () => {
-      if (blueCount < 5) { blueCount++; valBlue.textContent = blueCount; }
+      if (blueCount < 10) { blueCount++; valBlue.textContent = blueCount; }
     });
     modal.querySelector('.btn-ffa-minus').addEventListener('click', () => {
       if (ffaCount > 2) { ffaCount--; valFfa.textContent = ffaCount; }

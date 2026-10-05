@@ -78,8 +78,8 @@ const server = createServer(async (req, res) => {
         }
         const modeId = data.modeId || 'ctf';
         const levelId = data.levelId || 'skyhaven';
-        const redSize = Math.max(1, Math.min(5, Number(data.redSize) || 2));
-        const blueSize = Math.max(1, Math.min(5, Number(data.blueSize) || 2));
+        const redSize = Math.max(1, Math.min(10, Number(data.redSize) || 2));
+        const blueSize = Math.max(1, Math.min(10, Number(data.blueSize) || 2));
         const ffaSize = Math.max(2, Math.min(10, Number(data.ffaSize) || 6));
         const teamLimits = modeId === 'ffa' ? { ffa: ffaSize } : { red: redSize, blue: blueSize };
         const respawnTime = Math.max(1, Math.min(8, Number(data.respawnTime) || 5));
