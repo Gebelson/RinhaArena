@@ -191,6 +191,7 @@ let cachorroTemplate = null;
 let cachorroPromise = null;
 let macacoTemplate = null;
 let macacoPromise = null;
+let macacoMotionData = null;
 let blueCapivaraTex = null;
 let blueCapivaraMat = null;
 let redCapivaraMat = null;
@@ -463,7 +464,7 @@ export function getMacacoModel() {
   if (!macacoPromise) {
     const loader = new GLTFLoader();
     macacoPromise = new Promise((resolve) => {
-      loader.load('./models/macaco.glb?v=2', (gltf) => {
+      loader.load('./models/macaco.glb?v=3', async (gltf) => {
         const root = gltf.scene;
         const box = new THREE.Box3().setFromObject(root);
         const size = box.getSize(new THREE.Vector3());
@@ -474,6 +475,11 @@ export function getMacacoModel() {
         const wrapper = new THREE.Group();
         wrapper.name = 'macaco_wrapper'; wrapper.add(inner); wrapper.scale.setScalar(2.2 / (size.y || 1));
         wrapper.traverse((object) => { if (object.isMesh) { object.castShadow = true; object.receiveShadow = false; } });
+        try {
+          const response = await fetch('./assets/animations/macaco-reference.json?v=1');
+          if (!response.ok) throw new Error(`Animation asset: ${response.status}`);
+          macacoMotionData = await response.json();
+        } catch (error) { console.warn('Monkey reference animation unavailable:', error); }
         macacoTemplate = wrapper; resolve(wrapper);
       }, undefined, (error) => { console.error('Failed to load macaco model:', error); resolve(null); });
     });
@@ -667,7 +673,7 @@ export class CharacterView {
 
       this.pose.add(capivara);
       if (this.characterId === 'macaco') {
-        this.monkeyAnimator = new MonkeyAnimator(capivara, this.pose, this.capBones);
+        this.monkeyAnimator = new MonkeyAnimator(capivara, this.pose, this.capBones, macacoMotionData);
       }
 
       if (this.capBones.L_Hand) {

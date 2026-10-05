@@ -4,15 +4,27 @@ import { clamp, lerp } from '../core/math.js';
 const TAU = Math.PI * 2;
 const smooth = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const damp = (from, to, rate, dt) => lerp(from, to, 1 - Math.exp(-rate * dt));
+function spring(state, target, frequency, dt) {
+  // Exact critically damped response: stable at any accepted frame time,
+  // with inertia but no endless oscillation or frame-rate-dependent whip.
+  const offset = state.value - target;
+  const change = state.velocity + frequency * offset;
+  const decay = Math.exp(-frequency * dt);
+  state.value = target + (offset + change * dt) * decay;
+  state.velocity = (state.velocity - frequency * change * dt) * decay;
+  return state.value;
+}
 const supportCache = new WeakMap();
 
 // This rig has different rest axes on the head, hands and mirrored limbs.
 // Work in the character's anatomical frame, never add angles to FBX Eulers.
 export class MonkeyAnimator {
-  constructor(model, pose, bones) {
+  constructor(model, pose, bones, motionData = null) {
     this.model = model;
     this.pose = pose;
     this.bones = bones;
+    this.motions = motionData?.motions || null;
+    this.airTime = 0;
     this.entries = [];
     this.byName = {};
     this.speed = 0;
@@ -25,6 +37,7 @@ export class MonkeyAnimator {
     this.lastFace = null;
     this.wasKO = false;
     this.getUp = 0;
+    this.acceleration = 0;
     this.restRoot = model.position.clone();
     this.v = new THREE.Vector3();
     this.q = new THREE.Quaternion();
@@ -41,10 +54,32 @@ export class MonkeyAnimator {
     model.traverse((bone) => {
       if (!bone.isBone) return;
       const entry = { bone, rest: bone.quaternion.clone(), current: bone.quaternion.clone(),
-        position: bone.position.clone(), scale: bone.scale.clone(), angles: new Float32Array(3) };
+        position: bone.position.clone(), scale: bone.scale.clone(), angles: new Float32Array(3),
+        motion: bone.quaternion.clone(), hasMotion: false };
       this.entries.push(entry);
       this.byName[bone.name] = entry;
     });
+    this.tail = this.entries.filter(entry => /^Tail\d{2}$/.test(entry.bone.name))
+      .sort((a, b) => a.bone.name.localeCompare(b.bone.name));
+    for (const entry of this.tail) {
+      entry.tail = true;
+      entry.pitch = { value: 0, velocity: 0 };
+      entry.yaw = { value: 0, velocity: 0 };
+    }
+    this.legs = {};
+    this.rigInverse.copy(model.matrixWorld).invert();
+    for (const side of ['L', 'R']) {
+      const points = ['Thigh', 'Calf', 'Foot'].map(part =>
+        bones[`${side}_${part}`]?.getWorldPosition(new THREE.Vector3()).applyMatrix4(this.rigInverse));
+      if (points.some(point => !point)) continue;
+      const upper = points[1].clone().sub(points[0]);
+      const lower = points[2].clone().sub(points[1]);
+      this.legs[side] = {
+        upper: Math.hypot(upper.y, upper.z), lower: Math.hypot(lower.y, lower.z),
+        upperAngle: Math.atan2(upper.z, -upper.y), lowerAngle: Math.atan2(lower.z, -lower.y),
+        ankleY: points[2].y - points[0].y, ankleZ: points[2].z - points[0].z,
+      };
+    }
     // A small set of skinned support vertices keeps feet, hands and the crown
     // above the floor in crouches and falls without scanning the mesh per frame.
     this.support = [];
@@ -104,6 +139,7 @@ export class MonkeyAnimator {
   joint(name, pitch = 0, yaw = 0, roll = 0) {
     const entry = this.byName[name];
     if (!entry) return;
+    if (!entry.tail) entry.hasMotion = false;
     entry.angles[0] = pitch;
     entry.angles[1] = yaw;
     entry.angles[2] = roll;
@@ -124,6 +160,89 @@ export class MonkeyAnimator {
     this.joint(`${side}_ToeBase`, clamp(-foot * 0.22, -0.08, 0.08));
   }
 
+  gaitLeg(side, phase, moving, run, hipPitch, landing) {
+    const limb = this.legs[side];
+    if (!limb) return;
+    const cycle = ((phase / TAU) % 1 + 1) % 1;
+    const contact = lerp(0.64, 0.54, run);
+    const swing = cycle > contact;
+    const t = swing ? (cycle - contact) / (1 - contact) : cycle / contact;
+    const step = (limb.upper + limb.lower) * lerp(0.18, 0.28, run) * moving;
+    // During support the ankle moves steadily backwards; during swing it
+    // clears the ground and returns. A sinusoid has neither a planted phase
+    // nor a distinct heel contact, which made the previous gait look rubbery.
+    let forward = swing ? lerp(-1, 1, smooth(t)) : 1 - 2 * t;
+    let lift = swing ? Math.sin(Math.PI * t) ** 1.5 : 0;
+    if (this.motions?.walk.feet) {
+      // Use the reference's actual foot trajectory, adapted to this leg's
+      // length. IK retains the flat contact and avoids imported ankle twists.
+      const cycle = ((this.phase / TAU) % 1 + 1) % 1;
+      let walkZ = 0, walkY = 0;
+      for (const name of ['walk', 'run']) {
+        const clip = this.motions[name], values = clip.feet[side];
+        const frame = cycle * (clip.count - 1), first = Math.floor(frame), second = Math.min(first + 1, clip.count - 1);
+        const z = lerp(values[first * 2], values[second * 2], frame - first);
+        const y = lerp(values[first * 2 + 1], values[second * 2 + 1], frame - first);
+        if (name === 'walk') { walkZ = z; walkY = y; }
+        else { forward = lerp(walkZ, z, run); lift = lerp(walkY, y, run); }
+      }
+    }
+    const z = limb.ankleZ + step * forward;
+    const clearance = lift * limb.lower * lerp(0.24, 0.38, run) * moving;
+    const compression = (limb.upper + limb.lower) * (0.035 + run * 0.025 + landing * 0.45);
+    const y = limb.ankleY + compression + clearance;
+    const distance = clamp(Math.hypot(y, z), Math.abs(limb.upper - limb.lower) + 0.001,
+      (limb.upper + limb.lower) * 0.995);
+    const knee = Math.acos(clamp((distance * distance - limb.upper ** 2 - limb.lower ** 2)
+      / (2 * limb.upper * limb.lower), -1, 1));
+    const upperAngle = Math.atan2(z, -y)
+      + Math.atan2(limb.lower * Math.sin(knee), limb.upper + limb.lower * Math.cos(knee));
+    const thigh = limb.upperAngle - upperAngle - hipPitch;
+    const calf = limb.lowerAngle - limb.upperAngle + knee;
+    const toeOff = !swing ? smooth((t - 0.78) / 0.22) * moving * 0.12 : -0.035 * moving;
+    this.leg(side, thigh, calf, -(hipPitch + thigh + calf) + toeOff);
+  }
+
+  updateTail(dt, moving, run, airborne, ko, held) {
+    // The curled rest shape remains intact. Small bends counterbalance the
+    // pelvis, turn opposite steering, and reach the tip with increasing lag.
+    let pitch = ko ? 0 : clamp(-this.acceleration * 0.003 + (airborne ? 0.025 : 0)
+      + Math.sin(this.phase * 2 - 0.5) * 0.006 * moving, -0.045, 0.045);
+    let yaw = ko ? 0 : clamp(-this.turn * 0.035
+      + Math.sin(this.phase - 0.7) * lerp(0.014, 0.028, run) * moving
+      + Math.sin(this.time * 1.25) * 0.012 * (1 - moving), -0.12, 0.12);
+    if (held) { pitch *= 0.4; yaw *= 0.35; }
+    for (let i = 0; i < this.tail.length; i++) {
+      const entry = this.tail[i];
+      const rate = 10 - i * 0.8;
+      pitch = spring(entry.pitch, pitch, rate, dt);
+      yaw = spring(entry.yaw, yaw, rate, dt);
+      this.joint(entry.bone.name, pitch, yaw);
+      pitch *= 0.82; yaw *= 0.82;
+    }
+  }
+
+  sampleMotion(name, time, loop = false, weight = 1) {
+    const clip = this.motions?.[name];
+    if (!clip || weight <= 0) return;
+    const groundedFeet = ['idle', 'walk', 'run', 'land'].includes(name);
+    const normalized = loop ? ((time / clip.duration) % 1 + 1) % 1 : clamp(time / clip.duration, 0, 1);
+    const frame = normalized * (clip.count - 1), first = Math.floor(frame);
+    const second = Math.min(clip.count - 1, first + 1), blend = frame - first;
+    for (const [name, values] of Object.entries(clip.rotations)) {
+      if (groundedFeet && /Thigh|Calf|Foot|ToeBase/.test(name)) continue;
+      const entry = this.byName[name];
+      if (!entry) continue;
+      this.q.fromArray(values, first * 4).normalize();
+      this.target.fromArray(values, second * 4).normalize();
+      this.q.slerp(this.target, blend);
+      if (!entry.hasMotion) entry.motion.copy(entry.rest);
+      entry.motion.slerp(this.q, weight).normalize();
+      entry.hasMotion = true;
+      entry.angles.fill(0);
+    }
+  }
+
   update(p, dt, reaction = {}) {
     // Bound frame time after tab suspension; animation state stays finite.
     dt = clamp(Number.isFinite(dt) ? dt : 0, 0, 0.05);
@@ -137,20 +256,29 @@ export class MonkeyAnimator {
         this.initialized = false;
         this.pose.rotation.set(0, 0, 0);
         this.speed = 0;
+        this.acceleration = 0;
+        for (const entry of this.tail) {
+          entry.pitch.value = entry.pitch.velocity = 0;
+          entry.yaw.value = entry.yaw.velocity = 0;
+        }
       } else this.getUp = 0.65;
     }
     this.wasKO = ko;
     this.getUp = Math.max(0, this.getUp - dt);
     this.time += dt;
     const desiredSpeed = ko || held ? 0 : clamp(p.spd ?? Math.hypot(p.vx ?? 0, p.vz ?? 0), 0, 10);
+    const previousSpeed = this.speed;
     this.speed = damp(this.speed, desiredSpeed, 12, dt);
+    this.acceleration = damp(this.acceleration, dt > 0 ? clamp((this.speed - previousSpeed) / dt, -12, 12) : 0, 6, dt);
     const moving = smooth(this.speed / 0.8);
     const run = smooth((this.speed - 2.5) / 4.3);
-    if (!airborne && !held && !ko) this.phase += TAU * lerp(1.35, 2.6, run) * moving * dt;
+    if (!airborne && !held && !ko) this.phase += TAU * lerp(0.85, 1.85, run)
+      * clamp(this.speed / 2.5, 0, 1) * moving * dt;
     if (this.wasAirborne && !airborne && !held && !ko) this.land = 1;
     this.wasAirborne = airborne;
-    this.land = Math.max(0, this.land - dt * 5.5);
-    const landing = Math.sin(this.land * Math.PI) * 0.16;
+    this.land = Math.max(0, this.land - dt * 3.2);
+    this.airTime = airborne ? this.airTime + dt : 0;
+    const landing = Math.sin(this.land * Math.PI) * 0.09;
     let turnTarget = 0;
     const face = Number.isFinite(p.face) ? p.face : 0;
     if (this.lastFace !== null && dt > 0) {
@@ -159,35 +287,45 @@ export class MonkeyAnimator {
     }
     this.lastFace = face;
     this.turn = damp(this.turn, turnTarget, 9, dt);
-    for (const e of this.entries) e.angles.fill(0);
+    for (const e of this.entries) { e.angles.fill(0); e.hasMotion = false; }
 
     const stride = Math.sin(this.phase);
     const breath = Math.sin(this.time * 2.2);
-    const lean = 0.11 + run * 0.20 + landing;
-    this.joint('Hip', lean * 0.12, stride * moving * 0.035, -this.turn * 0.018);
-    this.joint('Waist', lean * 0.35, -stride * moving * 0.022);
-    this.joint('Spine01', lean * 0.35, stride * moving * 0.025);
-    this.joint('Spine02', lean * 0.20 + breath * 0.008, -stride * moving * 0.018);
-    this.joint('Head', -lean * 0.65, Math.sin(this.time * 0.7) * 0.018 * (1 - moving));
+    const lean = 0.07 + run * 0.09 + this.acceleration * 0.0025 + landing;
+    const hipPitch = lean * 0.15;
+    this.joint('Hip', hipPitch, stride * moving * 0.018, -this.turn * 0.008);
+    this.joint('Waist', lean * 0.30, -stride * moving * 0.012);
+    this.joint('Spine01', lean * 0.35, stride * moving * 0.014);
+    this.joint('Spine02', lean * 0.20 + breath * 0.004, -stride * moving * 0.01);
+    this.joint('Head', -lean * 0.70, Math.sin(this.time * 0.7) * 0.009 * (1 - moving));
     for (const side of ['L', 'R']) {
       const wave = side === 'L' ? stride : -stride;
-      const recovery = Math.max(0, wave);
-      const amplitude = lerp(0.23, 0.46, run) * moving;
-      const crouch = 0.10 + 0.09 * run + landing;
-      this.leg(side, -crouch - wave * amplitude,
-        crouch * 1.7 + recovery * lerp(0.28, 0.62, run) * moving,
-        wave * amplitude * 0.40 - crouch * 0.55);
-      // Opposite arm/leg timing, relaxed elbows and delayed wrist follow-through.
-      this.arm(side, -0.14 + wave * lerp(0.24, 0.48, run) * moving,
-        1.13 - run * 0.04, -0.22 - Math.max(0, -wave) * 0.20 * moving,
-        Math.sin(this.phase - 0.4) * 0.035 * moving);
+      this.gaitLeg(side, this.phase + (side === 'R' ? Math.PI : 0), moving, run, hipPitch, landing);
+      // Relaxed elbows; the shoulder counterbalances the supporting leg.
+      this.arm(side, -0.10 + wave * lerp(0.10, 0.22, run) * moving,
+        1.16 - run * 0.02, -0.18 - Math.max(0, -wave) * 0.09 * moving,
+        Math.sin(this.phase - 0.5) * 0.016 * moving);
+    }
+    if (this.motions && !ko && !held) {
+      this.sampleMotion('idle', this.time, true);
+      const cycle = this.phase / TAU;
+      this.sampleMotion('walk', cycle * this.motions.walk.duration, true, moving);
+      this.sampleMotion('run', cycle * this.motions.run.duration, true, run);
+      if (airborne) {
+        const clip = (p.vy ?? 0) >= 0 ? 'jump' : 'fall';
+        const time = clip === 'jump' ? Math.min(this.airTime * 1.5, this.motions.jump.duration)
+          : clamp(-(p.vy ?? 0) / 6.5, 0, 1) * this.motions.fall.duration;
+        this.sampleMotion(clip, time);
+      } else if (this.land > 0) {
+        this.sampleMotion('land', (1 - this.land) * this.motions.land.duration, false, smooth(this.land) * 0.65);
+      }
     }
 
     const holding = !!(p.carryFlag || p.heldBomb || p.heldPlayer);
     const throwT = p.throwT ?? 0;
     const punchT = p.punchT ?? 0;
     const hit = clamp(reaction.hitFlinch ?? 0, 0, 1);
-    let rootPitch = 0, rootRoll = -this.turn * 0.025, rootY = 0, rootZ = 0;
+    let rootPitch = 0, rootRoll = -this.turn * 0.012, rootY = 0, rootZ = 0;
     let response = 15;
     if ((p.dashT ?? 0) > 0 && !airborne) {
       this.joint('Waist', 0.10);
@@ -195,17 +333,19 @@ export class MonkeyAnimator {
       this.joint('Head', -0.15);
       this.arm('L', 0.25, 1.12, -0.18);
       this.arm('R', 0.25, 1.12, -0.18);
-      rootPitch = 0.08;
-      response = 24;
+      rootPitch = 0.05;
+      response = 20;
     }
     if (airborne) {
       const tuck = smooth(((p.vy ?? 0) + 1.5) / 6);
-      this.leg('L', -0.23 - tuck * 0.24, 0.44 + tuck * 0.35, -0.16);
-      this.leg('R', -0.14 - tuck * 0.24, 0.40 + tuck * 0.30, -0.12);
-      this.arm('L', -0.24, 0.83, -0.37);
-      this.arm('R', -0.24, 0.83, -0.37);
-      rootPitch = clamp(-(p.vy ?? 0) * 0.025, -0.17, 0.20);
-      this.joint('Head', -0.08 - rootPitch * 0.45);
+      if (!this.motions) {
+        this.leg('L', -0.20 - tuck * 0.16, 0.38 + tuck * 0.25, -0.14);
+        this.leg('R', -0.15 - tuck * 0.16, 0.36 + tuck * 0.22, -0.12);
+        this.arm('L', -0.16, 1.02, -0.28);
+        this.arm('R', -0.16, 1.02, -0.28);
+      }
+      rootPitch = clamp(-(p.vy ?? 0) * 0.014, -0.09, 0.11);
+      if (!this.motions) this.joint('Head', -0.08 - rootPitch * 0.45);
     }
     if (holding) {
       // Open shoulders, then reach forward/up. The arms clear the head and jacket.
@@ -223,16 +363,16 @@ export class MonkeyAnimator {
         shoulder = lerp(0.22, -0.20, a); elbow = lerp(0.28, -0.30, a); chest = -0.08 * a; open = -1.08;
       } else if (t < 0.62) {
         const a = smooth((t - 0.28) / 0.34);
-        shoulder = lerp(-0.20, 1.20, a); elbow = lerp(-0.30, 0.10, a); chest = lerp(-0.08, 0.14, a); open = -1.08;
+        shoulder = lerp(-0.20, 1.02, a); elbow = lerp(-0.30, 0.10, a); chest = lerp(-0.08, 0.10, a); open = -1.08;
       } else {
         const a = smooth((t - 0.62) / 0.38);
-        shoulder = lerp(1.20, -0.14, a); elbow = lerp(0.10, -0.22, a); chest = lerp(0.14, 0.035, a); open = lerp(-1.08, 1.13, a);
+        shoulder = lerp(1.02, -0.10, a); elbow = lerp(0.10, -0.18, a); chest = lerp(0.10, 0.025, a); open = lerp(-1.08, 1.16, a);
       }
       this.arm('L', shoulder, open, elbow, -0.06);
       this.arm('R', shoulder, open, elbow, -0.06);
       this.joint('Spine01', chest);
       this.joint('Head', -chest * 0.5);
-      response = 28;
+      response = 24;
     } else if (punchT > 0 && !holding) {
       // A grounded alternating jab, driven by torso rotation rather than a mesh lunge.
       const t = clamp(1 - punchT / 0.3, 0, 1);
@@ -242,12 +382,12 @@ export class MonkeyAnimator {
       const active = p.punchArm ? 'L' : 'R';
       const guard = p.punchArm ? 'R' : 'L';
       const sign = p.punchArm ? 1 : -1;
-      this.arm(active, -0.36 - Math.max(0, reach) * 1.00, 1.05,
-        lerp(-0.55, -0.05, Math.max(0, reach)), 0);
-      this.arm(guard, -0.36, 1.10, -0.48);
-      this.joint('Spine01', 0.05 + Math.max(0, reach) * 0.08, sign * reach * 0.11);
+      this.arm(active, -0.25 - Math.max(0, reach) * 0.78, 1.10,
+        lerp(-0.42, -0.05, Math.max(0, reach)), 0);
+      this.arm(guard, -0.22, 1.14, -0.32);
+      this.joint('Spine01', 0.035 + Math.max(0, reach) * 0.05, sign * reach * 0.14);
       this.joint('Head', -0.07, -sign * reach * 0.05);
-      response = 30;
+      response = 24;
     }
     if (hit > 0 && !held && !ko) {
       const direction = reaction.hitDir || 1;
@@ -255,20 +395,20 @@ export class MonkeyAnimator {
       this.joint('Head', -0.07 * hit, -direction * 0.06 * hit);
       this.arm('L', 0.16 * hit, 1.0, -0.35);
       this.arm('R', 0.16 * hit, 1.0, -0.35);
-      rootPitch = -0.10 * hit; rootRoll += direction * 0.06 * hit;
-      rootZ = -0.04 * hit;
-      response = 24;
+      rootPitch = -0.06 * hit; rootRoll += direction * 0.035 * hit;
+      rootZ = -0.02 * hit;
+      response = 20;
     }
     if (held) {
-      const struggle = Math.sin(this.time * 8);
-      this.leg('L', -0.15 - struggle * 0.19, 0.40 + Math.max(0, struggle) * 0.24, -0.12);
-      this.leg('R', -0.15 + struggle * 0.19, 0.40 + Math.max(0, -struggle) * 0.24, -0.12);
-      this.arm('L', -0.30 + struggle * 0.14, 0.9, -0.42);
-      this.arm('R', -0.30 - struggle * 0.14, 0.9, -0.42);
-      this.joint('Spine01', 0.03, struggle * 0.03);
-      this.joint('Head', -0.025, Math.sin(this.time * 5) * 0.045);
+      const struggle = Math.sin(this.time * 3.2);
+      this.leg('L', -0.15 - struggle * 0.07, 0.40 + Math.max(0, struggle) * 0.08, -0.12);
+      this.leg('R', -0.15 + struggle * 0.07, 0.40 + Math.max(0, -struggle) * 0.08, -0.12);
+      this.arm('L', -0.26 + struggle * 0.05, 1.02, -0.32);
+      this.arm('R', -0.26 - struggle * 0.05, 1.02, -0.32);
+      this.joint('Spine01', 0.025, struggle * 0.012);
+      this.joint('Head', -0.025, Math.sin(this.time * 2.3) * 0.018);
       rootPitch = -Math.PI / 2 + 0.16;
-      rootRoll = struggle * 0.035;
+      rootRoll = struggle * 0.015;
       rootY = 0.25;
     } else if (ko) {
       this.leg('L', -0.10, 0.28, -0.10);
@@ -292,6 +432,7 @@ export class MonkeyAnimator {
       rootRoll = 0.08 * weight;
     }
 
+    this.updateTail(dt, moving, run, airborne, ko, held);
     const alpha = this.initialized ? 1 - Math.exp(-response * dt) : 1;
     this.pose.rotation.x = damp(this.pose.rotation.x, rootPitch, ko ? 8 : 14, dt);
     this.pose.rotation.y = damp(this.pose.rotation.y, 0, 14, dt);
@@ -304,7 +445,7 @@ export class MonkeyAnimator {
     this.model.matrixWorld.decompose(this.scratchPosition, this.modelQ, this.scratchScale);
     for (const e of this.entries) {
       e.bone.position.copy(e.position); e.bone.scale.copy(e.scale);
-      this.target.copy(e.rest);
+      this.target.copy(e.hasMotion ? e.motion : e.rest);
       if (e.angles[0] || e.angles[1] || e.angles[2]) {
         // Entries follow hierarchy order, so their parent matrices are current.
         e.bone.parent.matrixWorld.decompose(this.scratchPosition, this.parentInverse, this.scratchScale);
@@ -318,7 +459,7 @@ export class MonkeyAnimator {
         }
         this.target.premultiply(this.delta).normalize();
       }
-      e.current.slerp(this.target, alpha).normalize();
+      e.current.slerp(this.target, e.tail ? 1 : alpha).normalize();
       e.bone.quaternion.copy(e.current);
       e.bone.updateWorldMatrix(false, false);
     }

@@ -1,6 +1,7 @@
 // Numerical pose/skin audit; render-style matrix updates expose stale binds.
 // Usage: node scripts/audit-macaco-animation.mjs [model.glb]
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { registerHooks } from 'node:module';
 import { loadMacacoRig } from './macaco-rig-utils.mjs';
@@ -12,6 +13,7 @@ registerHooks({ resolve(specifier, context, nextResolve) {
 } });
 const { MonkeyAnimator } = await import('../src/render/monkey-animation.js');
 const filename = path.resolve(process.argv[2] || path.join(repository, 'models/macaco.glb'));
+const motionData = JSON.parse(fs.readFileSync(path.join(repository, 'assets/animations/macaco-reference.json'), 'utf8'));
 function createAnimator() {
   const rig = loadMacacoRig(filename), THREE = rig.THREE;
   const box = new THREE.Box3().setFromObject(rig.root);
@@ -22,7 +24,7 @@ function createAnimator() {
   model.add(inner); model.scale.setScalar(2.2 / size.y);
   pose.add(model); group.add(pose); group.updateMatrixWorld(true);
   const baseline = rig.deform();
-  return { rig, model, pose, group, baseline, animator: new MonkeyAnimator(model, pose, rig.bones) };
+  return { rig, model, pose, group, baseline, animator: new MonkeyAnimator(model, pose, rig.bones, motionData) };
 }
 const cases = {
   idle: {}, walk: { spd: 2.5, vx: 2.5 }, run: { spd: 7, vx: 7 },
@@ -44,6 +46,48 @@ for (const timer of [0.30, 0.26, 0.20, 0.16, 0.08, 0.01]) {
 for (const timer of [0.35, 0.27, 0.18, 0.12, 0.06]) cases[`throw-${timer}`] = { throwT: timer };
 const report = {};
 const failures = [];
+for (const name of ['idle', 'walk', 'run', 'jump', 'land', 'fall']) {
+  const clip = motionData.motions[name];
+  if (!clip || clip.duration <= 0 || clip.count < 2) { failures.push(`${name}: empty reference clip`); continue; }
+  for (const values of Object.values(clip.rotations)) {
+    if (values.length !== clip.count * 4 || values.some(value => !Number.isFinite(value))) failures.push(`${name}: invalid reference rotations`);
+  }
+}
+// The added tail must skin actual vertices, preserve the bind pose, and bend
+// smoothly without pulling the jacket, face or legs along with it.
+const tailRig = loadMacacoRig(filename);
+const tailIndices = new Set(Object.entries(tailRig.bones).filter(([name]) => /^Tail\d{2}$/.test(name))
+  .map(([, bone]) => tailRig.mesh.skeleton.bones.indexOf(bone)));
+if (tailIndices.size !== 6) failures.push('tail: six joints required');
+let tailWeightError = 0;
+const tailVertices = new Set();
+const joints = tailRig.geometry.attributes.skinIndex, weights = tailRig.geometry.attributes.skinWeight;
+for (let index = 0; index < weights.count; index++) {
+  let sum = 0;
+  for (let c = 0; c < 4; c++) {
+    sum += weights.getComponent(index, c);
+    if (tailIndices.has(joints.getComponent(index, c)) && weights.getComponent(index, c) > 0) tailVertices.add(index);
+  }
+  tailWeightError = Math.max(tailWeightError, Math.abs(1 - sum));
+}
+if (tailVertices.size < 100 || tailWeightError > 1e-6) failures.push('tail: invalid skin influences');
+for (const name of Object.keys(tailRig.bones).filter(name => /^Tail\d{2}$/.test(name))) {
+  tailRig.bones[name].quaternion.multiply(new tailRig.THREE.Quaternion().setFromAxisAngle(new tailRig.THREE.Vector3(0, 0, 1), 0.055));
+}
+const tailDeformed = tailRig.deform();
+let bodyDelta = 0, tailDelta = 0;
+for (let index = 0; index < tailDeformed.length; index++) {
+  const delta = tailDeformed[index].distanceTo(tailRig.rest[index]);
+  if (tailVertices.has(index)) tailDelta = Math.max(tailDelta, delta);
+  else bodyDelta = Math.max(bodyDelta, delta);
+}
+const tailEdges = tailRig.edgeRatios(tailDeformed, index => tailVertices.has(index));
+if (bodyDelta > 1e-7 || tailDelta < 0.002 || tailEdges.max > 1.65) failures.push('tail: mesh bend/attachment failed');
+const tailMotion = createAnimator();
+tailMotion.animator.update({state:'alive',y:0,face:0,spd:0}, 1 / 60);
+const initialTail = tailMotion.rig.bones.Tail06.quaternion.clone();
+for (let frame = 0; frame < 90; frame++) tailMotion.animator.update({state:'alive',y:0,face:0,spd:6.8}, 1 / 60);
+if (tailMotion.rig.bones.Tail06.quaternion.angleTo(initialTail) < 0.002) failures.push('tail: no running motion');
 const instances = [];
 for (const [label, data] of Object.entries(cases)) {
   const { rig, pose, group, baseline, animator } = createAnimator();
@@ -81,7 +125,7 @@ for (const [label, data] of Object.entries(cases)) {
     }
     rootMax = Math.max(rootMax, Math.abs(pose.position.y));
     for (const { bone, position, scale } of boneRest) boneError = Math.max(boneError, bone.position.distanceTo(position), bone.scale.distanceTo(scale));
-    if (frame % 15 !== 0 && frame !== 89 && frame !== 20 && frame !== 21) continue;
+    if (frame % 5 !== 0 && frame !== 89 && frame !== 20 && frame !== 21) continue;
     const vertices = rig.deform();
     finite &&= vertices.every(vertex => Number.isFinite(vertex.x + vertex.y + vertex.z));
     const edges = rig.edgeRatios(vertices, undefined, baseline);
@@ -97,6 +141,7 @@ for (const [label, data] of Object.entries(cases)) {
   if (rootMax > 4) failures.push(`${label}: root drift (${rootMax})`);
   if (boneError > 1e-8) failures.push(`${label}: translated/scaled bone`);
   if (floorMin < -0.003) failures.push(`${label}: floor penetration (${floorMin})`);
+  if (maxRatio > 4 || p99 > 1.75) failures.push(`${label}: excessive skin deformation (${maxRatio}/${p99})`);
   report[label] = { minY: +minY.toFixed(4), poseY: +poseY.toFixed(4), maxEdge: maxRatio, p99,
     minEdge: minRatio, headError, boneError, rootMax: +rootMax.toFixed(4) };
 }
@@ -132,6 +177,7 @@ for (let frame = 0; frame < 30; frame++) {
 }
 updateCosts.sort((a, b) => a - b);
 const cpu = { characters: benchmark.length, medianMs: +updateCosts[15].toFixed(2), p95Ms: +updateCosts[28].toFixed(2) };
-console.log(JSON.stringify({ model: path.relative(repository, filename), failures, cpu, remoteParity }));
+console.log(JSON.stringify({ model: path.relative(repository, filename), failures, cpu, remoteParity,
+  tail: { joints: tailIndices.size, vertices: tailVertices.size, bodyDelta, tailDelta, edges: tailEdges } }));
 console.table(Object.entries(report).map(([state, row]) => ({ state, minY: row.minY, poseY: row.poseY, maxEdge: row.maxEdge, p99: row.p99 })));
 if (failures.length) process.exitCode = 1;
