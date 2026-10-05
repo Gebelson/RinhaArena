@@ -1451,6 +1451,53 @@ export class CharacterView {
           if (b.R_Hand && r.R_Hand) b.R_Hand.rotation.x = r.R_Hand.x;
         }
 
+        // The monkey's forward stance and active arms need a different gait
+        // from the upright mascots. Keep combat, carrying, falling and grabs
+        // on the shared animation path above so those actions remain readable.
+        if (this.characterId === 'macaco' && !ko && !knocked && !isHeld
+          && !airborne && !holding && !punching && !throwing && hitFlinch < 0.01) {
+          const stride = Math.sin(this.phase);
+          const liftL = Math.max(0, stride);
+          const liftR = Math.max(0, -stride);
+          const pace = clamp(run, 0, 1);
+          const sway = Math.cos(this.phase) * pace;
+          if (b.Pelvis && pos?.Pelvis && r.Pelvis) {
+            b.Pelvis.position.y = pos.Pelvis.y - 0.045 * pace + Math.abs(stride) * 0.035 * pace;
+            b.Pelvis.rotation.y = r.Pelvis.y + stride * 0.10 * pace;
+            b.Pelvis.rotation.z = r.Pelvis.z + sway * 0.045;
+          }
+          if (b.Waist && r.Waist) b.Waist.rotation.z = r.Waist.z - 0.09 - 0.14 * pace;
+          if (b.Spine01 && r.Spine01) {
+            b.Spine01.rotation.z = r.Spine01.z - 0.08 - 0.26 * pace;
+            b.Spine01.rotation.y = r.Spine01.y - stride * 0.09 * pace;
+          }
+          if (b.Spine02 && r.Spine02) b.Spine02.rotation.y = r.Spine02.y + stride * 0.06 * pace;
+
+          if (b.L_Thigh && r.L_Thigh) b.L_Thigh.rotation.z = r.L_Thigh.z - 0.18 - stride * 0.50 * pace;
+          if (b.R_Thigh && r.R_Thigh) b.R_Thigh.rotation.z = r.R_Thigh.z - 0.18 + stride * 0.50 * pace;
+          if (b.L_Calf && r.L_Calf) b.L_Calf.rotation.z = r.L_Calf.z + 0.38 + liftL * 0.45 * pace;
+          if (b.R_Calf && r.R_Calf) b.R_Calf.rotation.z = r.R_Calf.z + 0.38 + liftR * 0.45 * pace;
+          if (b.L_Foot && r.L_Foot) b.L_Foot.rotation.z = r.L_Foot.z - 0.16 + stride * 0.18 * pace;
+          if (b.R_Foot && r.R_Foot) b.R_Foot.rotation.z = r.R_Foot.z - 0.16 - stride * 0.18 * pace;
+
+          if (b.L_Clavicle && r.L_Clavicle) b.L_Clavicle.rotation.y = r.L_Clavicle.y + stride * 0.08 * pace;
+          if (b.R_Clavicle && r.R_Clavicle) b.R_Clavicle.rotation.y = r.R_Clavicle.y - stride * 0.08 * pace;
+          if (b.L_Upperarm && r.L_Upperarm) {
+            b.L_Upperarm.rotation.x = r.L_Upperarm.x - 0.70;
+            b.L_Upperarm.rotation.y = r.L_Upperarm.y + 0.50;
+            b.L_Upperarm.rotation.z = r.L_Upperarm.z - 0.48 + stride * 0.68 * pace;
+          }
+          if (b.R_Upperarm && r.R_Upperarm) {
+            b.R_Upperarm.rotation.x = r.R_Upperarm.x + 0.70;
+            b.R_Upperarm.rotation.y = r.R_Upperarm.y - 0.50;
+            b.R_Upperarm.rotation.z = r.R_Upperarm.z - 0.48 - stride * 0.68 * pace;
+          }
+          if (b.L_Forearm && r.L_Forearm) b.L_Forearm.rotation.z = r.L_Forearm.z - 0.32 - liftR * 0.25 * pace;
+          if (b.R_Forearm && r.R_Forearm) b.R_Forearm.rotation.z = r.R_Forearm.z - 0.32 - liftL * 0.25 * pace;
+          if (b.L_Hand && r.L_Hand) b.L_Hand.rotation.z = r.L_Hand.z - 0.12 - liftR * 0.15 * pace;
+          if (b.R_Hand && r.R_Hand) b.R_Hand.rotation.z = r.R_Hand.z - 0.12 - liftL * 0.15 * pace;
+        }
+
         // --- 5. HEAD & SNOUT DYNAMICS ---
         if (b.Head && r.Head) {
           if (isHeld) {
@@ -1479,6 +1526,10 @@ export class CharacterView {
             // Idle ambient sniffing / head tilt
             b.Head.rotation.x = r.Head.x + Math.sin(this.time * 1.5) * 0.03;
             b.Head.rotation.z = r.Head.z + Math.sin(this.time * 0.9) * 0.035;
+          }
+          if (this.characterId === 'macaco' && !ko && !knocked && !isHeld
+            && !airborne && !punching && !throwing && !holding && hitFlinch < 0.01) {
+            b.Head.rotation.z += 0.10 + 0.14 * clamp(run, 0, 1);
           }
         }
       }
