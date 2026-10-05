@@ -55,6 +55,17 @@ export class World {
   sync(view, dt, myId) {
     this.time += dt;
 
+    for (const state of view.interactives ?? []) {
+      const mesh = this.levelGroup.userData.interactiveMeshes?.get(state.id);
+      if (!mesh) continue;
+      mesh.position.x = state.x;
+      mesh.position.z = state.z;
+      if (state.type === 'rotator') mesh.rotation.y = -state.angle;
+      if (state.type === 'bridge') mesh.rotation.x = state.angle;
+      const warning = mesh.getObjectByName('warning');
+      if (warning) warning.material.emissive?.set(state.warning ? '#ff6a28' : '#000000');
+    }
+
     const seen = new Set();
     for (const p of view.players) {
       if (!p?.participantId || !p?.displayName) {

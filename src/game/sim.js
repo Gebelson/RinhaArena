@@ -51,6 +51,20 @@ const HIT_CREDIT = 5; // seconds a recent attacker stays eligible for the kill c
 const EMPTY_INPUT = { mx: 0, mz: 0, ax: 0, az: 0, ad: 7, run: 0, throw: false, grab: false, punch: false, jump: false, dash: false };
 
 export function createSim({ level, mode, config }) {
+  const interactiveSolids = [];
+  for (const item of level.interactives ?? []) {
+    if (item.type === 'rotator') {
+      for (let n = 0; n < 4; n++) {
+        const a = n * Math.PI / 2;
+        const solid = { x: item.x + Math.cos(a) * 3.25, z: item.z + Math.sin(a) * 3.25, w: 1.25, d: 1.25, h: 1.65, kind: 'pillar', interactiveId: item.id, orbit: n };
+        level.solids.push(solid); interactiveSolids.push(solid);
+      }
+    } else {
+      const solid = { x: item.x, z: item.z, w: item.w, d: item.d, h: item.h, kind: item.type === 'cart' ? 'cart' : 'mechanical', interactiveId: item.id };
+      if (item.type === 'bridge') { solid.x = 9999; solid.h = 0.01; }
+      level.solids.push(solid); interactiveSolids.push(solid);
+    }
+  }
   const sim = {
     level,
     mode,
@@ -81,6 +95,7 @@ export function createSim({ level, mode, config }) {
       puWave: 0, // time until the next spawn wave (first wave drops at once)
       puPend: [], // staggered per-point spawns queued within a wave
       flags: null,
+      interactives: (level.interactives ?? []).map((o) => ({ id: o.id, type: o.type, x: o.x, z: o.z, angle: 0, active: true, warning: false })),
     },
     events: [], // transient per-tick events, drained by the host
     nextId: 1,
@@ -88,6 +103,8 @@ export function createSim({ level, mode, config }) {
     punchHits: new Map(), // per-swing hit sets (one hit per target per swing)
     spawnIdx: { red: 0, blue: 0 },
     lastPowerup: null, // a med-pack always follows a curse box
+    interactiveSolids,
+    levelTime: 0,
   };
   mode.init(sim);
   return sim;
@@ -212,8 +229,11 @@ export function step(sim, inputs, dt) {
   }
 
   const paused = s.phase !== 'play';
+  if (!paused) updateLevelMechanics(sim, dt);
+  sim.dt = dt;
   for (const p of s.players) {
     updatePlayer(sim, p, inputs.get(p.id) ?? EMPTY_INPUT, dt, paused);
+    if (!paused) applyJumpPads(sim, p);
   }
   applyGrabs(sim, dt);
   playerCollisions(sim, s.players);
@@ -1319,4 +1339,74 @@ export function resetRound(sim) {
   sim.mode.init(sim);
   emit(sim, { t: 'newRound' });
   emit(sim, { t: 'tick', n: Math.ceil(s.countdown) });
+}
+function updateLevelMechanics(sim, dt) {
+  sim.levelTime += dt;
+  const byId = new Map((sim.state.interactives ?? []).map((x) => [x.id, x]));
+  for (const cfg of sim.level.interactives ?? []) {
+    const state = byId.get(cfg.id);
+    if (!state) continue;
+    const t = sim.levelTime + (cfg.phase || 0);
+    if (cfg.type === 'rotator') {
+      const old = state.angle || 0;
+      state.angle = t * cfg.speed;
+      const da = state.angle - old;
+      // Carry grounded players with the slow platform instead of relying on friction.
+      for (const p of sim.state.players) {
+        const dx = p.x - cfg.x, dz = p.z - cfg.z;
+        if (p.state !== 'alive' || p.y > 0.08 || Math.hypot(dx, dz) > cfg.radius) continue;
+        const c = Math.cos(da), sn = Math.sin(da);
+        p.x = cfg.x + dx * c - dz * sn; p.z = cfg.z + dx * sn + dz * c;
+      }
+      for (const solid of sim.interactiveSolids.filter((o) => o.interactiveId === cfg.id)) {
+        const a = state.angle + solid.orbit * Math.PI / 2;
+        solid.x = cfg.x + Math.cos(a) * 3.25; solid.z = cfg.z + Math.sin(a) * 3.25;
+      }
+    } else if (cfg.type === 'slider' || cfg.type === 'cart') {
+      let wave;
+      if (cfg.type === 'slider') {
+        const c = (t % cfg.period) / cfg.period;
+        state.warning = (c >= 0.30 && c < 0.38) || c >= 0.80;
+        const smooth = (v) => v * v * (3 - 2 * v);
+        if (c < 0.38) wave = -1;
+        else if (c < 0.5) wave = -1 + 2 * smooth((c - 0.38) / 0.12);
+        else if (c < 0.88) wave = 1;
+        else wave = 1 - 2 * smooth((c - 0.88) / 0.12);
+      } else {
+        wave = Math.sin((t / cfg.period) * Math.PI * 2);
+        state.warning = false;
+      }
+      state.x = cfg.x + (cfg.axis === 'x' ? wave * cfg.travel * 0.5 : 0);
+      state.z = cfg.z + (cfg.axis === 'z' ? wave * cfg.travel * 0.5 : 0);
+      const solid = sim.interactiveSolids.find((o) => o.interactiveId === cfg.id);
+      if (solid) { solid.x = state.x; solid.z = state.z; }
+    } else if (cfg.type === 'bridge') {
+      const cycle = (t % cfg.period) / cfg.period;
+      state.active = cycle < 0.55 || cycle > 0.93;
+      state.warning = (cycle >= 0.45 && cycle < 0.55) || cycle > 0.88;
+      state.angle = cycle < 0.55 ? 0 : cycle < 0.65 ? -Math.PI / 2 * ((cycle - 0.55) / 0.1) : cycle < 0.93 ? -Math.PI / 2 : -Math.PI / 2 * (1 - (cycle - 0.93) / 0.07);
+      const solid = sim.interactiveSolids.find((o) => o.interactiveId === cfg.id);
+      if (solid) {
+        // Upright bridge closes this risky shortcut; horizontal bridge is
+        // floor-like and nonblocking. Alternate routes remain available.
+        solid.x = state.active ? 9999 : cfg.x;
+        solid.z = cfg.z;
+        solid.h = state.active ? 0.01 : 1.45;
+      }
+    }
+  }
+}
+
+function applyJumpPads(sim, p) {
+  if (p.state !== 'alive' || p.y > 0.08 || p.jumpPadCd > 0) {
+    p.jumpPadCd = Math.max(0, (p.jumpPadCd || 0) - sim.dt);
+    return;
+  }
+  for (const pad of sim.level.jumpPads ?? []) {
+    if (Math.hypot(p.x - pad.x, p.z - pad.z) > 1.25) continue;
+    const dir = norm2(pad.tx - p.x, pad.tz - p.z);
+    p.vx = dir.x * 12; p.vz = dir.z * 12; p.vy = 8.5; p.y = 0.03; p.jumpPadCd = 1.1;
+    emit(sim, { t: 'jump', id: p.id, x: p.x, z: p.z });
+    break;
+  }
 }

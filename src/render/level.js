@@ -84,6 +84,7 @@ function crateTexture(theme) {
 export function buildLevel(scene, level, { touch }) {
   const theme = level.theme;
   const group = new THREE.Group();
+  group.userData.interactiveMeshes = new Map();
   const { w, d } = level.bounds;
 
   // floor slab + dark underside skirt (we're floating over a void)
@@ -204,6 +205,80 @@ export function buildLevel(scene, level, { touch }) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     group.add(mesh);
+  }
+
+  // Feira Suspensa set dressing. These use simple shared primitives so the
+  // level remains cheap even during a full 10v10 match.
+  for (const stall of level.decor?.marketStalls ?? []) {
+    const g = new THREE.Group();
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(3.5, 1.05, 1.35), toonMat(theme.wood || theme.crate));
+    counter.position.y = 0.53; g.add(counter);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(4.1, 0.18, 2.15), toonMat(stall.color));
+    roof.position.y = 2.25; g.add(roof);
+    for (const sx of [-1.65, 1.65]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.2, 8), toonMat('#664226'));
+      post.position.set(sx, 1.1, 0); g.add(post);
+    }
+    g.position.set(stall.x, 0, stall.z); g.rotation.y = stall.rot || 0;
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); group.add(g);
+  }
+  for (const shop of level.decor?.restaurants ?? []) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.8, 1.5), toonMat(shop.color));
+    body.position.y = 0.9; g.add(body);
+    const awning = new THREE.Mesh(new THREE.BoxGeometry(5, 0.18, 2.2), toonMat('#fff0c7'));
+    awning.position.set(0, 1.8, -0.25); g.add(awning);
+    g.position.set(shop.x, 0, shop.z); group.add(g);
+  }
+  for (const b of level.decor?.bushes ?? []) {
+    const bush = new THREE.Group();
+    for (const [ox, oz, sca] of [[0, 0, 1], [-0.55, 0.15, 0.75], [0.55, 0.1, 0.78]]) {
+      const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(0.85 * sca, 1), toonMat(theme.foliage || '#4f9b55'));
+      leaf.position.set(ox, 0.65, oz); bush.add(leaf);
+    }
+    bush.position.set(b.x, 0, b.z); group.add(bush);
+  }
+  for (const pad of level.jumpPads ?? []) {
+    const g = new THREE.Group();
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.35, 0.18, 24), toonMat(pad.id.includes('jr') ? '#ef5146' : '#3989ee'));
+    disc.position.y = 0.09; g.add(disc);
+    const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.0, 3), toonMat('#f8e253'));
+    arrow.rotation.x = Math.PI / 2; arrow.rotation.z = Math.atan2(pad.tx - pad.x, pad.tz - pad.z); arrow.position.y = 0.23; g.add(arrow);
+    g.position.set(pad.x, 0, pad.z); group.add(g);
+  }
+
+  for (const cfg of level.interactives ?? []) {
+    const g = new THREE.Group();
+    if (cfg.type === 'rotator') {
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(cfg.radius, cfg.radius, 0.24, 48), toonMat('#d6914b'));
+      disc.position.y = 0.12; g.add(disc);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(cfg.radius - 0.25, 0.13, 8, 48), toonMat('#ffe08a'));
+      ring.rotation.x = Math.PI / 2; ring.position.y = 0.26; g.add(ring);
+      for (let n = 0; n < 4; n++) {
+        const p = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 1.65, 12), toonMat(theme.pillar));
+        const a = n * Math.PI / 2; p.position.set(Math.cos(a) * 3.25, 0.83, Math.sin(a) * 3.25); p.castShadow = true; g.add(p);
+      }
+    } else if (cfg.type === 'slider') {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(cfg.w, cfg.h, cfg.d), toonMat('#56717c'));
+      wall.position.y = cfg.h / 2; wall.castShadow = true; g.add(wall);
+      const beacon = new THREE.Mesh(new THREE.BoxGeometry(cfg.w * 0.7, 0.12, cfg.d + 0.12), toonMat('#f4c542'));
+      beacon.position.y = cfg.h + 0.07; beacon.name = 'warning'; g.add(beacon);
+    } else if (cfg.type === 'cart') {
+      const cart = new THREE.Mesh(new THREE.BoxGeometry(cfg.w, 1.45, cfg.d), toonMat('#ed6c3b'));
+      cart.position.y = 0.9; cart.castShadow = true; g.add(cart);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(cfg.w + 0.35, 0.16, cfg.d + 0.4), toonMat('#ffe274'));
+      roof.position.y = 1.72; g.add(roof);
+      for (const sx of [-1.15, 1.15]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.18, 12), toonMat('#29313a'));
+        wheel.rotation.x = Math.PI / 2; wheel.position.set(sx, 0.35, cfg.d * 0.5); g.add(wheel);
+      }
+    } else if (cfg.type === 'bridge') {
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(cfg.w, cfg.h, cfg.d), toonMat('#a96b38'));
+      bridge.position.y = cfg.h / 2; bridge.castShadow = true; g.add(bridge);
+      g.userData.hingeZ = -cfg.d / 2;
+    }
+    g.position.set(cfg.x, 0, cfg.z); group.add(g);
+    group.userData.interactiveMeshes.set(cfg.id, g);
   }
 
   // decor: corner lamps + team banners

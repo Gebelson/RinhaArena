@@ -139,7 +139,16 @@ export async function connectOnline({ room, password, team, profile, host: reque
     let hostTransferReceived = false;
     let authorityTransferred = false;
 
-    let level = LEVELS[config.levelId] || LEVELS[DEFAULT_LEVEL];
+    const predictionLevel = (id) => {
+      const copy = JSON.parse(JSON.stringify(LEVELS[id] || LEVELS[DEFAULT_LEVEL]));
+      for (const item of copy.interactives ?? []) {
+        if (item.type === 'rotator') {
+          for (let n = 0; n < 4; n++) copy.solids.push({ x: item.x, z: item.z, w: 1.25, d: 1.25, h: 1.65, kind: 'pillar', interactiveId: item.id, orbit: n });
+        } else copy.solids.push({ x: item.type === 'bridge' ? 9999 : item.x, z: item.z, w: item.w, d: item.d, h: item.type === 'bridge' ? 0.01 : item.h, kind: 'mechanical', interactiveId: item.id });
+      }
+      return copy;
+    };
+    let level = predictionLevel(config.levelId);
     const playerCfg = config.config?.player || CONFIG.player;
     const worldCfg = config.config?.world || CONFIG.world;
     const matPlayer = CONFIG.physics.materials.player;
@@ -182,7 +191,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
       matchInfo = payload;
       config.levelId = payload.mapId;
       config.modeId = payload.mode;
-      level = LEVELS[payload.mapId] || LEVELS[DEFAULT_LEVEL];
+      level = predictionLevel(payload.mapId);
       const mine = payload.participants.find((participant) => participant.type === 'HUMAN' && participant.userId === profile.playerId);
       if (!mine) {
         fail(new Error('MATCH_FOUND não contém o participante deste usuário'));
@@ -357,6 +366,21 @@ export async function connectOnline({ room, password, team, profile, host: reque
       if (isHost || !message?.state) return;
       const lastSnapshot = snaps[snaps.length - 1];
       if (lastSnapshot && Number(message.state.tick) <= Number(lastSnapshot.tick)) return;
+      for (const state of message.state.interactives ?? []) {
+        const cfg = level.interactives?.find((item) => item.id === state.id);
+        if (!cfg) continue;
+        for (const solid of level.solids.filter((item) => item.interactiveId === state.id)) {
+          if (cfg.type === 'rotator') {
+            const angle = state.angle + solid.orbit * Math.PI / 2;
+            solid.x = cfg.x + Math.cos(angle) * 3.25;
+            solid.z = cfg.z + Math.sin(angle) * 3.25;
+          } else {
+            solid.x = cfg.type === 'bridge' && state.active ? 9999 : state.x;
+            solid.z = state.z;
+            if (cfg.type === 'bridge') solid.h = state.active ? 0.01 : 1.45;
+          }
+        }
+      }
       snaps.push(message.state);
       if (snaps.length > 40) snaps.shift();
       if (message.events?.length) eventQ.push(...message.events);
@@ -922,7 +946,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
         matchInfo = saved.match;
         config.levelId = matchInfo.mapId;
         config.modeId = matchInfo.mode;
-        level = LEVELS[config.levelId] || LEVELS[DEFAULT_LEVEL];
+        level = predictionLevel(config.levelId);
         hostGame = new GameHost({ ...roomOptions(config), participants: matchInfo.participants });
         hostGame.restoreAuthorityState(saved.authorityState);
         matchStart = saved.matchStart || { matchId: matchInfo.id, startAt: Date.now() };

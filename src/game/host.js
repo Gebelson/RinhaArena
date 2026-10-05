@@ -74,7 +74,9 @@ export class GameHost {
       : { red: teamSize, blue: teamSize });
 
     this.dt = 1 / this.config.tickRate;
-    this.sim = createSim({ level: LEVELS[levelId], mode: MODES[modeId], config: this.config });
+    const sourceLevel = LEVELS[levelId] || LEVELS[DEFAULT_LEVEL];
+    const runtimeLevel = JSON.parse(JSON.stringify(sourceLevel));
+    this.sim = createSim({ level: runtimeLevel, mode: MODES[modeId], config: this.config });
     this.inputs = new Map();
     this.brains = new Map();
     this.temporaryBrains = new Set();

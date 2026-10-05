@@ -83,6 +83,12 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       img: './assets/maps/skyhaven.png',
       desc: 'Floating islands connected by bridges high in the clouds.',
     },
+    feira_suspensa: {
+      id: 'feira_suspensa',
+      name: 'Feira Suspensa',
+      img: './assets/maps/feira-suspensa.png',
+      desc: 'Feira brasileira flutuante para batalhas 10v10 com cenário interativo.',
+    },
     procedural: {
       id: 'procedural',
       name: 'Aleatório',
@@ -1761,7 +1767,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       modal.querySelector('.map-block').classList.toggle('hidden', ranked);
       if (ranked) chosenMap = 'procedural';
       mapButtons.forEach((button) => {
-        const allowed = !ranked || ['foundry', 'skyhaven', 'procedural'].includes(button.dataset.map);
+        const allowed = !ranked || ['foundry', 'skyhaven', 'feira_suspensa', 'procedural'].includes(button.dataset.map);
         button.classList.toggle('disabled', !allowed);
         if (!allowed && chosenMap === button.dataset.map) chosenMap = 'procedural';
         button.classList.toggle('active', button.dataset.map === chosenMap);
@@ -2137,6 +2143,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
               <button class="chip sel chip-create-level" data-level="foundry" style="width:auto; height:auto; padding:8px 12px; font-size:12px;">📍 Foundry Court</button>
               <button class="chip chip-create-level" data-level="dojo" style="width:auto; height:auto; padding:8px 12px; font-size:12px;">📍 The Dojo</button>
               <button class="chip chip-create-level" data-level="skyhaven" style="width:auto; height:auto; padding:8px 12px; font-size:12px;">📍 Skyhaven</button>
+              <button class="chip chip-create-level" data-level="feira_suspensa" style="width:auto; height:auto; padding:8px 12px; font-size:12px;">📍 Feira Suspensa</button>
               <button class="chip chip-create-level" data-level="procedural" style="width:auto; height:auto; padding:8px 12px; font-size:12px;">🎲 Procedural</button>
             </div>
           </div>

@@ -45,6 +45,7 @@ export function createBotBrain(id, rng = Math.random) {
     aggro: 0.6 + rng() * 0.5,
     strafe: rng() < 0.5 ? -1 : 1,
     cool: 1 + rng() * 2,
+    lane: Math.floor(rng() * 3),
 
     think(sim, dt) {
       const s = sim.state;
@@ -110,7 +111,14 @@ export function createBotBrain(id, rng = Math.random) {
       }
 
       // --- steering
-      let dir = norm2(target.x - me.x, target.z - me.z);
+      let steerTarget = target;
+      if (sim.level.botRoutes?.length && Math.hypot(target.x - me.x, target.z - me.z) > 8) {
+        const route = sim.level.botRoutes[this.lane % sim.level.botRoutes.length];
+        const forward = target.x >= me.x;
+        const candidates = forward ? route : [...route].reverse();
+        steerTarget = candidates.find((point) => forward ? point.x > me.x + 2.5 : point.x < me.x - 2.5) ?? target;
+      }
+      let dir = norm2(steerTarget.x - me.x, steerTarget.z - me.z);
       // flinch away from bombs about to pop — deliberately late/imperfect,
       // a bot that always escapes the blast radius is no fun to fight.
       // Armed land mines get a permanent wide berth instead.

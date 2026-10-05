@@ -49,5 +49,6 @@ export function packState(st) {
           carrier: f.carrier, idle: r2(f.idle), cd: r2(f.cd),
         }]))
       : null,
+    interactives: (st.interactives ?? []).map((o) => ({ id: o.id, type: o.type, x: r2(o.x), z: r2(o.z), angle: r2(o.angle), active: o.active, warning: o.warning })),
   };
 }

@@ -4,6 +4,7 @@
 import { foundry } from './foundry.js';
 import { dojo } from './dojo.js';
 import { skyhaven } from './skyhaven.js';
+import { feiraSuspensa } from './feiraSuspensa.js';
 import { getProceduralLevel, generateProceduralLevel, newProceduralSeed } from './generator.js';
 
 export { getProceduralLevel, generateProceduralLevel, newProceduralSeed };
@@ -12,6 +13,7 @@ const STATIC_LEVELS = {
   foundry,
   dojo,
   skyhaven,
+  feira_suspensa: feiraSuspensa,
 };
 
 export const LEVELS = new Proxy(STATIC_LEVELS, {
