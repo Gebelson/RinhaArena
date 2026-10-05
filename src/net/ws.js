@@ -34,6 +34,7 @@ function interpPlayers(aList, bList, t) {
       x: lerp(a.x, b.x, t),
       z: lerp(a.z, b.z, t),
       y: lerp(a.y, b.y, t),
+      vy: lerp(a.vy ?? 0, b.vy ?? 0, t),
       spd: lerp(a.spd, b.spd, t),
       face: angleLerp(a.face, b.face, t),
     };
@@ -617,6 +618,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
             vz: pred.vz,
             face: pred.face,
             spd: pred.spd,
+            dashT: pred.dashT,
             punchT: pred.punchT > 0 ? pred.punchT : p.punchT,
           };
         }
