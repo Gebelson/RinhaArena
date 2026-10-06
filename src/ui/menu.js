@@ -21,6 +21,7 @@ import { createCharacterTrade, giftFriendResource, listCharacterTrades, listFrie
 import { EMOTES, EMOTE_PRICE } from '../content/emotes.js';
 import { SupabaseRealtimeChannel } from '../net/supabase.js';
 import { promptRoomPassword, showMessageDialog } from './dialog.js';
+import { leaderboardMarkup, leaderboardRowsMarkup } from './leaderboard.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -1082,36 +1083,44 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     onClickSound?.();
     const modal = document.createElement('div');
     modal.className = 'modal-overlay leaderboard-modal-overlay';
-    modal.innerHTML = `
-      <div class="modal-window leaderboard-window">
-        <div class="modal-header"><div class="modal-title">RANKING DE JOGADORES</div><button class="modal-close">✕</button></div>
-        <div class="leaderboard-head"><span>POSIÇÃO</span><span>JOGADOR</span><span>RANK</span><span>VITÓRIAS</span><span>DERROTAS</span><span>PONTOS</span></div>
-        <div class="leaderboard-list"><div class="leaderboard-loading">Carregando ranking…</div></div>
-      </div>`;
+    modal.innerHTML = leaderboardMarkup();
     uiRoot.appendChild(modal);
-    const close = () => modal.remove();
+    const previousFocus = document.activeElement;
+    const close = () => {
+      modal.remove();
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
     modal.querySelector('.modal-close').addEventListener('click', close);
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    modal.addEventListener('keydown', (event) => {
+      if (event.key === 'Tab') {
+        const closeButton = modal.querySelector('.modal-close');
+        const table = modal.querySelector('.leaderboard-table');
+        if (event.shiftKey && document.activeElement === closeButton) {
+          event.preventDefault();
+          table.focus();
+        } else if (!event.shiftKey && document.activeElement === table) {
+          event.preventDefault();
+          closeButton.focus();
+        }
+        return;
+      }
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    });
+    modal.querySelector('.modal-close').focus({ preventScroll: true });
 
     const list = modal.querySelector('.leaderboard-list');
     try {
       await submitPlayerRanking(profile);
       const players = await listPlayerRankings(100);
-      list.innerHTML = players.length ? players.map((player, index) => {
-        const rank = getRankProgress(player.points).rank;
-        const place = index + 1;
-        const avatar = AVATARS.includes(player.avatar) ? player.avatar : AVATARS[0];
-        return `<div class="leaderboard-row ${place <= 3 ? `leaderboard-top leaderboard-top-${place}` : ''} ${player.playerId === profile.playerId ? 'is-me' : ''}">
-          <div class="leaderboard-place"><b>${place}</b>${place <= 3 ? '<span>★</span>' : ''}</div>
-          <div class="leaderboard-player"><img src="./assets/ui/avatars/${avatar}" alt=""><strong class="leaderboard-name">${escapeHtml(player.name)}</strong></div>
-          <div class="leaderboard-rank"><img src="./assets/ui/ranks/${rank.asset}" alt="${rank.name}"><span>${rank.name}</span></div>
-          <b class="leaderboard-wins">${Number(player.wins).toLocaleString('pt-BR')}</b>
-          <b class="leaderboard-losses">${Number(player.losses).toLocaleString('pt-BR')}</b>
-          <b class="leaderboard-points">${Number(player.points).toLocaleString('pt-BR')}</b>
-        </div>`;
-      }).join('') : '<div class="leaderboard-loading">Nenhum jogador classificado ainda.</div>';
+      list.innerHTML = leaderboardRowsMarkup(players, profile.playerId);
     } catch (error) {
       list.innerHTML = `<div class="leaderboard-loading leaderboard-error">Não foi possível carregar o ranking agora.<small>${escapeHtml(error.message)}</small></div>`;
+    } finally {
+      list.setAttribute('aria-busy', 'false');
     }
   }
 

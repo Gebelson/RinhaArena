@@ -261,6 +261,107 @@
 .arena-dialog-overlay { z-index: 22000; }
 .loading-status-pill { border: 3px solid var(--arena-ink); background: var(--arena-button-blue); box-shadow: 0 3px #020c29, inset 0 2px #9eebff; }
 
+/* Player ranking: podium medals and a single scroll surface for every column. */
+.modal-overlay .leaderboard-window {
+  width: min(1180px, calc(100vw - 36px)); max-width: 1180px;
+  height: min(830px, calc(100dvh - 40px)); max-height: calc(100dvh - 40px);
+}
+.leaderboard-window .leaderboard-header { padding: 14px 22px; gap: 12px; }
+.leaderboard-heading { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.leaderboard-heading > div { min-width: 0; }
+.leaderboard-trophy { width: 84px; height: 74px; flex: 0 0 auto; filter: drop-shadow(0 3px 0 #063176); }
+.leaderboard-heading .modal-title { margin: 0; color: #fff18c; font-size: clamp(24px, 2.7vw, 38px); letter-spacing: .025em; }
+.leaderboard-subtitle { display: flex; align-items: center; gap: 8px; margin: 7px 0 0; color: #d0eaff; font-size: 17px; font-weight: 700; }
+.leaderboard-subtitle > svg { color: #ffdc38; width: 18px; height: 18px; flex: 0 0 auto; }
+.leaderboard-table { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; scrollbar-color: #1bc9ff #061a44; }
+.leaderboard-table:focus-visible { outline: 2px solid #fff38a; outline-offset: -3px; }
+.leaderboard-window :is(.leaderboard-head, .leaderboard-row) {
+  grid-template-columns: 112px minmax(180px, 1.35fr) minmax(175px, 1fr) 90px 90px 100px;
+  gap: 10px;
+}
+.leaderboard-window .leaderboard-head {
+  position: sticky; top: 0; z-index: 1; min-height: 42px;
+  margin: 0 14px; padding: 10px 12px;
+  border: 2px solid #285ba0; border-radius: 11px;
+  color: #baddff; background: linear-gradient(#123b76, #082451);
+  box-shadow: 0 4px 0 #051839; font-size: 12px; letter-spacing: .12em;
+}
+.leaderboard-window .leaderboard-head > span:nth-child(2) { text-align: left; padding-left: 8px; }
+.leaderboard-window .leaderboard-list { overflow: visible; padding: 10px 14px 14px; }
+.leaderboard-window .leaderboard-row {
+  position: relative; min-height: 66px; margin-bottom: 8px; padding: 5px 12px;
+  border: 2px solid #235398; border-radius: 14px;
+  background: linear-gradient(115deg, #0d2c5c, #081f47);
+  box-shadow: inset 0 2px #72c5ff22, 0 3px #021334;
+}
+.leaderboard-window .leaderboard-row:last-child { margin-bottom: 0; }
+.leaderboard-window .leaderboard-top {
+  min-height: 94px;
+  background: repeating-linear-gradient(130deg, #ffffff00 0 90px, #ffffff08 90px 130px), linear-gradient(105deg, var(--podium-edge), #172d4b 45%, #0a2149 72%, var(--podium-edge));
+  border-color: var(--medal-metal);
+  box-shadow: inset 0 2px 0 var(--medal-glint), inset 0 -2px 0 var(--medal-shadow), 0 4px #031333;
+}
+.leaderboard-top-1 { --podium-edge: #9d6a0e; --medal-metal: #ffcf35; --medal-light: #ffe475; --medal-shadow: #9e5c0d; --medal-face: #9c5409; --medal-glint: #fff6b3; }
+.leaderboard-top-2 { --podium-edge: #496684; --medal-metal: #c9e0f7; --medal-light: #e3f1ff; --medal-shadow: #516b93; --medal-face: #36507a; --medal-glint: #fff; }
+.leaderboard-top-3 { --podium-edge: #7e4520; --medal-metal: #eda369; --medal-light: #ffc891; --medal-shadow: #793814; --medal-face: #743813; --medal-glint: #ffdeac; }
+.leaderboard-window .leaderboard-row.is-me { outline: 2px solid #41e1ff; outline-offset: -5px; }
+.leaderboard-window .leaderboard-place { font-size: 23px; }
+.leaderboard-medal { display: block; width: 84px; height: 84px; flex: 0 0 auto; filter: drop-shadow(0 3px 2px #0007); }
+.leaderboard-medal .medal-shadow { fill: var(--medal-shadow); stroke: #031333; stroke-width: 2; stroke-linejoin: round; }
+.leaderboard-medal .medal-metal { fill: var(--medal-metal); }
+.leaderboard-medal .medal-light { fill: var(--medal-light); stroke: var(--medal-shadow); stroke-width: 2; }
+.leaderboard-medal .medal-face { fill: var(--medal-face); }
+.leaderboard-medal .medal-glint { fill: var(--medal-glint); }
+.leaderboard-medal text { fill: var(--medal-glint); stroke: var(--medal-shadow); stroke-width: 1px; paint-order: stroke fill; font: 900 36px var(--arena-face); }
+.leaderboard-window .leaderboard-player { justify-content: flex-start; gap: 14px; }
+.leaderboard-window .leaderboard-player > img { width: 50px; height: 50px; border: 2px solid #d9efff; box-shadow: 0 3px #031333; }
+.leaderboard-window .leaderboard-top .leaderboard-player > img { width: 70px; height: 70px; border: 3px solid var(--medal-light); border-radius: 14px; }
+.leaderboard-player-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+.leaderboard-window .leaderboard-name { display: block; font-size: 22px; text-shadow: 0 2px #031333; }
+.leaderboard-window .leaderboard-top .leaderboard-name { font-size: 26px; }
+.leaderboard-me { color: #81efff; font-size: 10px; font-weight: 900; letter-spacing: .12em; }
+.leaderboard-window .leaderboard-rank { justify-content: flex-start; gap: 10px; }
+.leaderboard-window .leaderboard-rank img { width: 54px; height: 54px; flex: 0 0 auto; }
+.leaderboard-window .leaderboard-top .leaderboard-rank img { width: 70px; height: 70px; }
+.leaderboard-window .leaderboard-rank span { display: block; font-size: 15px; }
+.leaderboard-window :is(.leaderboard-wins, .leaderboard-losses, .leaderboard-points) { font-size: 22px; font-variant-numeric: tabular-nums; text-shadow: 0 2px #031333; }
+.leaderboard-window .leaderboard-top :is(.leaderboard-wins, .leaderboard-losses, .leaderboard-points) { font-size: 27px; }
+.leaderboard-window .leaderboard-points { color: #49e6ff; }
+@media (max-width: 1000px) {
+  .leaderboard-window :is(.leaderboard-head, .leaderboard-row) { grid-template-columns: 84px minmax(150px, 1.2fr) minmax(145px, 1fr) 70px 70px 80px; gap: 6px; }
+  .leaderboard-window .leaderboard-head { letter-spacing: .06em; }
+  .leaderboard-window .leaderboard-top .leaderboard-player > img { width: 58px; height: 58px; }
+  .leaderboard-window .leaderboard-top .leaderboard-rank img { width: 56px; height: 56px; }
+}
+@media (max-width: 760px), (max-height: 520px) {
+  .leaderboard-window .leaderboard-header { padding: 8px 14px; }
+  .leaderboard-trophy { width: 54px; height: 48px; }
+  .leaderboard-heading { gap: 9px; }
+  .leaderboard-heading .modal-title { font-size: 25px; }
+  .leaderboard-subtitle { font-size: 13px; margin-top: 4px; }
+  .leaderboard-window .leaderboard-row { min-height: 58px; }
+  .leaderboard-window .leaderboard-top { min-height: 76px; }
+  .leaderboard-medal { width: 68px; height: 68px; }
+  .leaderboard-window .leaderboard-top .leaderboard-name { font-size: 22px; }
+}
+@media (max-width: 760px) {
+  .leaderboard-modal-overlay { padding: 10px; }
+  .modal-overlay .leaderboard-window { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); height: min(830px, calc(100dvh - 24px)); }
+  .leaderboard-window :is(.leaderboard-head, .leaderboard-row) { grid-template-columns: 62px minmax(140px, 1fr) 112px 56px 56px 70px; gap: 5px; }
+  .leaderboard-window .leaderboard-head { min-width: 545px; padding: 8px; margin: 0 8px; font-size: 10px; }
+  .leaderboard-window .leaderboard-list { min-width: 561px; padding: 8px; }
+  .leaderboard-window .leaderboard-row { padding: 4px 8px; }
+  .leaderboard-window .leaderboard-player { gap: 7px; }
+  .leaderboard-window .leaderboard-player > img { width: 40px; height: 40px; }
+  .leaderboard-window .leaderboard-top .leaderboard-player > img { width: 50px; height: 50px; }
+  .leaderboard-window .leaderboard-name { font-size: 17px; }
+  .leaderboard-window .leaderboard-top .leaderboard-name { font-size: 20px; }
+  .leaderboard-window .leaderboard-rank { gap: 5px; }
+  .leaderboard-window .leaderboard-rank img, .leaderboard-window .leaderboard-top .leaderboard-rank img { width: 40px; height: 40px; }
+  .leaderboard-window .leaderboard-rank span { font-size: 12px; }
+  .leaderboard-window :is(.leaderboard-wins, .leaderboard-losses, .leaderboard-points), .leaderboard-window .leaderboard-top :is(.leaderboard-wins, .leaderboard-losses, .leaderboard-points) { font-size: 21px; }
+}
+
 @media (max-width: 760px), (max-height: 520px) {
   :is(.modal-window, .game-options-window, .custom-room-lobby, .match-scoreboard-card, .auth-window) { border-radius: 16px; }
   :is(.modal-header, .game-options-header, .match-scoreboard-header), .custom-room-lobby > header { padding: 10px 12px; }
