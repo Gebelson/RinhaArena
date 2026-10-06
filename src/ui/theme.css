@@ -320,7 +320,7 @@
 .leaderboard-window .leaderboard-name { display: block; font-size: 22px; text-shadow: 0 2px #031333; }
 .leaderboard-window .leaderboard-top .leaderboard-name { font-size: 26px; }
 .leaderboard-me { color: #81efff; font-size: 10px; font-weight: 900; letter-spacing: .12em; }
-.leaderboard-window .leaderboard-rank { justify-content: flex-start; gap: 10px; }
+.leaderboard-window .leaderboard-rank { justify-content: center; gap: 10px; }
 .leaderboard-window .leaderboard-rank img { width: 54px; height: 54px; flex: 0 0 auto; }
 .leaderboard-window .leaderboard-top .leaderboard-rank img { width: 70px; height: 70px; }
 .leaderboard-window .leaderboard-rank span { display: block; font-size: 15px; }
