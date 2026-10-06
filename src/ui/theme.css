@@ -286,7 +286,7 @@
   color: #baddff; background: linear-gradient(#123b76, #082451);
   box-shadow: 0 4px 0 #051839; font-size: 12px; letter-spacing: .12em;
 }
-.leaderboard-window .leaderboard-head > span:nth-child(2) { text-align: left; padding-left: 8px; }
+.leaderboard-window .leaderboard-head > span:nth-child(2) { text-align: center; padding-left: 0; }
 .leaderboard-window .leaderboard-list { overflow: visible; padding: 10px 14px 14px; }
 .leaderboard-window .leaderboard-row {
   position: relative; min-height: 66px; margin-bottom: 8px; padding: 5px 12px;
@@ -313,7 +313,7 @@
 .leaderboard-medal .medal-face { fill: var(--medal-face); }
 .leaderboard-medal .medal-glint { fill: var(--medal-glint); }
 .leaderboard-medal text { fill: var(--medal-glint); stroke: var(--medal-shadow); stroke-width: 1px; paint-order: stroke fill; font: 900 36px var(--arena-face); }
-.leaderboard-window .leaderboard-player { justify-content: flex-start; gap: 14px; }
+.leaderboard-window .leaderboard-player { justify-content: center; gap: 14px; }
 .leaderboard-window .leaderboard-player > img { width: 50px; height: 50px; border: 2px solid #d9efff; box-shadow: 0 3px #031333; }
 .leaderboard-window .leaderboard-top .leaderboard-player > img { width: 70px; height: 70px; border: 3px solid var(--medal-light); border-radius: 14px; }
 .leaderboard-player-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
