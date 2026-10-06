@@ -1,0 +1,278 @@
+/* Rinha Arena window skin. The lobby art is the reference: chunky navy
+   outlines, cyan bevels, diagonal blue bands and golden action buttons.
+   This file only styles UI surfaces; layouts and game behavior stay in
+   their existing components. */
+:root {
+  --arena-ink: #03133c;
+  --arena-blue: #0869f8;
+  --arena-cyan: #39e7ff;
+  --arena-gold: #ffdc38;
+  --arena-panel: #082759;
+  --arena-text: #f4f8ff;
+  --arena-muted: #b5d2ef;
+  --arena-face: 'Barlow Condensed', 'Rajdhani', sans-serif;
+  --arena-button-blue: repeating-linear-gradient(130deg, #ffffff00 0 28px, #ffffff0a 28px 54px), linear-gradient(175deg, #17caff, #087fff 48%, #0755d8);
+  --arena-button-gold: repeating-linear-gradient(130deg, #ffffff00 0 28px, #ffffff22 28px 54px), linear-gradient(175deg, #fff46b, #ffce13 52%, #ffae0a);
+}
+
+/* Common frame for modal and non-modal windows. Preserve their sizes. */
+:is(.modal-window, .game-options-window, .matchmaking-window, .auth-window,
+    .custom-room-lobby, .match-action-dialog, .quick-config, .room-invite-popup,
+    .lobby-friends-panel, .social-action-panel, .match-scoreboard-card,
+    .over-card, .game-chat, .lab),
+.modal-overlay :is(.rank-modal-window, .leaderboard-window) {
+  border: 4px solid var(--arena-ink);
+  border-radius: 23px;
+  color: var(--arena-text);
+  background: linear-gradient(145deg, #0d3975, #092555 55%, #061b41);
+  box-shadow: 0 0 0 2px #28bcff, 0 7px 0 #020a23, 0 18px 46px #0009,
+    inset 0 2px 0 #80eaff, inset 0 -3px 0 #031231;
+  font-family: var(--arena-face);
+}
+.modal-overlay { background: #010925b3; backdrop-filter: blur(5px); }
+.modal-window { isolation: isolate; }
+.social-modal-window { position: relative; }
+:is(.modal-window, .game-options-window, .custom-room-lobby, .auth-window,
+    .match-scoreboard-card, .quick-config, .lab, .game-chat) * {
+  scrollbar-color: #1bc9ff #061a44;
+  scrollbar-width: thin;
+}
+
+/* Raised title bars, with the same diagonal bands as the mission button. */
+:is(.modal-header, .game-options-header, .match-scoreboard-header),
+.custom-room-lobby > header {
+  flex-shrink: 0;
+  border-bottom: 4px solid var(--arena-ink);
+  background: repeating-linear-gradient(130deg, #ffffff00 0 55px, #ffffff0b 55px 100px),
+    linear-gradient(170deg, #17d6ff, #087fff 45%, #064ec9);
+  box-shadow: inset 0 3px 0 #adf6ff, inset 0 -2px 0 #20bcff;
+}
+:is(.modal-header, .game-options-header, .match-scoreboard-header),
+.custom-room-lobby > header { padding: 16px 20px; }
+:is(.modal-title, .game-options-header h2, .custom-room-lobby header h2,
+    .match-scoreboard-header h2, .matchmaking-heading h2, .over-title,
+    .auth-form h1, .match-action-dialog h2, .quick-config-head strong) {
+  color: #fff;
+  font-family: var(--arena-face);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .035em;
+  line-height: 1.05;
+  -webkit-text-stroke: .5px #041b57;
+  text-shadow: 0 3px 0 #073985, 0 4px 1px #03173e;
+}
+.modal-title { font-size: clamp(23px, 2.4vw, 32px); }
+:is(.missions-kicker, .social-header > div > span, .game-options-header small,
+    .custom-room-lobby header small, .match-scoreboard-header small,
+    .matchmaking-kicker, .arena-dialog-kicker) {
+  color: #fff6a0;
+  font: 900 11px/1.2 var(--arena-face);
+  letter-spacing: .17em;
+  text-shadow: 0 2px #0753a4;
+}
+.missions-count { color: #fff3a6; text-shadow: 0 2px #074993; }
+.match-scoreboard-meta { color: #dbf3ff; }
+:is(.modal-footer, .game-options-footer, .in-game-settings-footer),
+.custom-room-lobby > footer, .match-scoreboard-card footer {
+  border-top: 3px solid #031b43;
+  background: #061c46;
+  box-shadow: inset 0 1px #329ce444;
+}
+
+/* Actions are real controls, with bevels and a short pressed state. */
+:is(.modal-window, .game-options-window, .custom-room-lobby, .matchmaking-window,
+    .match-action-dialog, .quick-config, .room-invite-popup, .lobby-friends-panel,
+    .social-action-panel, .auth-panel, .game-chat, .lab) button {
+  border: 3px solid var(--arena-ink);
+  border-radius: 11px;
+  color: #fff;
+  background: var(--arena-button-blue);
+  box-shadow: 0 3px 0 #010c2b, inset 0 2px 0 #a0efff, inset 0 -2px 0 #073689;
+  font-family: var(--arena-face);
+  font-weight: 900;
+  text-shadow: 0 2px 0 #053477;
+  transition: filter .12s, translate .12s, box-shadow .12s;
+  cursor: pointer;
+}
+:is(.modal-window, .game-options-window, .custom-room-lobby, .matchmaking-window,
+    .match-action-dialog, .quick-config, .room-invite-popup, .lobby-friends-panel,
+    .social-action-panel, .auth-panel, .game-chat, .lab) button:not(:disabled):hover { filter: brightness(1.12); }
+:is(.modal-window, .game-options-window, .custom-room-lobby, .matchmaking-window,
+    .match-action-dialog, .quick-config, .room-invite-popup, .lobby-friends-panel,
+    .social-action-panel, .auth-panel, .game-chat, .lab) button:not(:disabled):active {
+  translate: 0 2px;
+  box-shadow: 0 1px 0 #010c2b, inset 0 2px 2px #031b6970;
+}
+:is(.modal-window, .game-options-window, .custom-room-lobby, .matchmaking-window,
+    .match-action-dialog, .quick-config, .room-invite-popup, .lobby-friends-panel,
+    .social-action-panel, .auth-panel, .game-chat, .lab) button:disabled {
+  color: #aebdd3;
+  background: linear-gradient(#3c5174, #223957);
+  box-shadow: inset 0 1px #8898b366;
+  text-shadow: none;
+  cursor: default;
+  filter: none;
+}
+:is(.modal-window, .game-options-window, .custom-room-lobby, .matchmaking-window,
+    .match-action-dialog, .quick-config, .room-invite-popup, .auth-panel,
+    .social-action-panel, .game-chat, .lab) :is(button, input, select):focus-visible,
+.match-scoreboard-close:focus-visible {
+  outline: 3px solid #fff38a;
+  outline-offset: 3px;
+}
+
+/* Yellow = confirmation, selected tab or claimed reward. */
+.modal-window :is(.modal-btn-primary, .mission-claim:not(:disabled),
+    .shop-character-card.available .shop-character-action:not(:disabled)),
+.game-options-window .game-create-button,
+.custom-room-lobby .lobby-start,
+.room-invite-popup [data-accept], .auth-panel .auth-submit,
+.modal-window :is(.shop-tabs, .settings-tabs, .social-tabs) button.active,
+.game-options-window .game-options-tabs button.active,
+.modal-window .settings-key.listening, .lab .lab-btn.on,
+.arena-dialog-window button[type="submit"] {
+  color: #05204f;
+  border-color: #6e4106;
+  background: var(--arena-button-gold);
+  box-shadow: 0 3px 0 #432700, inset 0 2px 0 #fffac2, inset 0 -2px 0 #de8000;
+  text-shadow: 0 1px #fff7a0;
+}
+.modal-window :is(.settings-tabs, .shop-tabs, .social-tabs) button,
+.game-options-window .game-options-tabs button { margin-bottom: 3px; }
+.game-options-window .match-type { background: linear-gradient(#164986, #0b2b62); }
+.game-options-window .match-type.active {
+  border-color: #ffe36a;
+  background: linear-gradient(145deg, #866017, #163761);
+  box-shadow: inset 0 2px #fff4a6, 0 3px #031334;
+}
+.game-options-window .game-map-option.active { border-color: #ffe266; box-shadow: 0 0 0 2px #9c6a16, 0 4px 0 #031334; }
+.modal-window .shop-character-card.acquired .shop-character-action:not(:disabled) {
+  background: linear-gradient(#51da8a, #15964c);
+  box-shadow: 0 3px #06371c, inset 0 2px #baffd5, inset 0 -2px #0b6835;
+  text-shadow: 0 2px #096137;
+}
+.modal-window :is(.settings-leave-match, .settings-disconnect, .social-friend-actions .danger),
+.matchmaking-window .matchmaking-cancel, .match-action-dialog [data-yes] {
+  border-color: #4c112b;
+  background: linear-gradient(#ff7468, #df344a 52%, #a51736);
+  box-shadow: 0 3px #350919, inset 0 2px #ffc5ad, inset 0 -2px #7d1230;
+  text-shadow: 0 2px #7e1830;
+}
+
+/* Close buttons look like the lobby's chunky utility buttons. */
+:is(.modal-window, .game-options-window, .custom-room-lobby, .quick-config,
+    .match-scoreboard-card) :is(.modal-close, .lobby-close, .quick-config-close, .match-scoreboard-close) {
+  width: 36px; height: 36px; min-width: 36px;
+  display: grid; place-items: center; align-self: center; flex: 0 0 auto;
+  margin: 0; padding: 0;
+  border: 3px solid #031844;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(#65d9ff, #168df5 55%, #0562c3);
+  box-shadow: 0 3px 0 #022057, inset 0 2px #dcfcff;
+  font: 900 19px/1 var(--arena-face);
+  text-shadow: 0 2px #064681;
+  cursor: pointer;
+}
+
+/* Recessed contents keep the saturated title and actions easy to read. */
+.modal-window :is(.settings-tabs, .social-tabs), .game-options-tabs { background: #061d49; }
+.modal-window :is(.settings-section, .mission-card, .rank-entry, .leaderboard-row, .social-friend-card),
+.game-options-window :is(.game-config-block, .game-room-card), .custom-room-lobby .room-slot {
+  border-color: #265a9e;
+  background: linear-gradient(145deg, #123b73, #08264f);
+  box-shadow: inset 0 1px #72c5ff33, 0 3px #03133388;
+}
+.modal-window :is(.mission-card.complete, .rank-entry.current),
+.custom-room-lobby .room-slot.bot { border-color: #ffe063; }
+.custom-room-lobby [data-team="red"] h3 { color: #ff9a9e; }
+.custom-room-lobby [data-team="blue"] h3 { color: #63e1ff; }
+.modal-window :is(.settings-section h3, .mission-main strong, .social-add h3),
+.game-options-window :is(.game-config-block h3, .rooms-toolbar h3) { color: #ffe578; }
+.modal-window .shop-character-card { border-width: 2px; border-color: #1c5aaf; background: #08265a; }
+.modal-window .shop-character-card.acquired { border-color: #ffdc38; }
+.modal-window .shop-character-card.selected { box-shadow: inset 0 0 0 2px #66ef9f, 0 0 18px #45e58959; }
+.modal-window .shop-character-info { background: #061b42; }
+.modal-window .shop-balance { border: 2px solid #ffe270; background: #06306a; box-shadow: inset 0 1px #91dcff55; }
+.modal-window .social-add { background: linear-gradient(#0d559f, #092b64); }
+.modal-window .social-empty, .game-options-window .game-room-empty { background: #071e47; color: #b4cbe7; }
+.modal-window :is(.avatar-option.sel, .avatar-option.selected) { border-color: #ffe578; box-shadow: 0 0 0 2px #d78918; }
+
+/* Fields retain their input types, selected values and keyboard behavior. */
+:is(.modal-window, .game-options-window, .custom-room-lobby, .quick-config,
+    .social-action-panel, .auth-panel, .game-chat) :is(input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), select) {
+  border: 2px solid #2863a5;
+  border-radius: 10px;
+  color: #f4f8ff;
+  background: #041937;
+  box-shadow: inset 0 2px 4px #010c2680, 0 1px #64d7ff33;
+  font-family: var(--arena-face);
+  font-weight: 700;
+}
+:is(.modal-window, .game-options-window, .quick-config, .auth-panel, .game-chat) input::placeholder { color: #a3b9d7; }
+.modal-window .settings-toggle { border: 3px solid #031840; background: #193b6d; box-shadow: inset 0 2px 4px #00102d; }
+.modal-window .settings-toggle-input:checked + .settings-toggle { background: #12aaf4; border-color: #031840; box-shadow: inset 0 2px #75e4ff; }
+.modal-window .settings-toggle-input:focus-visible + .settings-toggle { outline: 3px solid #fff38a; outline-offset: 3px; }
+
+/* Login was the only white window; its art remains the game's artwork. */
+.auth-window { min-height: 0; max-height: 92dvh; }
+.auth-panel { padding: clamp(18px, 4vw, 44px); overflow-y: auto; justify-content: safe center; background: linear-gradient(145deg, #0e3b78, #071d47); color: #fff; }
+.auth-form { margin-top: 0; }
+.auth-panel .auth-form h1 { margin-bottom: clamp(16px, 4vh, 32px); font-size: clamp(30px, 4vw, 50px); }
+.auth-panel .auth-form label { color: #bbebff; font-family: var(--arena-face); font-weight: 900; letter-spacing: .08em; }
+.auth-panel .auth-form input { font-size: 18px; }
+.auth-panel .auth-actions { align-items: center; flex-wrap: wrap; }
+.auth-panel :is(.auth-forgot, .auth-switch) { color: #e2f4ff; font-size: 12px; padding: 9px 12px; }
+.auth-panel .auth-switch { margin-top: 20px; width: 100%; min-height: 42px; }
+.auth-panel :is(.auth-form, .auth-switch) { transform: none; flex-shrink: 0; }
+.auth-panel .auth-submit { min-height: 44px; padding: 9px 24px; font-size: 20px; }
+.auth-panel .auth-message { color: #8cffb6; }
+.auth-panel .auth-message.error { color: #ffada8; }
+.auth-panel .auth-resend { min-height: 40px; padding: 9px 12px; }
+.auth-art { border-right: 4px solid var(--arena-ink); }
+
+/* Smaller windows and overlays use the same visual language. */
+.matchmaking-window { border-color: var(--arena-ink); }
+.matchmaking-overlay.is-found .matchmaking-window { border-color: #ffe578; box-shadow: 0 0 0 4px #092254, 0 0 32px #ffdc3866; }
+.matchmaking-window .matchmaking-slot.is-accepted { background: var(--arena-button-blue); border-color: #92f5ff; }
+.quick-config-head { padding-bottom: 12px; border-bottom: 2px solid #268cff; }
+.quick-config-head strong { font-size: 22px; }
+.quick-config .skin-btn { background-image: none; }
+.room-invite-popup > strong, .lobby-friends-panel > b, .social-action-title { color: #ffe578; font-weight: 900; }
+.match-scoreboard-card .match-scoreboard-team { border: 2px solid #1b5091; background: #061d47; }
+.match-scoreboard-card .result-red { color: #ffabac; text-shadow: 0 2px #6e103d; }
+.match-scoreboard-card .result-blue { color: #b9f8ff; text-shadow: 0 2px #034a9a; }
+.match-scoreboard-card .match-scoreboard-clock strong { text-shadow: 0 2px #063981; }
+.match-scoreboard-card .scoreboard-player-name > span { background: #0c3164; }
+.match-scoreboard-card .scoreboard-player-status { color: #a7c6e8; }
+.match-scoreboard-card .scoreboard-player-status.has-flag { color: #ffe76a; }
+.match-scoreboard-card .is-defeated .scoreboard-player-status { color: #ffaaa8; }
+.over-card { padding: 24px; }
+.over-score { color: #ffe578; text-shadow: 0 3px #061735; }
+.game-chat { border-radius: 15px; }
+.lab { border-radius: 15px; }
+.lab-head { color: #ffe578; font-weight: 900; }
+.lab .lab-btn { border-width: 2px; }
+.emote-wheel { border: 4px solid #052653; box-shadow: 0 0 0 3px #25dfff, 0 9px 0 #010b22, 0 12px 40px #0009; }
+.emote-wheel-item { box-shadow: 0 3px #031231, inset 0 2px #94eaff66; }
+.arena-dialog-message { margin: 0; color: #cee5ff; font-size: 17px; line-height: 1.4; overflow-wrap: anywhere; }
+.arena-dialog-field { display: grid; gap: 8px; color: #bbebff; font-weight: 900; }
+.arena-dialog-input { min-height: 46px; padding: 10px 12px; }
+.arena-dialog-overlay { z-index: 22000; }
+.loading-status-pill { border: 3px solid var(--arena-ink); background: var(--arena-button-blue); box-shadow: 0 3px #020c29, inset 0 2px #9eebff; }
+
+@media (max-width: 760px), (max-height: 520px) {
+  :is(.modal-window, .game-options-window, .custom-room-lobby, .match-scoreboard-card, .auth-window) { border-radius: 16px; }
+  :is(.modal-header, .game-options-header, .match-scoreboard-header), .custom-room-lobby > header { padding: 10px 12px; }
+  .modal-title { font-size: 23px; }
+  .auth-panel { padding: 18px 22px; }
+  .auth-panel .auth-form label { margin-bottom: 14px; }
+  .auth-panel .auth-form h1 { font-size: 30px; margin-bottom: 16px; }
+  .auth-panel .auth-switch { margin-top: 12px; }
+  .quick-config { width: min(460px, 94vw); right: 3%; }
+  .match-scoreboard-header h2 { font-size: 21px; }
+  .match-scoreboard-card footer { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.modal-window, .game-options-window, .custom-room-lobby, .auth-panel, .lab) button { transition: none; }
+}

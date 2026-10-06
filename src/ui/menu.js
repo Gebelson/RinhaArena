@@ -20,6 +20,7 @@ import { claimMission, ensureMissions, missionProgress } from '../game/missions.
 import { createCharacterTrade, giftFriendResource, listCharacterTrades, listFriendRequests, listFriends, respondCharacterTrade, respondFriendRequest, searchPlayers, sendFriendRequest } from '../net/social.js';
 import { EMOTES, EMOTE_PRICE } from '../content/emotes.js';
 import { SupabaseRealtimeChannel } from '../net/supabase.js';
+import { promptRoomPassword, showMessageDialog } from './dialog.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -1862,7 +1863,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
           card.querySelector('button').addEventListener('click', async () => {
             let password;
             if (room.isPrivate) {
-              password = prompt(`Digite a senha da sala “${room.name}”:`);
+              password = await promptRoomPassword(uiRoot, room.name);
               if (password === null) return;
             }
             close();
@@ -2078,7 +2079,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
           joinBtn.addEventListener('click', async () => {
             let password = undefined;
             if (r.isPrivate) {
-              password = prompt(`A sala "${r.name}" é protegida por senha. Digite a senha:`);
+              password = await promptRoomPassword(uiRoot, r.name);
               if (password === null) return;
             }
             const checkedTeam = card.querySelector(`input[name="team_${r.code}"]:checked`)?.value || undefined;
@@ -2302,7 +2303,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         close();
         await onPlayOnline({ room: data.code, password, host: true, hostToken: data.hostToken, roomConfig: data.room });
       } catch (err) {
-        alert('Erro ao criar sala: ' + err.message);
+        await showMessageDialog(uiRoot, { title: 'ERRO AO CRIAR SALA', message: err.message });
         submitBtn.disabled = false;
         submitBtn.textContent = '🚀 CRIAR E JOGAR';
       }
