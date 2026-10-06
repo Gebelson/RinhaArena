@@ -1,6 +1,9 @@
 const WATCHED_FILES = [
   './index.html',
   './styles.css',
+  './src/ui/theme.css',
+  './src/boot.js',
+  './src/ui/lobbyLoading.js',
   './src/main.js',
   './src/ui/menu.js',
   './src/net/ws.js',

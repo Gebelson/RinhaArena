@@ -22,6 +22,7 @@ import { EMOTES, EMOTE_PRICE } from '../content/emotes.js';
 import { SupabaseRealtimeChannel } from '../net/supabase.js';
 import { promptRoomPassword, showMessageDialog } from './dialog.js';
 import { leaderboardMarkup, leaderboardRowsMarkup } from './leaderboard.js';
+import { createLobbyLoading } from './lobbyLoading.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -37,7 +38,12 @@ const CHARACTER_PRICE = 900;
 
 export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepareOnline, onStartPrepared, onPlayLab, onClickSound }) {
   const el = document.createElement('div');
-  el.className = 'menu';
+  el.className = 'menu lobby-loading';
+  const loading = createLobbyLoading(uiRoot);
+  loading.show();
+  let visibilityRequest = 0;
+  let notifyAuthenticated;
+  const authenticatedReady = new Promise((resolve) => { notifyAuthenticated = resolve; });
   let accountSyncTimer = 0;
   let accountSyncBusy = false;
   let lastLocalSaveAt = 0;
@@ -133,9 +139,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   const initialLevel = getLevelProgress(profile.rankStats);
 
   el.innerHTML = `
-    <video class="lobby-bg-video" autoplay muted loop playsinline preload="auto" poster="./assets/media/lobby-background-poster.webp" aria-hidden="true">
-      <source src="./assets/media/lobby-background.mp4" type="video/mp4" />
-    </video>
+    <video class="lobby-bg-video" muted loop playsinline preload="none" poster="./assets/media/lobby-background-poster.webp" data-src="./assets/media/lobby-background.mp4" aria-hidden="true"></video>
     <div class="home-lobby">
       <section class="player-card" aria-label="Perfil do jogador">
         <button class="player-avatar" type="button" aria-label="Trocar ícone do perfil"><img src="./assets/ui/avatars/${profile.cos.avatar}" alt="Ícone do perfil" /></button>
@@ -152,14 +156,14 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
 
       <nav class="top-actions" aria-label="Ações rápidas">
         <div class="coin-card"><img class="coin-crown" src="./assets/ui/capicoin.png" alt="Capicoin" /><strong>${Math.max(0, Number(profile.gold) || 0).toLocaleString('pt-BR')}</strong><button class="coin-plus" aria-label="Adicionar moedas">+</button></div>
-        <button class="image-icon-btn btn-lobby" aria-label="Amigos e salas"><img src="./assets/ui/menu-friends.png" alt="" /></button>
-        <button class="image-icon-btn btn-settings" aria-label="Configurações"><img src="./assets/ui/menu-config.png" alt="" /></button>
-        <button class="image-icon-btn btn-audio" aria-label="Áudio"><img src="./assets/ui/menu-audio.png" alt="" /></button>
+        <button class="image-icon-btn btn-lobby" aria-label="Amigos e salas"><img src="./assets/ui/menu-friends.webp" alt="" /></button>
+        <button class="image-icon-btn btn-settings" aria-label="Configurações"><img src="./assets/ui/menu-config.webp" alt="" /></button>
+        <button class="image-icon-btn btn-audio" aria-label="Áudio"><img src="./assets/ui/menu-audio.webp" alt="" /></button>
       </nav>
 
-      <button class="art-button shop-button btn-shop" aria-label="Loja de personagens"><img src="./assets/ui/menu-shop.png" alt="Loja de personagens" /></button>
-      <button class="art-button ranking-button btn-ranking" aria-label="Ranking"><img src="./assets/ui/menu-ranking.png" alt="Ranking" /></button>
-      <button class="art-button missions-button btn-missions" aria-label="Missões"><img src="./assets/ui/menu-missions.png" alt="Missões" /></button>
+      <button class="art-button shop-button btn-shop" aria-label="Loja de personagens"><img src="./assets/ui/menu-shop.webp" alt="Loja de personagens" /></button>
+      <button class="art-button ranking-button btn-ranking" aria-label="Ranking"><img src="./assets/ui/menu-ranking.webp" alt="Ranking" /></button>
+      <button class="art-button missions-button btn-missions" aria-label="Missões"><img src="./assets/ui/menu-missions.webp" alt="Missões" /></button>
 
       <button class="map-selector" aria-label="Selecionar arena">
         <img class="map-selector-thumb" src="./assets/maps/random-arena-cover.webp" alt="" />
@@ -167,14 +171,14 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         <span class="map-chevron">›</span>
       </button>
 
-      <button class="art-button play-button play-btn-huge" aria-label="Jogar"><img src="./assets/ui/menu-play.png" alt="Jogar" /></button>
+      <button class="art-button play-button play-btn-huge" aria-label="Jogar"><img src="./assets/ui/menu-play.webp" alt="Jogar" /></button>
 
       <div class="quick-config hidden" aria-label="Configurações da partida">
         <div class="quick-config-head"><strong>CONFIGURAÇÕES</strong><button class="quick-config-close" aria-label="Fechar">✕</button></div>
         <label>NOME DO JOGADOR</label>
         <div class="config-name-mirror">${profile.name || 'SEM NICK'}</div>
         <label>CHAPÉU</label>
-        <div class="hat-row">${HATS.map((h, i) => `<button class="hat-btn ${profile.hat === h.id ? 'sel' : ''}" data-hat="${h.id}" title="${h.name}"><img src="./assets/ui/hat_${i}.png" alt="${h.name}" class="hat-img" /></button>`).join('')}</div>
+        <div class="hat-row">${HATS.map((h, i) => `<button class="hat-btn ${profile.hat === h.id ? 'sel' : ''}" data-hat="${h.id}" title="${h.name}"><img loading="lazy" src="./assets/ui/hat_${i}.png" alt="${h.name}" class="hat-img" /></button>`).join('')}</div>
         <label>PELE</label>
         <div class="skin-row">${REFERENCE_SKINS.map((c) => `<button class="skin-btn ${profile.skin === c ? 'sel' : ''}" data-skin="${c}" style="background-color:${c}" title="Pele"></button>`).join('')}</div>
         <label>MODO</label>
@@ -235,7 +239,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
             <div class="hat-row">
               ${HATS.map((h, i) => `
                 <button class="hat-btn ${profile.hat === h.id ? 'sel' : ''}" data-hat="${h.id}" title="${h.name}">
-                  <img src="./assets/ui/hat_${i}.png" alt="${h.name}" class="hat-img" />
+                  <img loading="lazy" src="./assets/ui/hat_${i}.png" alt="${h.name}" class="hat-img" />
                 </button>
               `).join('')}
             </div>
@@ -340,7 +344,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         <main class="lobby-center-col">
           <!-- Hero Logo (Floating directly over background) -->
           <div class="lobby-logo-container">
-            <img src="./assets/logo.png" alt="RINHA ARENA — PEGA BANDEIRA" class="lobby-logo-img" />
+            <img loading="lazy" src="./assets/logo.png" alt="RINHA ARENA — PEGA BANDEIRA" class="lobby-logo-img" />
           </div>
 
           <!-- Big Map Showcase Card -->
@@ -385,11 +389,11 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
             </div>
             <div class="online-btn-row">
               <button class="btn-action-blue btn-lobby">
-                <img src="./assets/ui/icon_ver_salas.png" class="btn-icon-img" alt="Salas" />
+                <img loading="lazy" src="./assets/ui/icon_ver_salas.png" class="btn-icon-img" alt="Salas" />
                 <span>VER SALAS ONLINE</span>
               </button>
               <button class="btn-action-gold btn-custom-create">
-                <img src="./assets/ui/icon_criar_sala.png" class="btn-icon-img" alt="Criar" />
+                <img loading="lazy" src="./assets/ui/icon_criar_sala.png" class="btn-icon-img" alt="Criar" />
                 <span>CRIAR SALA</span>
               </button>
             </div>
@@ -403,11 +407,11 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
             </div>
             <div class="lab-btn-row">
               <button class="lab-btn btn-duel">
-                <img src="./assets/ui/icon_live_bot.png" class="btn-icon-img" alt="Live Bot" />
+                <img loading="lazy" src="./assets/ui/icon_live_bot.png" class="btn-icon-img" alt="Live Bot" />
                 <span>live bot</span>
               </button>
               <button class="lab-btn btn-doll">
-                <img src="./assets/ui/icon_training_doll.png" class="btn-icon-img" alt="Training Doll" />
+                <img loading="lazy" src="./assets/ui/icon_training_doll.png" class="btn-icon-img" alt="Training Doll" />
                 <span>training doll</span>
               </button>
             </div>
@@ -428,6 +432,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       </div>
     </div></div></div>
   `;
+  el.querySelectorAll('.legacy-menu-template img, .quick-config img').forEach((image) => { image.loading = 'lazy'; });
   uiRoot.appendChild(el);
 
   // ------------------------------------------------------------ Element queries
@@ -465,15 +470,17 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   const playerAvatar = el.querySelector('.player-avatar img');
   const lobbyVideo = el.querySelector('.lobby-bg-video');
   let authenticated = false;
-  const lobbyMusic = new Audio('./audio/lobby-theme.m4a');
+  const lobbyMusic = new Audio();
   lobbyMusic.loop = true;
-  lobbyMusic.preload = 'auto';
+  lobbyMusic.preload = 'none';
   lobbyMusic.volume = getSettings().musicVolume / 100;
   btnAudio.classList.toggle('muted', localStorage.getItem('blast.muted') === '1');
 
   const playLobbyMedia = () => {
+    if (!authenticated || el.classList.contains('lobby-loading') || el.classList.contains('hidden')) return;
+    if (!lobbyVideo.getAttribute('src')) lobbyVideo.src = lobbyVideo.dataset.src;
     lobbyVideo.play().catch(() => {});
-    if (!authenticated) { lobbyMusic.pause(); return; }
+    if (!lobbyMusic.getAttribute('src')) lobbyMusic.src = './audio/lobby-theme.m4a';
     lobbyMusic.muted = localStorage.getItem('blast.muted') === '1';
     lobbyMusic.play().catch(() => {});
   };
@@ -665,9 +672,13 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   // Initial Sync
   syncUI();
   el.classList.add('auth-pending');
+  const initialAssetsReady = loading.prepare(el);
 
-  openAuthGate(uiRoot, {
+  const auth = openAuthGate(uiRoot, {
     async onAuthenticated(account) {
+      loading.show();
+      el.classList.add('lobby-loading');
+      await initialAssetsReady;
       const saved = account.profile;
       profile.playerId = account.user.id;
       profile.name = saved.nickname;
@@ -705,7 +716,10 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       profile.save();
       lastRemoteSnapshot = accountSnapshot(saved);
       syncUI();
+      await loading.prepare(el, { includeLogin: false });
       el.classList.remove('auth-pending');
+      el.classList.remove('lobby-loading');
+      loading.hide();
       authenticated = true;
       playLobbyMedia();
       clearInterval(accountSyncTimer);
@@ -735,8 +749,13 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       };
       accountSyncTimer = window.setInterval(syncAccountFromCloud, 1500);
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncAccountFromCloud(); });
-      await submitPlayerRanking(profile).catch(() => {});
+      submitPlayerRanking(profile).catch(() => {});
+      notifyAuthenticated();
     },
+  });
+  const ready = Promise.all([initialAssetsReady, auth.ready]).then(() => {
+    el.classList.remove('lobby-loading');
+    loading.hide();
   });
 
   // ------------------------------------------------------------ Modals
@@ -2320,15 +2339,26 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   }
 
   return {
+    ready,
+    authenticatedReady,
     openInGameSettings(options) { return openSettingsModal({ ...options, inGame: true }); },
-    show() {
+    async show() {
+      const request = ++visibilityRequest;
+      loading.show();
+      el.classList.add('lobby-loading');
       syncUI();
       el.classList.remove('hidden');
+      await loading.prepare(el, { includeLogin: false });
+      if (request !== visibilityRequest) return;
+      el.classList.remove('lobby-loading');
+      loading.hide();
       playLobbyMedia();
     },
     hide() {
+      visibilityRequest++;
       pauseLobbyMedia();
       el.classList.add('hidden');
+      loading.hide();
     },
   };
 }

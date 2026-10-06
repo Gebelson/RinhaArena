@@ -15,6 +15,18 @@
   --arena-button-gold: repeating-linear-gradient(130deg, #ffffff00 0 28px, #ffffff22 28px 54px), linear-gradient(175deg, #fff46b, #ffce13 52%, #ffae0a);
 }
 
+/* Lightweight loading screen: visible before the game module graph arrives. */
+.app-loading { position: fixed; inset: 0; z-index: 50000; display: grid; place-items: center; padding: 22px; background: radial-gradient(ellipse at 50% 35%, #124c96, #051631 75%); color: #f4f8ff; font-family: var(--arena-face); }
+.app-loading[hidden] { display: none; }
+.app-loading-card { width: min(440px, 90vw); padding: 34px 28px; text-align: center; border: 4px solid #03133c; border-radius: 24px; background: repeating-linear-gradient(130deg, #ffffff00 0 55px, #ffffff08 55px 100px), linear-gradient(160deg, #137be4, #092b64); box-shadow: 0 0 0 2px #39e7ff, 0 7px #020a23, inset 0 2px #80eaff; }
+.app-loading-card > strong { font-size: clamp(30px, 5vw, 46px); font-weight: 900; color: #ffe66b; text-shadow: 0 3px #033577; }
+.app-loading-label { margin: 14px 0 22px; font-size: 20px; font-weight: 700; }
+.app-loading-track { height: 22px; padding: 3px; overflow: hidden; border: 3px solid #03133c; border-radius: 11px; background: #051934; }
+.app-loading-track i { display: block; height: 100%; width: 0; border-radius: 5px; background: linear-gradient(#fff377, #ffc719); box-shadow: inset 0 2px #fff9c9; transition: width .15s ease; }
+.app-loading-retry { margin-top: 20px; padding: 10px 22px; border: 3px solid #694005; border-radius: 12px; background: var(--arena-button-gold); color: #05204f; box-shadow: 0 3px #432700, inset 0 2px #fffac2; font: 900 20px var(--arena-face); cursor: pointer; }
+.app-loading-retry:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+.menu.lobby-loading { visibility: hidden; pointer-events: none; }
+
 /* Common frame for modal and non-modal windows. Preserve their sizes. */
 :is(.modal-window, .game-options-window, .matchmaking-window, .auth-window,
     .custom-room-lobby, .match-action-dialog, .quick-config, .room-invite-popup,

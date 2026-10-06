@@ -13,11 +13,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;0,900;1,700;1,800;1,900&family=Rajdhani:wght@600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./src/ui/theme.css" />
-  <link rel="preload" href="./models/capivara_2_color_v5.glb" as="fetch" crossorigin />
-  <link rel="preload" href="./models/Color_blue_v5.jpg" as="image" />
-  <link rel="preload" href="./assets/ui/loading_bg.jpg" as="image" />
-  <link rel="preload" href="./assets/ui/loading_bar_bg.png" as="image" />
-  <link rel="preload" href="./assets/ui/loading_bar_fill_inner.png" as="image" />
+  <link rel="preload" href="./assets/ui/menu-shop.webp" as="image" />
+  <link rel="preload" href="./assets/ui/menu-ranking.webp" as="image" />
+  <link rel="preload" href="./assets/ui/menu-missions.webp" as="image" />
+  <link rel="preload" href="./assets/ui/menu-play.webp" as="image" />
+  <link rel="preload" href="./assets/ui/menu-friends.webp" as="image" />
+  <link rel="preload" href="./assets/ui/menu-config.webp" as="image" />
+  <link rel="preload" href="./assets/ui/menu-audio.webp" as="image" />
   <link rel="preload" href="./assets/media/lobby-background-poster.webp" as="image" fetchpriority="high" />
   <script type="importmap">
     {
@@ -29,8 +31,16 @@
   </script>
 </head>
 <body>
+  <section id="app-loading" class="app-loading" aria-label="Carregando Rinha Arena">
+    <div class="app-loading-card">
+      <strong>RINHA ARENA</strong>
+      <p class="app-loading-label" role="status">Preparando lobby…</p>
+      <div class="app-loading-track" role="progressbar" aria-label="Carregamento do lobby" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+      <button class="app-loading-retry" hidden>TENTAR NOVAMENTE</button>
+    </div>
+  </section>
   <canvas id="game" class="hidden"></canvas>
   <div id="ui"></div>
-  <script type="module" src="./src/main.js"></script>
+  <script type="module" src="./src/boot.js"></script>
 </body>
 </html>

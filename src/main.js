@@ -33,7 +33,6 @@ const uiRoot = document.getElementById('ui');
 const sfx = createSfx();
 const bgm = createBgm();
 applySettings();
-startAutoUpdate();
 
 // Unlock audio context on initial user interaction so audio assets load early
 window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
@@ -110,6 +109,8 @@ const menu = createMenu(uiRoot, profile, {
   onStartPrepared: (transport) => startMatch(transport),
   onPlayOnline: async (opts) => startMatch(await prepareOnlineMatch(opts)),
 });
+// Update checks download several source files; don't compete with lobby assets.
+menu.ready.then(() => startAutoUpdate());
 function playSfx(events, myId, myPos) {
   const spatial = (ev) => Math.max(0.15, 1 - Math.hypot(ev.x - myPos.x, ev.z - myPos.z) / 30);
   for (const ev of events) {
@@ -442,7 +443,7 @@ async function resumeActiveMatch() {
   }
 }
 
-setTimeout(resumeActiveMatch, 0);
+menu.ready.then(() => menu.authenticatedReady).then(resumeActiveMatch);
 
 window.addEventListener('keydown', (e) => {
   if (!/INPUT|TEXTAREA/.test(e.target?.tagName)) {

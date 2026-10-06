@@ -130,7 +130,7 @@ export function openAuthGate(uiRoot, { onAuthenticated }) {
   });
 
   setBusy(true);
-  restoreSession().then((account) => {
+  overlay.ready = restoreSession().then((account) => {
     if (account) return finish(account);
     setBusy(false);
     overlay.classList.remove('auth-checking');
