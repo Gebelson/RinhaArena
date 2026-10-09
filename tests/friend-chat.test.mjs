@@ -71,7 +71,7 @@ function harness({ autoJoin = true, heartbeatReplies = true, tokenProvider, rpc 
   const subscribe = () => service.subscribeFriendMessages(OWNER, {
     onMessage: (message, event) => messages.push({ message, event }), onStatus: status => statuses.push(status),
   });
-  return { service, subscribe, advance, sockets, timers, statuses, messages, tokenCalls, lifecycle, onlineListeners };
+  return { service, subscribe, advance, sockets, timers, statuses, messages, tokenCalls, lifecycle, onlineListeners, elapsed: () => time };
 }
 
 test('RPCs send only friend parameters and guard every operation with the owner', async () => {
@@ -218,17 +218,18 @@ test('reconnect obtains a fresh JWT; stale socket events and a late token after 
   assert.equal(waiting.sockets.length, 0); assert.equal(waiting.timers.size, 0);
 });
 
-test('missing heartbeat acknowledgements and join timeouts reconnect with bounded backoff', async () => {
+test('missing heartbeat acknowledgements and join timeouts reconnect with capped backoff', async () => {
   const live = harness({ heartbeatReplies: false }); const liveSubscription = live.subscribe(); await flush();
   await live.advance(25_000); assert.equal(live.statuses.at(-1), 'connected');
   await live.advance(25_000); assert.equal(live.statuses.at(-1), 'reconnecting');
   liveSubscription.close(); assert.equal(live.timers.size, 0);
   const f = harness({ autoJoin: false }); const subscription = f.subscribe(); await flush();
-  await f.advance(180_000);
+  await f.advance(144_000);
   assert.equal(f.sockets.length, 7); // Initial connection plus six retries.
-  assert.equal(f.statuses.at(-1), 'offline'); assert.equal(f.timers.size, 0);
-  await f.advance(180_000); assert.equal(f.sockets.length, 7);
-  subscription.close();
+  assert.equal(f.statuses.at(-1), 'offline'); assert.equal(f.timers.size, 1);
+  await f.advance(29_999); assert.equal(f.sockets.length, 7);
+  await f.advance(1); assert.equal(f.sockets.length, 8);
+  subscription.close(); assert.equal(f.timers.size, 0);
 });
 
 test('wrong-account, absent and expired JWTs never create a socket or fall back to the publishable key', async () => {
@@ -241,21 +242,39 @@ test('wrong-account, absent and expired JWTs never create a socket or fall back 
   }
 });
 
-test('browser online resumes an exhausted subscription once and close removes the listener', async () => {
+test('a long server outage recovers automatically at 30-second intervals without an online event', async () => {
+  let available = false;
+  const attempts = [];
+  const f = harness({ tokenProvider: () => {
+    attempts.push(f.elapsed());
+    if (!available) throw new Error('Network unavailable');
+    return jwt();
+  } });
+  const subscription = f.subscribe(); await flush();
+  await f.advance(170_000);
+  assert.equal(f.statuses.at(-1), 'offline'); assert.equal(f.timers.size, 1); assert.equal(f.tokenCalls.length, 10);
+  assert.deepEqual(attempts, [0, 1000, 3000, 7000, 15000, 30000, 60000, 90000, 120000, 150000]);
+  assert.equal(f.onlineListeners.size, 1);
+  available = true; await f.advance(9_999); assert.equal(f.sockets.length, 0);
+  await f.advance(1);
+  assert.equal(f.statuses.at(-1), 'connected'); assert.equal(f.sockets.length, 1); assert.equal(f.tokenCalls.length, 11);
+  f.lifecycle.dispatchEvent(new Event('online')); await flush();
+  assert.equal(f.sockets.length, 1); assert.equal(f.tokenCalls.length, 11);
+  subscription.close(); assert.equal(f.onlineListeners.size, 0); assert.equal(f.timers.size, 0);
+  f.lifecycle.dispatchEvent(new Event('online')); await flush();
+  assert.equal(f.tokenCalls.length, 11);
+});
+
+test('browser online resumes an offline subscription immediately and replaces its scheduled retry', async () => {
   let available = false;
   const f = harness({ tokenProvider: () => {
     if (!available) throw new Error('Network unavailable');
     return jwt();
   } });
-  const subscription = f.subscribe(); await flush();
-  await f.advance(100_000);
-  assert.equal(f.statuses.at(-1), 'offline'); assert.equal(f.timers.size, 0); assert.equal(f.tokenCalls.length, 7);
-  assert.equal(f.onlineListeners.size, 1);
+  const subscription = f.subscribe(); await flush(); await f.advance(70_000);
+  assert.equal(f.statuses.at(-1), 'offline'); assert.equal(f.timers.size, 1); assert.equal(f.tokenCalls.length, 7);
   available = true; f.lifecycle.dispatchEvent(new Event('online')); await flush();
   assert.equal(f.statuses.at(-1), 'connected'); assert.equal(f.sockets.length, 1); assert.equal(f.tokenCalls.length, 8);
-  f.lifecycle.dispatchEvent(new Event('online')); await flush();
-  assert.equal(f.sockets.length, 1); assert.equal(f.tokenCalls.length, 8);
+  await f.advance(30_000); assert.equal(f.sockets.length, 1); assert.equal(f.tokenCalls.length, 8);
   subscription.close(); assert.equal(f.onlineListeners.size, 0); assert.equal(f.timers.size, 0);
-  f.lifecycle.dispatchEvent(new Event('online')); await flush();
-  assert.equal(f.tokenCalls.length, 8);
 });

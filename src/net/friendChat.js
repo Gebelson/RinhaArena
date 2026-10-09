@@ -103,9 +103,11 @@ export function createFriendChatService(options = {}) {
       if (closed) return;
       generation++; clearTimers(); detach();
       terminalOffline = terminal;
-      if (terminal || failures >= RETRY_DELAYS.length) { emitStatus('offline', error); return; }
-      emitStatus('reconnecting', error);
-      retryTimer = timers.setTimeout(() => { retryTimer = null; void connect(); }, RETRY_DELAYS[failures++]);
+      if (terminal) { emitStatus('offline', error); return; }
+      emitStatus(failures >= RETRY_DELAYS.length ? 'offline' : 'reconnecting', error);
+      const delay = RETRY_DELAYS[Math.min(failures, RETRY_DELAYS.length - 1)];
+      failures = Math.min(failures + 1, RETRY_DELAYS.length);
+      retryTimer = timers.setTimeout(() => { retryTimer = null; void connect(); }, delay);
     };
     const push = (event, payload, pushTopic = topic, pushJoinRef = joinRef) => {
       if (!socket || socket.readyState !== (Socket?.OPEN ?? 1)) return null;
@@ -214,6 +216,7 @@ export function createFriendChatService(options = {}) {
     }
     const resumeOnline = () => {
       if (closed || terminalOffline || status !== 'offline') return;
+      timers.clearTimeout(retryTimer); retryTimer = null;
       failures = 0;
       void connect();
     };
