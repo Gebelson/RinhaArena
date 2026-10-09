@@ -26,6 +26,7 @@ import { promptRoomPassword, showMessageDialog } from './dialog.js';
 import { leaderboardMarkup, leaderboardRowsMarkup } from './leaderboard.js';
 import { createLobbyLoading } from './lobbyLoading.js';
 import { openPlayerProfile } from './playerProfile.js';
+import { createFriendChat } from './friendChat.js';
 import { AVATARS, isAvatarId, getAvatarUrl } from '../content/avatars.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
@@ -641,6 +642,15 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   });
 
   // Online Multiplayer Modals
+  const friendChat = createFriendChat(uiRoot, profile, {
+    onUnreadChange(unread) {
+      const total = [...unread.values()].reduce((sum, count) => sum + count, 0);
+      let badge = btnLobby.querySelector('.friend-chat-badge');
+      if (!badge) { badge = document.createElement('span'); badge.className = 'friend-chat-badge'; btnLobby.append(badge); }
+      badge.hidden = !total; badge.textContent = total > 99 ? '99+' : String(total);
+      btnLobby.setAttribute('aria-label', total ? `Amigos: ${total} mensagens não lidas` : 'Amigos e salas');
+    },
+  });
   btnLobby.addEventListener('click', () => {
     onClickSound?.();
     openLobbyModal();
@@ -727,6 +737,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       el.classList.remove('lobby-loading');
       loading.hide();
       authenticated = true;
+      friendChat.start(profile.playerId);
       playLobbyMedia();
       clearInterval(accountSyncTimer);
       const syncAccountFromCloud = async () => {
@@ -1043,6 +1054,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       button.disabled = true;
       button.textContent = 'DESCONECTANDO...';
       await signOut();
+      friendChat.stop();
       location.reload();
     });
     if (inGame) {
@@ -1934,11 +1946,18 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     const names = Object.fromEntries(SHOP_CHARACTERS.map((item) => [item.id, item.name]));
     const setStatus = (text, error = false) => { status.textContent = text; status.classList.toggle('error', error); };
     const closePanel = () => panel.classList.add('hidden');
-    const friendCard = (friend) => `<article class="social-friend-card"><img src="${getAvatarUrl(friend.avatar)}" alt=""><div><strong>${escapeHtml(friend.nickname)}</strong><small>${friend.rank_points} PONTOS DE RANK</small></div><div class="social-friend-actions"><button data-profile-id="${friend.id}">VER PERFIL</button><button data-gift="gold" data-id="${friend.id}" data-name="${escapeHtml(friend.nickname)}">DAR GOLD</button><button data-gift="rank" data-id="${friend.id}" data-name="${escapeHtml(friend.nickname)}">DAR RANK</button><button data-trade="${friend.id}" data-name="${escapeHtml(friend.nickname)}">TROCAR</button></div></article>`;
+    const friendCard = (friend) => `<article class="social-friend-card"><img src="${getAvatarUrl(friend.avatar)}" alt=""><div><strong>${escapeHtml(friend.nickname)}</strong><small>${friend.rank_points} PONTOS DE RANK</small></div><div class="social-friend-actions"><button class="social-chat-button" data-chat="${friend.id}">CONVERSAR<span data-unread="${friend.id}" hidden></span></button><button data-profile-id="${friend.id}">VER PERFIL</button><button data-gift="gold" data-id="${friend.id}" data-name="${escapeHtml(friend.nickname)}">DAR GOLD</button><button data-gift="rank" data-id="${friend.id}" data-name="${escapeHtml(friend.nickname)}">DAR RANK</button><button data-trade="${friend.id}" data-name="${escapeHtml(friend.nickname)}">TROCAR</button></div></article>`;
+    const updateUnread = (unread = friendChat.getUnread()) => {
+      modal.querySelectorAll('[data-unread]').forEach(badge => {
+        const count = unread.get(badge.dataset.unread) || 0;
+        badge.hidden = !count; badge.textContent = count > 99 ? '99+' : String(count);
+      });
+    };
+    const unsubscribeUnread = friendChat.subscribeUnread(updateUnread);
     const loadTab = async (tab) => {
       closePanel(); list.innerHTML = '<div class="social-empty">CARREGANDO...</div>'; setStatus('');
       try {
-        if (tab === 'friends') { friends = await listFriends(); list.innerHTML = friends.length ? friends.map(friendCard).join('') : '<div class="social-empty">ADICIONE AMIGOS PELO ID OU NICKNAME.</div>'; }
+        if (tab === 'friends') { friends = await listFriends(); list.innerHTML = friends.length ? friends.map(friendCard).join('') : '<div class="social-empty">ADICIONE AMIGOS PELO ID OU NICKNAME.</div>'; updateUnread(); friendChat.refreshUnread(); }
         if (tab === 'requests') { const rows = await listFriendRequests(); list.innerHTML = rows.length ? rows.map((row) => `<article class="social-friend-card"><img src="${getAvatarUrl(row.avatar)}" alt=""><div><strong>${escapeHtml(row.nickname)}</strong><small>QUER SER SEU AMIGO</small></div><div class="social-friend-actions"><button data-request="${row.id}" data-accept="1">ACEITAR</button><button class="danger" data-request="${row.id}" data-accept="0">RECUSAR</button></div></article>`).join('') : '<div class="social-empty">NENHUMA SOLICITAÇÃO PENDENTE.</div>'; }
         if (tab === 'trades') { const rows = await listCharacterTrades(); list.innerHTML = rows.length ? rows.map((row) => `<article class="social-friend-card"><div class="social-trade-icon">⇄</div><div><strong>${escapeHtml(row.nickname)}</strong><small>OFERECE ${escapeHtml(names[row.offered_character] || row.offered_character)} POR ${escapeHtml(names[row.requested_character] || row.requested_character)}</small></div><div class="social-friend-actions"><button data-trade-request="${row.id}" data-accept="1">ACEITAR</button><button class="danger" data-trade-request="${row.id}" data-accept="0">RECUSAR</button></div></article>`).join('') : '<div class="social-empty">NENHUMA PROPOSTA DE TROCA.</div>'; }
       } catch (error) { list.innerHTML = ''; setStatus(error.message, true); }
@@ -1951,6 +1970,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     });
     modal.querySelector('.social-search-results').addEventListener('click', async (event) => { const button = event.target.closest('[data-add]'); if (!button) return; button.disabled = true; try { await sendFriendRequest(button.dataset.add); button.textContent = 'ENVIADO'; } catch (error) { setStatus(error.message, true); button.disabled = false; } });
     list.addEventListener('click', async (event) => {
+      const chat = event.target.closest('[data-chat]');
+      if (chat) { const friend = friends.find(item => item.id === chat.dataset.chat); if (friend) friendChat.open(friend); return; }
       const player=event.target.closest('[data-profile-id]'); if(player) {openProfilePage(player.dataset.profileId);return;}
       const request = event.target.closest('[data-request]'); const tradeRequest = event.target.closest('[data-trade-request]');
       if (request) { await respondFriendRequest(request.dataset.request, request.dataset.accept === '1').catch((error) => setStatus(error.message, true)); return loadTab('requests'); }
@@ -1977,7 +1998,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         setStatus(panel.dataset.action === 'gift' ? 'PRESENTE ENVIADO!' : 'PROPOSTA DE TROCA ENVIADA!'); closePanel();
       } catch (error) { setStatus(error.message, true); event.currentTarget.disabled = false; }
     });
-    const close = () => modal.remove(); modal.querySelector('.modal-close').addEventListener('click', close); modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    const close = () => { unsubscribeUnread(); modal.remove(); }; modal.querySelector('.modal-close').addEventListener('click', close); modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
     loadTab('friends');
   }
 
@@ -2353,6 +2374,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     },
     hide() {
       visibilityRequest++;
+      friendChat.close();
       pauseLobbyMedia();
       el.classList.add('hidden');
       loading.hide();
