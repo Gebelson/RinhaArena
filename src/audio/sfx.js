@@ -3,12 +3,13 @@
 // falloff comes from a simple distance gain passed by the caller.
 
 export function createSfx() {
+  const readSetting = (key) => { try { return globalThis.localStorage?.getItem(key) ?? null; } catch { return null; } };
   let ctx = null;
   let master = null;
-  let muted = typeof localStorage !== 'undefined' && localStorage.getItem('blast.muted') === '1';
+  let muted = readSetting('blast.muted') === '1';
   let yeetBuffer = null;
   let yeetLoading = false;
-  let volume = Math.max(0, Math.min(1, Number(localStorage.getItem('rinha.sfxVolume') ?? .5)));
+  let volume = Math.max(0, Math.min(1, Number(readSetting('rinha.sfxVolume') ?? .5)));
 
   const setMuted = (nextMuted) => {
     muted = Boolean(nextMuted);
@@ -18,7 +19,7 @@ export function createSfx() {
     window.addEventListener('blast:mute-change', (event) => setMuted(event.detail?.muted));
     window.addEventListener('rinha:sfx-volume', (event) => {
       volume = Math.max(0, Math.min(1, Number(event.detail?.volume) || 0));
-      localStorage.setItem('rinha.sfxVolume', String(volume));
+      try { globalThis.localStorage?.setItem('rinha.sfxVolume', String(volume)); } catch { /* Volume still applies when storage is unavailable. */ }
       if (master && !muted) master.gain.value = volume;
     });
   }

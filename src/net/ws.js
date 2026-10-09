@@ -18,10 +18,18 @@ import {
 import { EMOTE_IDS } from '../content/emotes.js';
 
 const TICK_RATE = CONFIG.tickRate || 60;
-const SNAPSHOT_INTERVAL = 1 / 30; // 30 Hz broadcasts from host
-const INPUT_INTERVAL_MS = 25; // 40 Hz periodic input updates for steady movement
-const MIN_INPUT_SEND_INTERVAL_MS = 10; // minimum interval for immediate edge-trigger sends
-const TARGET_BUFFER_TICKS = 6; // ~100ms keeps remote players smooth under normal Realtime jitter
+// Supabase counts the sender and every recipient. One six-human room uses at
+// most 5*5*2 input + 5*6 snapshot + 5/2*2 presence = 85 recurring messages/s.
+// The Free 100/s allowance is project-wide; joins/chat/transfers need headroom.
+// https://supabase.com/docs/guides/platform/manage-your-usage/realtime-messages
+export const REALTIME_BUDGET = Object.freeze({ inputHz: 5, snapshotHz: 5, presenceMs: 2000 });
+const SNAPSHOT_INTERVAL_MS = 1000 / REALTIME_BUDGET.snapshotHz;
+const MIN_INPUT_SEND_INTERVAL_MS = 1000 / REALTIME_BUDGET.inputHz;
+const INPUT_REFRESH_MS = 1000;
+const TARGET_BUFFER_TICKS = Math.ceil(TICK_RATE / REALTIME_BUDGET.snapshotHz) + 3;
+const ACTION_KEYS = ['jump', 'punch', 'throw', 'dash', 'grab'];
+const withoutActions = input => ({ ...input, ...Object.fromEntries(ACTION_KEYS.map(key => [key, false])) });
+const inputChanged = (a, b) => ['mx', 'mz', 'ax', 'az', 'run', 'ad', 'aiming'].some(key => (a[key] ?? 0) !== (b[key] ?? 0));
 
 function interpPlayers(aList, bList, t) {
   const byIdA = new Map(aList.map((p) => [p.id, p]));
@@ -104,15 +112,25 @@ export async function connectOnline({ room, password, team, profile, host: reque
 
   const clientId = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
   const channel = new SupabaseRealtimeChannel(`arena:${roomCode}`);
-  await channel.connect();
+  const controlTopic = id => `arena-control:${roomCode}:${id}`;
+  let ownControl = requestedHost ? null : new SupabaseRealtimeChannel(controlTopic(clientId));
+  try { await Promise.all([channel.connect(), ownControl?.connect()]); }
+  catch (error) { channel.close(); ownControl?.close(); throw error; }
 
   return new Promise((resolve, reject) => {
     let settled = false;
     let closed = false;
     let myId = null;
     let hostGame = null;
-    let snapAccumulator = 0;
-    let lastSent = 0;
+    let lastSnapshotSent = -Infinity;
+    let lastSent = -Infinity;
+    let lastInputSentAt = 0;
+    let directInputReady = false;
+    let directInputSupported = null;
+    const peerControls = new Map();
+    const retryTimers = new Set();
+    const remoteInputs = new Map();
+    const snapshotEvents = [];
     let welcomeTimer = null;
     let touchTimer = null;
     let presenceTimer = null;
@@ -136,6 +154,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
     const startWaiters = [];
     let matchStart = null;
     let readyTimer = null;
+    let queueTimer = null;
     let isHost = requestedHost;
     let hostTransferReceived = false;
     let authorityTransferred = false;
@@ -169,12 +188,14 @@ export async function connectOnline({ room, password, team, profile, host: reque
     };
 
     let currentInput = { mx: 0, mz: 0, ax: 0, az: 0, run: 0, punch: false, jump: false, throw: false, dash: false, grab: false };
-    const latchedInput = { jump: false, punch: false, throw: false, dash: false, grab: false };
+    const pendingActions = [];
+    let previousInput = {};
     let prevSentInput = { mx: 0, mz: 0, run: 0, punch: false, jump: false, throw: false, dash: false, grab: false };
 
     const fail = (error) => {
       if (!settled) {
         settled = true;
+        closeControls();
         channel.close();
         reject(error instanceof Error ? error : new Error(String(error)));
       }
@@ -185,8 +206,74 @@ export async function connectOnline({ room, password, team, profile, host: reque
       return;
     }
     const sendJoin = () => channel.send('join', {
-      clientId, userId: profile.playerId, displayName: officialName, cos: profile.cos, team,
+      clientId, userId: profile.playerId, displayName: officialName, cos: profile.cos, team, directInput: true,
     });
+    function closeControls() {
+      ownControl?.close();
+      for (const entry of peerControls.values()) entry.channel.close();
+      peerControls.clear();
+      for (const timer of retryTimers) clearTimeout(timer);
+      retryTimers.clear();
+    }
+    function retryLater(callback, delay) {
+      const timer = setTimeout(() => { retryTimers.delete(timer); if (!closed) callback(); }, delay);
+      retryTimers.add(timer);
+    }
+    function bindOwnControl(control, attempt = 0) {
+      for (const event of ['welcome', 'error']) control.on(event, message => {
+        if (!closed && message?.target === clientId) channel.emit(event, message);
+      });
+      control.on('disconnect', () => {
+        if (closed || isHost || ownControl !== control) return;
+        directInputReady = false;
+        retryLater(async () => {
+          const replacement = new SupabaseRealtimeChannel(controlTopic(clientId));
+          ownControl = replacement;
+          bindOwnControl(replacement, attempt + 1);
+          try { await replacement.connect(); if (closed || isHost) replacement.close(); else sendJoin(); }
+          catch { replacement.close(); if (attempt < 2) replacement.emit('disconnect'); else onDropped?.(); }
+        }, 250 * 2 ** attempt);
+      });
+    }
+    if (ownControl) bindOwnControl(ownControl);
+    async function ensurePeerControl(record) {
+      if (!record.directInput || record.clientId === clientId || closed) return false;
+      const existing = peerControls.get(record.clientId);
+      if (existing) return existing.promise;
+      const control = new SupabaseRealtimeChannel(controlTopic(record.clientId));
+      const entry = { channel: control, promise: null };
+      peerControls.set(record.clientId, entry);
+      for (const event of ['input', 'presence-ping', 'match-client-ready']) control.on(event, message => {
+        if (!closed && isHost && message?.clientId === record.clientId) channel.emit(event, message);
+      });
+      control.on('disconnect', () => {
+        if (closed || peerControls.get(record.clientId) !== entry) return;
+        peerControls.delete(record.clientId);
+        control.close();
+        if (isHost) channel.send('input-paused', { target: record.clientId });
+        retryLater(async () => {
+          const current = clientPlayers.get(record.clientId);
+          if (current && await ensurePeerControl(current)) channel.send('input-ready', { target: record.clientId });
+        }, 500);
+      });
+      entry.promise = control.connect().then(() => {
+        if (closed || !isHost || peerControls.get(record.clientId) !== entry) { control.close(); return false; }
+        return true;
+      }).catch(() => { control.close(); if (peerControls.get(record.clientId) === entry) peerControls.delete(record.clientId); return false; });
+      return entry.promise;
+    }
+    function closePeerControl(id) {
+      const entry = peerControls.get(id);
+      peerControls.delete(id);
+      entry?.channel.close();
+      remoteInputs.delete(id);
+    }
+    channel.on('input-ready', message => { if (message?.target === clientId) directInputReady = true; });
+    channel.on('input-paused', message => { if (message?.target === clientId) directInputReady = false; });
+    function sendTargeted(event, payload) {
+      const peer = peerControls.get(payload.target);
+      return (peer?.channel || channel).send(event, payload);
+    }
     const resolveMatch = (payload) => {
       if (!payload?.id || !Array.isArray(payload.participants)) return;
       matchInfo = payload;
@@ -212,12 +299,16 @@ export async function connectOnline({ room, password, team, profile, host: reque
         if (!hostTransferReceived && !closed) onDropped?.();
       }, 750);
     });
-    channel.on('host-transfer', (message) => {
+    channel.on('host-transfer', async (message) => {
       if (isHost || closed || !message?.match || !message?.successorUserId) return;
       hostTransferReceived = true;
+      directInputReady = false;
+      directInputSupported = true;
       resolveMatch(message.match);
       if (message.successorUserId !== profile.playerId) return;
       isHost = true;
+      ownControl?.close();
+      ownControl = null;
       clientPlayers.clear();
       for (const record of message.players || []) {
         if (record?.clientId && record?.userId) clientPlayers.set(record.clientId, { ...record, connected: true });
@@ -230,12 +321,17 @@ export async function connectOnline({ room, password, team, profile, host: reque
       for (const participant of matchInfo.participants) {
         if (participant.type === 'HUMAN') readyUsers.add(participant.userId);
       }
-      channel.send('match-found', { match: matchInfo });
+      await Promise.all([...clientPlayers.values()].map(ensurePeerControl));
+      if (closed) return;
+      channel.send('match-found', { match: matchInfo, inputReadyFor: [...peerControls.keys()] });
       if (!matchStart) maybeStartMatch(true);
       console.info(`[MATCH] authority transferred match=${matchInfo.id} successor=${profile.playerId}`);
     });
     channel.on('welcome', (message) => {
-      if (isHost || message?.target !== clientId || settled) return;
+      if (isHost || message?.target !== clientId) return;
+      directInputReady = message.directInput === true;
+      directInputSupported = message.directInput === true;
+      if (settled) return;
       myId = message.playerId;
       lobbyPlayers = Array.isArray(message.players) ? message.players : [];
       remoteQueueEndsAt = Number(message.queueEndsAt) || remoteQueueEndsAt;
@@ -247,7 +343,10 @@ export async function connectOnline({ room, password, team, profile, host: reque
       if (Array.isArray(message?.players)) lobbyPlayers = message.players;
       remoteQueueEndsAt = Number(message?.deadlineAt) || remoteQueueEndsAt;
     });
-    channel.on('match-found', (message) => resolveMatch(message?.match));
+    channel.on('match-found', (message) => {
+      if (Array.isArray(message?.inputReadyFor)) directInputReady = message.inputReadyFor.includes(clientId);
+      resolveMatch(message?.match);
+    });
     channel.on('match-client-ready', (message) => {
       if (!isHost || !matchInfo || !message?.userId) return;
       if (matchInfo.participants.some((participant) => participant.type === 'HUMAN' && participant.userId === message.userId)) {
@@ -485,10 +584,16 @@ export async function connectOnline({ room, password, team, profile, host: reque
       const participant = matchInfo.participants.find((entry) => entry.participantId === message?.participantId);
       if (participant) controlEvents.push({ type: 'emote', participantId: participant.participantId, emote: message.emote });
     });
-    const broadcastQueue = () => channel.send('queue-update', {
-      players: [...clientPlayers.values()].map(({ userId, displayName, cos, team }) => ({ userId, name: displayName, displayName, cos, team })),
-      deadlineAt: remoteQueueEndsAt,
-    });
+    const broadcastQueue = () => {
+      if (queueTimer || closed) return;
+      queueTimer = setTimeout(() => {
+        queueTimer = null;
+        if (!closed) channel.send('queue-update', {
+          players: [...clientPlayers.values()].map(({ userId, displayName, cos, team }) => ({ userId, name: displayName, displayName, cos, team })),
+          deadlineAt: remoteQueueEndsAt,
+        });
+      }, 250);
+    };
     const maybeStartMatch = (force = false) => {
       if (!isHost || !matchInfo || matchStart) return;
       const humanIds = matchInfo.participants.filter((participant) => participant.type === 'HUMAN').map((participant) => participant.userId);
@@ -500,17 +605,24 @@ export async function connectOnline({ room, password, team, profile, host: reque
       channel.send('match-start', matchStart);
       while (startWaiters.length) startWaiters.shift()(matchStart);
     };
-    channel.on('join', (message) => {
+    channel.on('join', async (message) => {
       if (!isHost || !message?.clientId || message.clientId === clientId) return;
       const displayName = validDisplayName(message.displayName);
       if (!message.userId || !displayName) {
         channel.send('error', { target: message.clientId, reason: 'Perfil multiplayer inválido' });
         return;
       }
+      const directInput = message.directInput === true;
+      if (directInput && !await ensurePeerControl({ clientId: message.clientId, directInput })) {
+        if (!closed) channel.send('error', { target: message.clientId, reason: 'Não foi possível conectar os controles multiplayer' });
+        return;
+      }
+      if (closed || !isHost) return;
       const existing = clientPlayers.get(message.clientId);
       if (existing) {
-        channel.send('welcome', {
-          target: message.clientId, playerId: existing.participantId ?? null,
+        existing.directInput = directInput;
+        sendTargeted('welcome', {
+          target: message.clientId, playerId: existing.participantId ?? null, directInput,
           players: [...clientPlayers.values()].map((entry) => ({ userId: entry.userId, name: entry.displayName, displayName: entry.displayName, cos: entry.cos })),
           queueEndsAt: remoteQueueEndsAt,
         });
@@ -521,7 +633,9 @@ export async function connectOnline({ room, password, team, profile, host: reque
       const reconnect = [...clientPlayers.values()].find((entry) => entry.userId === message.userId);
       if (reconnect) {
         clientPlayers.delete(reconnect.clientId);
+        closePeerControl(reconnect.clientId);
         reconnect.clientId = message.clientId;
+        reconnect.directInput = directInput;
         reconnect.connected = true;
         reconnect.lastSeenAt = Date.now();
         clientPlayers.set(message.clientId, reconnect);
@@ -529,7 +643,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
           const player = hostGame.sim.state.players.find((candidate) => candidate.participantId === reconnect.participantId);
           if (player) hostGame.reconnectHuman(reconnect.participantId);
         }
-        channel.send('welcome', { target: message.clientId, playerId: reconnect.participantId ?? null, players: lobbyPlayers, queueEndsAt: remoteQueueEndsAt });
+        sendTargeted('welcome', { target: message.clientId, playerId: reconnect.participantId ?? null, directInput, players: lobbyPlayers, queueEndsAt: remoteQueueEndsAt });
         if (matchInfo) channel.send('match-found', { target: message.clientId, match: matchInfo });
         if (matchStart) channel.send('match-start', { ...matchStart, target: message.clientId });
         broadcastQueue();
@@ -538,35 +652,38 @@ export async function connectOnline({ room, password, team, profile, host: reque
       const returningParticipant = matchInfo?.participants.find((participant) => participant.type === 'HUMAN' && participant.userId === message.userId);
       if (returningParticipant && matchStart) {
         const record = {
-          clientId: message.clientId, userId: message.userId, displayName,
+          clientId: message.clientId, userId: message.userId, displayName, directInput,
           characterId: returningParticipant.characterId, cos: returningParticipant.cos,
           team: returningParticipant.team, connected: true,
           participantId: returningParticipant.participantId, lastSeenAt: Date.now(),
         };
         clientPlayers.set(message.clientId, record);
         hostGame?.reconnectHuman(returningParticipant.participantId);
-        channel.send('welcome', { target: message.clientId, playerId: returningParticipant.participantId, players: lobbyPlayers, queueEndsAt: remoteQueueEndsAt });
+        sendTargeted('welcome', { target: message.clientId, playerId: returningParticipant.participantId, directInput, players: lobbyPlayers, queueEndsAt: remoteQueueEndsAt });
         channel.send('match-found', { target: message.clientId, match: matchInfo });
         channel.send('match-start', { ...matchStart, target: message.clientId });
         return;
       }
       if (clientPlayers.size >= maxPlayers(config)) {
+        closePeerControl(message.clientId);
         channel.send('error', { target: message.clientId, reason: 'A sala está cheia!' });
         return;
       }
       if (session?.status !== MatchmakingStatus.WAITING) {
+        closePeerControl(message.clientId);
         channel.send('error', { target: message.clientId, reason: 'A partida já está iniciando' });
         return;
       }
       const record = {
-        clientId: message.clientId, userId: message.userId, displayName,
+        clientId: message.clientId, userId: message.userId, displayName, directInput,
         characterId: ['crocodilo', 'porco', 'pato', 'gato', 'cachorro', 'macaco'].includes(message.cos?.characterId) ? message.cos.characterId : 'capivara', cos: message.cos, team: message.team, connected: true, participantId: null,
         lastSeenAt: Date.now(),
       };
       clientPlayers.set(message.clientId, record);
       session.players.set(record.userId, record);
-      channel.send('welcome', {
+      sendTargeted('welcome', {
         target: message.clientId,
+        directInput,
         playerId: null,
         players: [...clientPlayers.values()].map((entry) => ({ userId: entry.userId, name: entry.displayName, displayName: entry.displayName, cos: entry.cos })),
         queueEndsAt: remoteQueueEndsAt,
@@ -577,12 +694,20 @@ export async function connectOnline({ room, password, team, profile, host: reque
     channel.on('input', (message) => {
       if (!isHost || !hostGame) return;
       const player = clientPlayers.get(message?.clientId);
-      if (player?.participantId && hostGame) hostGame.setInput(player.participantId, message.input ?? {});
+      if (!player?.participantId) return;
+      player.lastSeenAt = Date.now();
+      if (!Array.isArray(message.actions)) { hostGame.setInput(player.participantId, message.input ?? {}); return; }
+      const entry = remoteInputs.get(message.clientId) || { input: {}, actions: [] };
+      entry.input = withoutActions(message.input ?? {});
+      entry.actions.push(...message.actions.slice(0, 16).filter(action => action && typeof action === 'object'));
+      remoteInputs.set(message.clientId, entry);
+      hostGame.setInput(player.participantId, entry.input);
     });
     channel.on('leave', (message) => {
       if (!isHost) return;
       const player = clientPlayers.get(message?.clientId);
       if (!player) return;
+      closePeerControl(message.clientId);
       if (session?.status === MatchmakingStatus.WAITING) {
         clientPlayers.delete(message.clientId);
         session.players.delete(player.userId);
@@ -651,7 +776,7 @@ export async function connectOnline({ room, password, team, profile, host: reque
           readyUsers.add(profile.playerId);
           maybeStartMatch();
         } else {
-          channel.send('match-client-ready', { matchId: matchInfo.id, userId: profile.playerId });
+          (directInputReady ? ownControl : channel).send('match-client-ready', { clientId, matchId: matchInfo.id, userId: profile.playerId });
         }
         if (matchStart) return Promise.resolve(matchStart);
         return new Promise((resolve) => startWaiters.push(resolve));
@@ -681,45 +806,29 @@ export async function connectOnline({ room, password, team, profile, host: reque
           return;
         }
         currentInput = { ...input };
-
-        // Latched edge triggers
-        if (input.jump) latchedInput.jump = true;
-        if (input.punch) latchedInput.punch = true;
-        if (input.throw) latchedInput.throw = true;
-        if (input.dash) latchedInput.dash = true;
-        if (input.grab) latchedInput.grab = true;
+        // Queue each press with its aim/movement, including two quick taps of
+        // the same button. Holding a button produces exactly one action.
+        const action = withoutActions(input);
+        let hasEdge = false;
+        for (const key of ACTION_KEYS) if (input[key] && !previousInput[key]) { action[key] = true; hasEdge = true; }
+        previousInput = { ...input };
+        if (hasEdge) pendingActions.push(action);
+        if (!matchStart || Date.now() < matchStart.startAt || closed || directInputSupported === null
+          || (directInputSupported && !directInputReady)) return;
 
         const now = performance.now();
         const timeSince = now - lastSent;
-
-        const hasTrigger = latchedInput.jump || latchedInput.punch || latchedInput.throw || latchedInput.dash || latchedInput.grab;
-        const dirChanged = Math.hypot(
-          (input.mx || 0) - (prevSentInput.mx || 0),
-          (input.mz || 0) - (prevSentInput.mz || 0),
-        ) > 0.15;
-
-        const shouldSend =
-          (hasTrigger && timeSince >= MIN_INPUT_SEND_INTERVAL_MS) ||
-          (dirChanged && timeSince >= 15) ||
-          (timeSince >= INPUT_INTERVAL_MS);
-
-        if (shouldSend) {
+        const moving = Math.hypot(input.mx || 0, input.mz || 0) > .05;
+        if (timeSince < MIN_INPUT_SEND_INTERVAL_MS || !(pendingActions.length || inputChanged(input, prevSentInput)
+          || (moving && timeSince >= INPUT_REFRESH_MS))) return;
+        const actions = pendingActions.slice(0, 16);
+        const toSend = { ...withoutActions(input), ...Object.fromEntries(ACTION_KEYS.map(key => [key, !!actions[0]?.[key]])) };
+        const writer = directInputSupported ? ownControl : channel;
+        if (writer?.send('input', { clientId, input: toSend, actions })) {
           lastSent = now;
-          const toSend = {
-            ...input,
-            jump: input.jump || latchedInput.jump,
-            punch: input.punch || latchedInput.punch,
-            throw: input.throw || latchedInput.throw,
-            dash: input.dash || latchedInput.dash,
-            grab: input.grab || latchedInput.grab,
-          };
-          latchedInput.jump = false;
-          latchedInput.punch = false;
-          latchedInput.throw = false;
-          latchedInput.dash = false;
-          latchedInput.grab = false;
-          prevSentInput = { ...toSend };
-          channel.send('input', { clientId, input: toSend });
+          lastInputSentAt = Date.now();
+          prevSentInput = { ...input };
+          pendingActions.splice(0, actions.length);
         }
       },
       update(dt) {
@@ -731,13 +840,28 @@ export async function connectOnline({ room, password, team, profile, host: reque
               if (record.participantId) hostGame.disconnectHuman(record.participantId);
             }
           }
+          // A packet may contain several presses. Execute one queued press per
+          // physics update; reset only its edge bits so quick taps remain edges.
+          const consumed = [];
+          if (hostGame.acc + dt >= hostGame.dt) for (const [id, entry] of remoteInputs) {
+            const record = clientPlayers.get(id);
+            if (!record?.participantId || record.connected === false) continue;
+            const action = entry.actions.shift();
+            if (!action) continue;
+            const prev = hostGame.sim.prevIn.get(record.participantId) || {};
+            hostGame.sim.prevIn.set(record.participantId, { ...prev, ...Object.fromEntries(ACTION_KEYS.filter(key => action[key]).map(key => [key, false])) });
+            hostGame.setInput(record.participantId, action);
+            consumed.push([record.participantId, entry]);
+          }
           hostGame.step(dt);
-          snapAccumulator += dt;
-          if (snapAccumulator >= SNAPSHOT_INTERVAL) {
-            snapAccumulator %= SNAPSHOT_INTERVAL;
-            const events = hostGame.drainEvents();
-            if (events.length) hostEventQ.push(...events);
-            channel.send('snap', { state: packState(hostGame.sim.state), events });
+          for (const [id, entry] of consumed) hostGame.setInput(id, entry.input);
+          const events = hostGame.drainEvents();
+          if (events.length) { hostEventQ.push(...events); snapshotEvents.push(...events); }
+          const snapshotNow = performance.now();
+          if (snapshotNow - lastSnapshotSent >= SNAPSHOT_INTERVAL_MS
+            && channel.send('snap', { state: packState(hostGame.sim.state), events: snapshotEvents })) {
+            lastSnapshotSent = snapshotNow;
+            snapshotEvents.length = 0;
           }
           return;
         }
@@ -970,7 +1094,9 @@ export async function connectOnline({ room, password, team, profile, host: reque
         clearInterval(welcomeTimer);
         clearInterval(touchTimer);
         clearInterval(presenceTimer);
+        closeControls();
         clearTimeout(readyTimer);
+        clearTimeout(queueTimer);
         for (const vote of surrenderVotes.values()) clearTimeout(vote.timer);
         surrenderVotes.clear();
         if (isHost) {
@@ -1022,7 +1148,12 @@ export async function connectOnline({ room, password, team, profile, host: reque
     } else {
       sendJoin();
       welcomeTimer = setInterval(sendJoin, 1000);
-      presenceTimer = setInterval(() => channel.send('presence-ping', { clientId }), 2_000);
+      presenceTimer = setInterval(() => {
+        if (closed || isHost) return;
+        if (directInputSupported && !directInputReady) { sendJoin(); return; }
+        if (Date.now() - lastInputSentAt < 1500) return;
+        (directInputSupported ? ownControl : channel)?.send('presence-ping', { clientId });
+      }, REALTIME_BUDGET.presenceMs);
       setTimeout(() => fail(new Error('O criador da sala não está conectado')), 10_000);
     }
   });

@@ -1,4 +1,5 @@
 import { getRankProgress } from '../content/ranks.js';
+import { getAvatarUrl } from '../content/avatars.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -39,11 +40,11 @@ export function leaderboardRowsMarkup(players, localPlayerId) {
   return players.map((player, index) => {
     const rank = getRankProgress(player.points).rank;
     const place = index + 1;
-    const avatar = /^avatar-(?:[1-9]|10)\.webp$/.test(player.avatar) ? player.avatar : 'avatar-1.webp';
+    const avatar = getAvatarUrl(player.avatar);
     const isMe = player.playerId === localPlayerId;
     return `<div role="row" class="leaderboard-row ${place <= 3 ? `leaderboard-top leaderboard-top-${place}` : ''} ${isMe ? 'is-me' : ''}">
       <div class="leaderboard-place" role="cell">${place <= 3 ? medal(place) : `<b>${place}</b>`}</div>
-      <div class="leaderboard-player" role="cell"><img src="./assets/ui/avatars/${avatar}" alt=""><div class="leaderboard-player-copy"><strong class="leaderboard-name" title="${escapeHtml(player.name)}">${escapeHtml(player.name)}</strong>${isMe ? '<small class="leaderboard-me">VOCÊ</small>' : ''}</div></div>
+      <div class="leaderboard-player" role="cell" data-profile-id="${escapeHtml(player.playerId)}" tabindex="0" aria-label="Ver perfil de ${escapeHtml(player.name)}"><img src="${avatar}" alt=""><div class="leaderboard-player-copy"><strong class="leaderboard-name" title="${escapeHtml(player.name)}">${escapeHtml(player.name)}</strong>${isMe ? '<small class="leaderboard-me">VOCÊ</small>' : ''}</div></div>
       <div class="leaderboard-rank" role="cell"><img src="./assets/ui/ranks/${rank.asset}" alt=""><span>${rank.name}</span></div>
       <b class="leaderboard-wins" role="cell">${number(player.wins)}</b>
       <b class="leaderboard-losses" role="cell">${number(player.losses)}</b>

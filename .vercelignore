@@ -19,3 +19,8 @@ models/capivara_rigged.glb
 models/capivara_pbr_blue.glb
 models/capivara_pbr_rigged.glb
 models/Capivara 2.png
+
+output
+.playwright-cli
+tests
+src/ui/tests

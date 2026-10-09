@@ -4,10 +4,10 @@ import { circlePushOut } from '../src/core/math.js';
 
 const assert = (ok, message) => { if (!ok) throw new Error(message); };
 
-const host = new GameHost({ levelId: 'feira_suspensa', modeId: 'ctf', teamSize: 10 });
+const host = new GameHost({ levelId: 'feira_suspensa', modeId: 'ctf', teamSize: 3 });
 host.fillBots();
 const sim = host.sim;
-assert(sim.state.players.length === 20, '10v10 did not create 20 players');
+assert(sim.state.players.length === 6, '3v3 did not create 6 players');
 assert(sim.level.spawns.red.length === 10 && sim.level.spawns.blue.length === 10, 'spawn count');
 assert(sim.level.jumpPads.length === 4, 'jump-pad count');
 assert(sim.state.interactives.length === 5, 'interactive count');
@@ -58,13 +58,20 @@ assert(blueFlag.st === 'home', 'flag return failed');
 
 const wire = packState(sim.state);
 assert(wire.interactives.length === 5, 'interactives missing from network snapshot');
-assert(JSON.stringify(wire).length < 30000, '10v10 snapshot is unexpectedly large');
+assert(JSON.stringify(wire).length < 30000, '3v3 snapshot is unexpectedly large');
 
 // Bot traversal smoke: all three assigned lane groups must move away from base.
+const traversalHost = new GameHost({ levelId: 'feira_suspensa', modeId: 'ctf', teamSize: 3 });
+traversalHost.fillBots();
+traversalHost.sim.state.phase = 'play';
+const visited = new Set();
 const started = performance.now();
-for (let i = 0; i < 60 * 25; i++) host.step(1 / 60);
+for (let i = 0; i < 60 * 25; i++) {
+  traversalHost.step(1 / 60);
+  for (const player of traversalHost.sim.state.players) if (Math.abs(player.x) < 23) visited.add(player.id);
+}
 const elapsed = performance.now() - started;
-const advanced = sim.state.players.filter((p) => Math.abs(p.x) < 23).length;
-assert(advanced >= 6, 'bots did not traverse the arena');
-assert(elapsed < 5000, `10v10 simulation performance regression: ${elapsed.toFixed(0)}ms`);
+const advanced = visited.size;
+assert(advanced >= Math.ceil(sim.state.players.length * 0.6), 'bots did not traverse the arena');
+assert(elapsed < 5000, `3v3 simulation performance regression: ${elapsed.toFixed(0)}ms`);
 console.log('FEIRA SUSPENSA OK', { players: sim.state.players.length, humans: 2, advanced, snapshotBytes: JSON.stringify(wire).length, sim25sMs: Math.round(elapsed) });

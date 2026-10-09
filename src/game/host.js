@@ -10,6 +10,7 @@ import { createSim, addPlayer, removePlayer, step, endRound } from './sim.js';
 import { createBotBrain } from './bots.js';
 import { BOT_NAMES, randomCos } from '../content/cosmetics.js';
 import { assertParticipants, ParticipantType, validDisplayName } from './matchmaking.js';
+import { clampTeamSize, clampPlayerCount, assertRosterCapacity } from './capacity.js';
 
 function adjustBotDifficulty(brain, difficulty = 'medium') {
   if (difficulty === 'medium') return brain;
@@ -68,10 +69,10 @@ export class GameHost {
       this.config = config;
     }
 
-    this.teamSize = teamSize;
-    this.teamLimits = teamLimits || (modeId === 'ffa'
-      ? { ffa: teamSize * 2 }
-      : { red: teamSize, blue: teamSize });
+    this.teamSize = clampTeamSize(teamSize);
+    this.teamLimits = modeId === 'ffa'
+      ? { ffa: clampPlayerCount(teamLimits?.ffa ?? this.teamSize * 2) }
+      : { red: clampTeamSize(teamLimits?.red ?? this.teamSize), blue: clampTeamSize(teamLimits?.blue ?? this.teamSize) };
 
     this.dt = 1 / this.config.tickRate;
     const sourceLevel = LEVELS[levelId] || LEVELS[DEFAULT_LEVEL];
@@ -103,6 +104,7 @@ export class GameHost {
       if (this.sim.state.players.length >= maxPlayers) {
         const bot = this.sim.state.players.find((p) => p.bot);
         if (bot) this.remove(bot.id);
+        else throw new Error('[MATCH] room is full');
       }
       const id = addPlayer(this.sim, { participantId, type: ParticipantType.HUMAN, userId, displayName: validName, characterId, team: 'free', cos, spawnIndex });
       this.humanLastActive.set(id, Date.now());
@@ -130,6 +132,7 @@ export class GameHost {
     if (this.teamCount(team) >= maxForTeam) {
       const bot = this.sim.state.players.find((p) => p.team === team && p.bot);
       if (bot) this.remove(bot.id);
+      else throw new Error('[MATCH] team is full');
     }
     const id = addPlayer(this.sim, { participantId, type: ParticipantType.HUMAN, userId, displayName: validName, characterId, team, cos, spawnIndex });
     this.humanLastActive.set(id, Date.now());
@@ -138,6 +141,8 @@ export class GameHost {
 
   addBot(team = 'red') {
     const assignedTeam = this.modeId === 'ffa' ? 'free' : team;
+    const limit = this.modeId === 'ffa' ? this.teamLimits.ffa : this.teamLimits[assignedTeam];
+    if (!limit || this.teamCount(assignedTeam) >= limit) throw new Error('[MATCH] team is full');
     const name = this.sim.mode.variant === 'doll' ? 'Doll' : (this.botNames.pop() ?? 'Bot-' + this.sim.nextId);
     const botId = `local-${++this.botSequence}`;
     const id = addPlayer(this.sim, {
@@ -152,7 +157,8 @@ export class GameHost {
 
   spawnParticipants(participants) {
     if (this.sim.state.players.length) throw new Error('[MATCH] participants can only spawn into an empty simulation');
-    assertParticipants(participants, participants.length);
+    assertParticipants(participants);
+    assertRosterCapacity(participants, this.modeId, this.teamLimits);
     for (const participant of participants) {
       const id = addPlayer(this.sim, {
         id: participant.participantId,
@@ -276,6 +282,7 @@ export class GameHost {
 
   restoreAuthorityState(snapshot) {
     if (!snapshot?.state?.players) return false;
+    assertRosterCapacity(snapshot.state.players, this.modeId, this.teamLimits);
     const state = structuredClone(snapshot.state);
     state.mapId ??= this.sim.state.mapId;
     state.rules = { ...this.sim.state.rules, ...state.rules };

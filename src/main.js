@@ -23,6 +23,8 @@ import { submitPlayerRanking } from './net/ranking.js';
 import { registerPlayerAbandon } from './net/discipline.js';
 import { applySettings, getSettings } from './settings.js';
 import { recordMissionMatch } from './game/missions.js';
+import { recordPlayerMatchHistory } from './net/profile.js';
+import { recordedMatchPayload, accumulateRecordedStats } from './ui/profileModel.js';
 import { startAutoUpdate } from './autoUpdate.js';
 
 const isTouch = navigator.maxTouchPoints > 0
@@ -48,6 +50,7 @@ const profile = (() => {
     gold: Math.max(0, Number(data.gold) || 0),
     cos: { ...DEFAULT_COS, ...data.cos },
     friendlyFire: data.friendlyFire ?? false,
+    bio: String(data.bio || ''), banner: data.banner || 'character', historyPublic: data.historyPublic === true,
     rankXp: Math.max(0, Number(data.rankXp) || 0),
     rankStats: {
       matches: Math.max(0, Number(data.rankStats?.matches) || 0),
@@ -57,7 +60,7 @@ const profile = (() => {
     missionStats: data.missionStats || {},
     missions: Array.isArray(data.missions) ? data.missions : [],
     save() {
-      localStorage.setItem('blast.profile', JSON.stringify({ playerId: this.playerId, name: this.name, gold: this.gold, cos: this.cos, friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats, missionStats: this.missionStats, missions: this.missions }));
+      localStorage.setItem('blast.profile', JSON.stringify({ playerId: this.playerId, name: this.name, gold: this.gold, cos: this.cos, friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats, missionStats: this.missionStats, missions: this.missions, bio: this.bio, banner: this.banner, historyPublic: this.historyPublic }));
     },
   };
 })();
@@ -168,6 +171,9 @@ function playSfx(events, myId, myPos) {
 }
 
 function startMatch(transport) {
+  const localHistoryMatchId=`local:${crypto.randomUUID()}`;
+  const recordedHistoryKeys=new Set();
+  const completedHistoryRounds=new Set(),matchHistoryStats={};
   menu.hide();
   sfx.unlock();
   bgm.play({ fade: true, reset: true });
@@ -335,6 +341,11 @@ function startMatch(transport) {
     hud.pushChatMessages(transport.drainChatMessages?.() ?? []);
     for (const event of events) {
       if (event.t !== 'roundOver' || view.lab) continue;
+      const historyRound=JSON.stringify([event.series?.wins||{},event.winner]);
+      if (!completedHistoryRounds.has(historyRound)) {
+        completedHistoryRounds.add(historyRound);
+        accumulateRecordedStats(matchHistoryStats,me?.stats);
+      }
       if (event.matchComplete === false) continue;
       const draw = event.winner === 'draw';
       const won = !draw && (view.modeId === 'ffa' ? event.winner === myId : event.winner === me?.team);
@@ -347,6 +358,12 @@ function startMatch(transport) {
       else if (!draw) profile.rankStats.losses += 1;
       recordMissionMatch(profile, { won, draw, ranked: event.ranked, modeId: view.modeId, gold: gainedGold });
       profile.save();
+      const historyPayload=recordedMatchPayload({matchId:transport.match?.()?.id||localHistoryMatchId,event,view:{...view,players:view.players.map(player=>player.id===myId?{...player,stats:matchHistoryStats}:player)},myId,mapId:transport.levelId||DEFAULT_LEVEL});
+      const historyKey=historyPayload && `${historyPayload.p_match_id}:round:${historyPayload.p_round}`;
+      if (historyPayload && !recordedHistoryKeys.has(historyKey)) {
+        recordedHistoryKeys.add(historyKey);
+        recordPlayerMatchHistory(historyPayload, profile.playerId).catch(error=>console.warn('[history] record failed:',error.message));
+      }
       submitPlayerRanking(profile).catch((error) => console.warn('[rank] sync failed:', error.message));
       const { rank } = getRankProgress(profile.rankXp);
       if (event.ranked) console.info(`[rank] ${gainedPoints >= 0 ? '+' : ''}${gainedPoints} PTS · ${rank.name}`);

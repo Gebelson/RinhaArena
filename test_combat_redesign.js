@@ -703,7 +703,7 @@ console.log('\n--- TEST 12: Flag immunity to punches and bombs ---');
   }
 }
 
-console.log('\n--- TEST 14: Asymmetric teams with custom teamLimits (up to 5 per team) ---');
+console.log('\n--- TEST 14: Asymmetric teams with custom teamLimits (up to 3 per team) ---');
 {
   // 14.1: 3 Red vs 1 Blue
   const host = new GameHost({
@@ -728,16 +728,16 @@ console.log('\n--- TEST 14: Asymmetric teams with custom teamLimits (up to 5 per
   assert(host.teamCount('red') === 3, 'Red team restored to 3 bots');
   assert(host.humanCount('red') === 0, 'Zero humans remain in red team');
 
-  // 14.2: 5 Red vs 2 Blue
+  // 14.2: Legacy 5 Red selection clamps to 3 Red vs 2 Blue
   const host2 = new GameHost({
     levelId: 'foundry',
     modeId: 'deathmatch',
     teamLimits: { red: 5, blue: 2 },
   });
   host2.fillBots();
-  assert(host2.teamCount('red') === 5, 'Red team has 5 players (maximum)');
+  assert(host2.teamCount('red') === 3, 'Red team clamps to 3 players (maximum)');
   assert(host2.teamCount('blue') === 2, 'Blue team has 2 players');
-  assert(host2.sim.state.players.length === 7, 'Total 7 players in match');
+  assert(host2.sim.state.players.length === 5, 'Total 5 players in asymmetric match');
 }
 
 console.log('\n--- TEST 15: Free-For-All (Todos contra Todos) mode ---');

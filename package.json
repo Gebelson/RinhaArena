@@ -8,7 +8,10 @@
     "start": "node server/server.js",
     "test": "node test_combat_redesign.js",
     "test:cloud": "node scripts/test-supabase.mjs",
-    "test:prediction": "node test_multiplayer_prediction.mjs",
+    "test:prediction": "node --test tests/realtime-free-budget.test.mjs",
+    "test:profile": "node --test src/ui/tests/auth.test.mjs src/ui/tests/profile.test.mjs src/ui/tests/profile-compat.test.mjs src/ui/tests/profile-history-queue.test.mjs",
+    "test:compat-sql": "node --test --test-concurrency=1 tests/profile-compatible.sql.test.mjs tests/free-room-capacity.sql.test.mjs",
+    "test:capacity": "node --test tests/security/capacity.test.mjs",
     "test:matchmaking": "node test_matchmaking.js",
     "test:feira": "node scripts/test-feira-suspensa.js",
     "test:macaco": "node scripts/audit-macaco-animation.mjs",
@@ -18,6 +21,7 @@
     "tune": "node scripts/tune.js"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "three": "0.170.0"
   }
 }

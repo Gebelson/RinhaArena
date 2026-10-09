@@ -1,8 +1,9 @@
 import { BOT_NAMES, randomCos } from '../content/cosmetics.js';
+import { MAX_PLAYERS, MAX_TEAM_SIZE } from './capacity.js';
+export { MAX_PLAYERS } from './capacity.js';
 
 export const MATCHMAKING_TIMEOUT = 30_000;
 export const MATCH_READY_TIMEOUT = 10_000;
-export const MAX_PLAYERS = 20;
 
 export const ParticipantType = Object.freeze({ HUMAN: 'HUMAN', BOT: 'BOT' });
 export const MatchmakingStatus = Object.freeze({
@@ -39,7 +40,11 @@ export function replaceHumanParticipantWithBot(match, userId) {
 
 export function assertParticipants(participants, maxPlayers = MAX_PLAYERS) {
   if (!Array.isArray(participants)) throw new Error('[MATCH] participants must be an array');
+  maxPlayers = Number.isFinite(maxPlayers) ? Math.min(MAX_PLAYERS, Math.floor(maxPlayers)) : MAX_PLAYERS;
   if (participants.length > maxPlayers) throw new Error(`[MATCH] ${participants.length} participants exceeds ${maxPlayers}`);
+  for (const team of ['red', 'blue']) {
+    if (participants.filter(p => p?.team === team).length > MAX_TEAM_SIZE) throw new Error('[MATCH] team capacity exceeded');
+  }
   const ids = new Set();
   const users = new Set();
   for (const participant of participants) {
@@ -137,6 +142,6 @@ export function createMatchmakingSession({ id, queueKey, mode, ranked, maxPlayer
   return {
     id, queueKey, mode, ranked, status: MatchmakingStatus.WAITING,
     createdAt, deadlineAt: createdAt + MATCHMAKING_TIMEOUT,
-    players: new Map(), maxPlayers: Math.min(MAX_PLAYERS, maxPlayers), timer: null, match: null,
+    players: new Map(), maxPlayers: Number.isFinite(maxPlayers) ? Math.min(MAX_PLAYERS, Math.max(1, Math.floor(maxPlayers))) : MAX_PLAYERS, timer: null, match: null,
   };
 }

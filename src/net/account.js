@@ -11,7 +11,7 @@ function authError(result, status) {
   const raw = result?.msg || result?.message || result?.error_description || `Erro ${status}`;
   const text = String(raw).toLowerCase();
   if (text.includes('invalid login')) return 'E-mail ou senha incorretos.';
-  if (text.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
+  if ((result?.error_code || result?.code) === 'email_not_confirmed' || text.includes('email not confirmed')) return 'Seu cadastro ainda está pendente. Conclua o cadastro para ativar sua conta.';
   if (text.includes('user already registered')) return 'Este e-mail já está cadastrado.';
   if (text.includes('rate limit')) return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
   if (text.includes('password') && text.includes('characters')) return 'A senha precisa ter pelo menos 6 caracteres.';
@@ -36,15 +36,23 @@ async function request(path, { method = 'GET', body, token, headers = {} } = {})
     throw new Error(error?.name === 'AbortError' ? 'A conexão demorou demais. Tente novamente.' : 'Não foi possível conectar. Verifique sua internet.');
   } finally { clearTimeout(timeout); }
   const result = response.status === 204 ? null : await response.json().catch(() => null);
-  if (!response.ok) throw new Error(authError(result, response.status));
+  if (!response.ok) {
+    const error = new Error(authError(result, response.status));
+    error.code = result?.error_code || result?.code || (/email not confirmed/i.test(String(result?.msg || result?.message || result?.error_description || '')) ? 'email_not_confirmed' : '');
+    error.status = response.status;
+    throw error;
+  }
   return result;
 }
 
 function rememberSession(session) {
-  activeSession = session;
-  if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  activeSession = session ? {
+    ...session,
+    expires_at: Number(session.expires_at) || Date.now() / 1000 + (Number(session.expires_in) || 3600),
+  } : null;
+  if (activeSession) localStorage.setItem(SESSION_KEY, JSON.stringify(activeSession));
   else localStorage.removeItem(SESSION_KEY);
-  return session;
+  return activeSession;
 }
 
 async function refreshSession(session) {
@@ -52,11 +60,35 @@ async function refreshSession(session) {
   if (refreshPromise) return refreshPromise;
   refreshPromise = request('/auth/v1/token?grant_type=refresh_token', {
     method: 'POST', body: { refresh_token: session.refresh_token },
-  }).then(rememberSession).finally(() => { refreshPromise = null; });
+  }).then((next) => rememberSession({ ...next, recoveryRequired: session.recoveryRequired === true })).finally(() => { refreshPromise = null; });
   return refreshPromise;
 }
 
 export async function restoreSession() {
+  if (globalThis.location) {
+    const params = new URLSearchParams(location.hash.slice(1));
+    if (params.get('error_description')) {
+      const description = params.get('error_description');
+      const code = params.get('error_code') || params.get('error') || '';
+      history.replaceState(history.state, '', location.pathname + location.search);
+      const error = new Error(code === 'otp_expired' || /expired|invalid/i.test(description)
+        ? 'Este link é inválido ou expirou. Solicite um novo e-mail.' : description);
+      error.code = code;
+      throw error;
+    }
+    if (params.get('access_token')) {
+      const session = rememberSession({
+        access_token: params.get('access_token'),
+        refresh_token: params.get('refresh_token'),
+        expires_in: Number(params.get('expires_in')) || 3600,
+        recoveryRequired: params.get('type') === 'recovery',
+      });
+      history.replaceState(history.state, '', location.pathname + location.search);
+      const user = await request('/auth/v1/user', { token: session.access_token });
+      rememberSession({ ...session, user });
+      return { ...await loadAccount(user, activeSession), recoveryRequired: activeSession.recoveryRequired === true };
+    }
+  }
   let saved;
   try { saved = JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
   if (!saved?.access_token) return null;
@@ -65,7 +97,7 @@ export async function restoreSession() {
   if (!session) return null;
   try {
     const user = await request('/auth/v1/user', { token: session.access_token });
-    return loadAccount(user, session);
+    return { ...await loadAccount(user, session), recoveryRequired: session.recoveryRequired === true };
   } catch {
     rememberSession(null);
     return null;
@@ -101,6 +133,17 @@ export function resendConfirmation(email) {
   return request('/auth/v1/resend', {
     method: 'POST', body: { type: 'signup', email: normalizeEmail(email), email_redirect_to: AUTH_RETURN_URL },
   });
+}
+
+export async function updatePassword(password) {
+  if (String(password).length < 8) throw new Error('Use uma senha com pelo menos 8 caracteres.');
+  if (!activeSession?.access_token) throw new Error('Sua sessão expirou. Entre novamente.');
+  if (Number(activeSession.expires_at) <= Date.now() / 1000 + 60) await refreshSession(activeSession);
+  const user = await request('/auth/v1/user', {
+    method: 'PUT', token: activeSession.access_token, body: { password },
+  });
+  rememberSession({ ...activeSession, user, recoveryRequired: false });
+  return user;
 }
 
 export async function signOut() {
@@ -161,4 +204,57 @@ export async function saveAccountProfile(profile) {
       updated_at: new Date().toISOString(),
     },
   });
+}
+
+// Profile RPCs refresh bearer credentials without changing legacy game persistence.
+export async function ensureAccessToken() {
+  if (!activeSession?.access_token) throw new Error('Entre na sua conta para continuar.');
+  if (Number(activeSession.expires_at) <= Date.now() / 1000 + 60) await refreshSession(activeSession);
+  if (!activeSession?.access_token) throw new Error('Sua sessão expirou. Entre novamente.');
+  return activeSession.access_token;
+}
+export async function authenticatedRpc(name, body = {}, expectedPlayerId = null) {
+  const path = '/rest/v1/rpc/' + name;
+  const ownerToken = async () => {
+    const token = await ensureAccessToken();
+    if (expectedPlayerId && activeSession?.user?.id?.toLowerCase() !== expectedPlayerId.toLowerCase()) {
+      throw new Error('Entre na conta correspondente para sincronizar este histórico.');
+    }
+    return token;
+  };
+  try { return await request(path, { method:'POST',body,token:await ownerToken() }); }
+  catch (error) {
+    if (error.status !== 401 || !activeSession?.refresh_token) throw error;
+    await refreshSession(activeSession);
+    return request(path, { method:'POST',body,token:await ownerToken() });
+  }
+}
+export function applyAccountProfile(profile, row) {
+  if (!row) return profile;
+  const owns = key => Object.prototype.hasOwnProperty.call(row,key);
+  if (owns('id')) profile.playerId=row.id;
+  if (owns('nickname')) profile.name=row.nickname;
+  for (const [column,key] of [['gold','gold'],['rank_points','rankXp'],['experience_points','experienceXp']]) {
+    if (owns(column)) profile[key]=Math.max(0,Number(row[column])||0);
+  }
+  if (['matches','wins','losses'].some(owns)) {
+    profile.rankStats={...profile.rankStats};
+    for (const key of ['matches','wins','losses']) if (owns(key)) profile.rankStats[key]=Math.max(0,Number(row[key])||0);
+  }
+  if (owns('mission_stats')) profile.missionStats=row.mission_stats||{};
+  if (owns('missions')) profile.missions=Array.isArray(row.missions)?row.missions:[];
+  if (owns('friendly_fire')) profile.friendlyFire=Boolean(row.friendly_fire);
+  if (owns('hat')) profile.hat=row.hat||'crown';
+  if (owns('skin')) profile.skin=row.skin||'#bdaee6';
+  if (owns('profile_bio')) profile.bio=row.profile_bio||'';
+  if (owns('profile_banner')) profile.banner=row.profile_banner||'character';
+  if (owns('history_public')) profile.historyPublic=row.history_public===true;
+  profile.cos={...profile.cos};
+  if (owns('avatar')) profile.cos.avatar=row.avatar||'avatar-1.webp';
+  if (owns('hat')) profile.cos.hat=profile.hat;
+  if (owns('skin')) profile.cos.skin=profile.skin;
+  if (owns('selected_character')) profile.cos.characterId=row.selected_character||'capivara';
+  if (owns('owned_characters')) profile.cos.ownedCharacters=[...new Set(['capivara',...(row.owned_characters||[])])];
+  if (owns('owned_emotes')) profile.cos.ownedEmotes=[...new Set(row.owned_emotes||[])];
+  return profile;
 }

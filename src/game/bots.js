@@ -7,8 +7,9 @@
 //   otherwise -> nearest teammate to the enemy flag goes stealing, the
 //   rest brawl (bombs at range, punches up close)
 
-import { clamp, norm2, circlePushOut } from '../core/math.js';
+import { clamp, norm2 } from '../core/math.js';
 import { otherTeam } from '../core/config.js';
+import { steerBot } from './botNavigation.js';
 
 const ZERO = { mx: 0, mz: 0, ax: 0, az: 0, ad: 7, run: 1, throw: false, grab: false, punch: false, jump: false };
 
@@ -20,22 +21,6 @@ const nearest = (list, to) => {
     if (d < bd) { bd = d; best = p; }
   }
   return best;
-};
-
-function blockedAhead(level, me, dir, probe) {
-  const px = me.x + dir.x * probe;
-  const pz = me.z + dir.z * probe;
-  for (const box of level.solids) {
-    if (box.h < 0.5) continue;
-    if (circlePushOut(px, pz, 0.72, box)) return true;
-  }
-  return false;
-}
-
-const rot = (d, a) => {
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  return { x: d.x * c - d.z * s, z: d.x * s + d.z * c };
 };
 
 export function createBotBrain(id, rng = Math.random) {
@@ -137,14 +122,7 @@ export function createBotBrain(id, rng = Math.random) {
         }
       }
       dir = norm2(dir.x, dir.z);
-      if (blockedAhead(sim.level, me, dir, 1.7)) {
-        let side = rot(dir, this.strafe * 0.95);
-        if (blockedAhead(sim.level, me, side, 1.7)) {
-          this.strafe *= -1;
-          side = rot(dir, this.strafe * 0.95);
-        }
-        dir = side;
-      }
+      dir = steerBot(sim, me, steerTarget, this, dt, dir);
       // never charge off the rim
       const hw = sim.level.bounds.w / 2 - 1.3;
       const hd = sim.level.bounds.d / 2 - 1.3;
@@ -160,18 +138,22 @@ export function createBotBrain(id, rng = Math.random) {
         const fuse = bomb ? bomb.fuse : 0;
         const at = throwAt ?? nearest(enemies, me);
         const dd = at ? Math.hypot(at.x - me.x, at.z - me.z) : 99;
-        if (fuse < 2.5 || dd < 4 || !at) {
-          const leadT = Math.max(0.3, fuse - 0.4);
+        if (bomb?.kind === 'impact' || fuse < 2.5 || dd < 4 || !at) {
+          const leadT = bomb?.kind === 'impact' ? 0.45 : Math.max(0.3, fuse - 0.4);
           const px = clamp((at?.x ?? me.x + dir.x * 8) + (at?.vx || 0) * leadT, -hw, hw);
           const pz = clamp((at?.z ?? me.z + dir.z * 8) + (at?.vz || 0) * leadT, -hd, hd);
-          const a = Math.atan2(px - me.x, pz - me.z) + (Math.random() * 2 - 1) * this.aimErr;
+          const a = Math.atan2(px - me.x, pz - me.z) + (rng() * 2 - 1) * this.aimErr;
           input.ax = Math.sin(a);
           input.az = Math.cos(a);
           input.ad = Math.hypot(px - me.x, pz - me.z);
           input.throw = true;
-          this.cool = 0.8 + (Math.random() * 1.6) / this.aggro;
+          this.cool = 0.8 + (rng() * 1.6) / this.aggro;
         }
         return input; // no punching/grabbing with a bomb overhead
+      }
+
+      if (!me.carryFlag && !me.heldPlayer && this.cool <= 0 && ((me.bombAmmo || 0) > 0 || me.mines > 0)) {
+        input.throw = true;
       }
 
       // --- melee: momentum punch when an enemy is in fist range
@@ -187,7 +169,7 @@ export function createBotBrain(id, rng = Math.random) {
       }
 
       // occasional dash to close distance or escape
-      if (me.dashCd <= 0 && (input.punch || (throwAt && Math.hypot(throwAt.x - me.x, throwAt.z - me.z) > 4 && Math.random() < 0.15))) {
+      if (me.dashCd <= 0 && (input.punch || (throwAt && Math.hypot(throwAt.x - me.x, throwAt.z - me.z) > 4 && rng() < 0.15))) {
         input.dash = true;
       }
 

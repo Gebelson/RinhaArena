@@ -6,13 +6,13 @@ import {
 } from './src/game/matchmaking.js';
 
 const room = {
-  levelId: 'procedural:238472', modeId: 'ctf', teamLimits: { red: 10, blue: 10 },
+  levelId: 'procedural:238472', modeId: 'ctf', teamLimits: { red: 3, blue: 3 },
   config: { rules: { ranked: true, botDifficulty: 'medium' } },
 };
 const human = (id, name) => ({
   userId: id, displayName: name, characterId: 'capivara', cos: { hat: 'none', skin: '#ffd29c' }, connected: true,
 });
-const session = (count, maxPlayers = 20) => {
+const session = (count, maxPlayers = 6) => {
   const value = createMatchmakingSession({ id: 'session-a', queueKey: 'ctf:ranked', mode: 'ctf', ranked: true, maxPlayers, createdAt: 0 });
   for (let index = 0; index < count; index += 1) value.players.set(`u${index}`, human(`u${index}`, `Capy${index}`));
   return value;
@@ -23,14 +23,14 @@ for (const humans of [1, 2, 3]) {
   const queued = session(humans);
   assert.equal(queued.deadlineAt, 30_000);
   const match = finalizeMatchmakingSession(queued, room, { now: 30_000 });
-  assert.equal(match.participants.length, 20);
+  assert.equal(match.participants.length, 6);
   assert.equal(match.participants.filter((p) => p.type === ParticipantType.HUMAN).length, humans);
-  assert.equal(match.participants.filter((p) => p.type === ParticipantType.BOT).length, 20 - humans);
-  assert.equal(new Set(match.participants.map((p) => p.participantId)).size, 20);
+  assert.equal(match.participants.filter((p) => p.type === ParticipantType.BOT).length, 6 - humans);
+  assert.equal(new Set(match.participants.map((p) => p.participantId)).size, 6);
   assert(!match.participants.some((p) => /^player(?:\s*\d+)?$/i.test(p.displayName)));
   const host = new GameHost({ levelId: match.mapId, modeId: match.mode, teamLimits: room.teamLimits, participants: match.participants });
   assert.equal(host.sim.state.players.length, match.participants.length);
-  assert.equal(host.brains.size, 20 - humans);
+  assert.equal(host.brains.size, 6 - humans);
   assert(host.sim.state.players.every((entity) => entity.participantId && entity.matchId === match.id));
 }
 
@@ -41,11 +41,11 @@ for (const humans of [1, 2, 3]) {
   const replacement = replaceHumanParticipantWithBot(match, 'u1');
   assert.equal(replacement.type, ParticipantType.BOT);
   assert.equal(replacement.spawnIndex, departed.spawnIndex);
-  assert.equal(match.participants.length, 20);
+  assert.equal(match.participants.length, 6);
   assert.equal(match.participants.filter((participant) => participant.type === ParticipantType.HUMAN).length, 1);
   const host = new GameHost({ levelId: match.mapId, modeId: match.mode, teamLimits: room.teamLimits, participants: match.participants });
-  assert.equal(host.sim.state.players.length, 20);
-  assert.equal(host.brains.size, 19);
+  assert.equal(host.sim.state.players.length, 6);
+  assert.equal(host.brains.size, 5);
 }
 
 // 2, 14, 15: one finalized payload is idempotent and carries one map/seed/list.

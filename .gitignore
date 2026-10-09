@@ -56,3 +56,5 @@ Desktop.ini
 
 # Optional local scratch
 *.local
+output/
+.playwright-cli/

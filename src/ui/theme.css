@@ -28,7 +28,7 @@
 .menu.lobby-loading { visibility: hidden; pointer-events: none; }
 
 /* Common frame for modal and non-modal windows. Preserve their sizes. */
-:is(.modal-window, .game-options-window, .matchmaking-window, .auth-window,
+:is(.modal-window, .game-options-window, .matchmaking-window,
     .custom-room-lobby, .match-action-dialog, .quick-config, .room-invite-popup,
     .lobby-friends-panel, .social-action-panel, .match-scoreboard-card,
     .over-card, .game-chat, .lab),
@@ -41,10 +41,10 @@
     inset 0 2px 0 #80eaff, inset 0 -3px 0 #031231;
   font-family: var(--arena-face);
 }
-.modal-overlay { background: #010925b3; backdrop-filter: blur(5px); }
+.modal-overlay:not(.auth-overlay) { background: #010925b3; backdrop-filter: blur(5px); }
 .modal-window { isolation: isolate; }
 .social-modal-window { position: relative; }
-:is(.modal-window, .game-options-window, .custom-room-lobby, .auth-window,
+:is(.modal-window, .game-options-window, .custom-room-lobby,
     .match-scoreboard-card, .quick-config, .lab, .game-chat) * {
   scrollbar-color: #1bc9ff #061a44;
   scrollbar-width: thin;
@@ -63,7 +63,7 @@
 .custom-room-lobby > header { padding: 16px 20px; }
 :is(.modal-title, .game-options-header h2, .custom-room-lobby header h2,
     .match-scoreboard-header h2, .matchmaking-heading h2, .over-title,
-    .auth-form h1, .match-action-dialog h2, .quick-config-head strong) {
+    .match-action-dialog h2, .quick-config-head strong) {
   color: #fff;
   font-family: var(--arena-face);
   font-weight: 900;
@@ -94,7 +94,7 @@
 /* Actions are real controls, with bevels and a short pressed state. */
 :is(.modal-window, .game-options-window, .custom-room-lobby, .matchmaking-window,
     .match-action-dialog, .quick-config, .room-invite-popup, .lobby-friends-panel,
-    .social-action-panel, .auth-panel, .game-chat, .lab) button {
+    .social-action-panel, .game-chat, .lab) button {
   border: 3px solid var(--arena-ink);
   border-radius: 11px;
   color: #fff;
@@ -108,16 +108,16 @@
 }
 :is(.modal-window, .game-options-window, .custom-room-lobby, .matchmaking-window,
     .match-action-dialog, .quick-config, .room-invite-popup, .lobby-friends-panel,
-    .social-action-panel, .auth-panel, .game-chat, .lab) button:not(:disabled):hover { filter: brightness(1.12); }
+    .social-action-panel, .game-chat, .lab) button:not(:disabled):hover { filter: brightness(1.12); }
 :is(.modal-window, .game-options-window, .custom-room-lobby, .matchmaking-window,
     .match-action-dialog, .quick-config, .room-invite-popup, .lobby-friends-panel,
-    .social-action-panel, .auth-panel, .game-chat, .lab) button:not(:disabled):active {
+    .social-action-panel, .game-chat, .lab) button:not(:disabled):active {
   translate: 0 2px;
   box-shadow: 0 1px 0 #010c2b, inset 0 2px 2px #031b6970;
 }
 :is(.modal-window, .game-options-window, .custom-room-lobby, .matchmaking-window,
     .match-action-dialog, .quick-config, .room-invite-popup, .lobby-friends-panel,
-    .social-action-panel, .auth-panel, .game-chat, .lab) button:disabled {
+    .social-action-panel, .game-chat, .lab) button:disabled {
   color: #aebdd3;
   background: linear-gradient(#3c5174, #223957);
   box-shadow: inset 0 1px #8898b366;
@@ -126,7 +126,7 @@
   filter: none;
 }
 :is(.modal-window, .game-options-window, .custom-room-lobby, .matchmaking-window,
-    .match-action-dialog, .quick-config, .room-invite-popup, .auth-panel,
+    .match-action-dialog, .quick-config, .room-invite-popup,
     .social-action-panel, .game-chat, .lab) :is(button, input, select):focus-visible,
 .match-scoreboard-close:focus-visible {
   outline: 3px solid #fff38a;
@@ -138,7 +138,7 @@
     .shop-character-card.available .shop-character-action:not(:disabled)),
 .game-options-window .game-create-button,
 .custom-room-lobby .lobby-start,
-.room-invite-popup [data-accept], .auth-panel .auth-submit,
+.room-invite-popup [data-accept],
 .modal-window :is(.shop-tabs, .settings-tabs, .social-tabs) button.active,
 .game-options-window .game-options-tabs button.active,
 .modal-window .settings-key.listening, .lab .lab-btn.on,
@@ -212,7 +212,7 @@
 
 /* Fields retain their input types, selected values and keyboard behavior. */
 :is(.modal-window, .game-options-window, .custom-room-lobby, .quick-config,
-    .social-action-panel, .auth-panel, .game-chat) :is(input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), select) {
+    .social-action-panel, .game-chat) :is(input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), select) {
   border: 2px solid #2863a5;
   border-radius: 10px;
   color: #f4f8ff;
@@ -221,27 +221,10 @@
   font-family: var(--arena-face);
   font-weight: 700;
 }
-:is(.modal-window, .game-options-window, .quick-config, .auth-panel, .game-chat) input::placeholder { color: #a3b9d7; }
+:is(.modal-window, .game-options-window, .quick-config, .game-chat) input::placeholder { color: #a3b9d7; }
 .modal-window .settings-toggle { border: 3px solid #031840; background: #193b6d; box-shadow: inset 0 2px 4px #00102d; }
 .modal-window .settings-toggle-input:checked + .settings-toggle { background: #12aaf4; border-color: #031840; box-shadow: inset 0 2px #75e4ff; }
 .modal-window .settings-toggle-input:focus-visible + .settings-toggle { outline: 3px solid #fff38a; outline-offset: 3px; }
-
-/* Login was the only white window; its art remains the game's artwork. */
-.auth-window { min-height: 0; max-height: 92dvh; }
-.auth-panel { padding: clamp(18px, 4vw, 44px); overflow-y: auto; justify-content: safe center; background: linear-gradient(145deg, #0e3b78, #071d47); color: #fff; }
-.auth-form { margin-top: 0; }
-.auth-panel .auth-form h1 { margin-bottom: clamp(16px, 4vh, 32px); font-size: clamp(30px, 4vw, 50px); }
-.auth-panel .auth-form label { color: #bbebff; font-family: var(--arena-face); font-weight: 900; letter-spacing: .08em; }
-.auth-panel .auth-form input { font-size: 18px; }
-.auth-panel .auth-actions { align-items: center; flex-wrap: wrap; }
-.auth-panel :is(.auth-forgot, .auth-switch) { color: #e2f4ff; font-size: 12px; padding: 9px 12px; }
-.auth-panel .auth-switch { margin-top: 20px; width: 100%; min-height: 42px; }
-.auth-panel :is(.auth-form, .auth-switch) { transform: none; flex-shrink: 0; }
-.auth-panel .auth-submit { min-height: 44px; padding: 9px 24px; font-size: 20px; }
-.auth-panel .auth-message { color: #8cffb6; }
-.auth-panel .auth-message.error { color: #ffada8; }
-.auth-panel .auth-resend { min-height: 40px; padding: 9px 12px; }
-.auth-art { border-right: 4px solid var(--arena-ink); }
 
 /* Smaller windows and overlays use the same visual language. */
 .matchmaking-window { border-color: var(--arena-ink); }
@@ -375,13 +358,9 @@
 }
 
 @media (max-width: 760px), (max-height: 520px) {
-  :is(.modal-window, .game-options-window, .custom-room-lobby, .match-scoreboard-card, .auth-window) { border-radius: 16px; }
+  :is(.modal-window, .game-options-window, .custom-room-lobby, .match-scoreboard-card) { border-radius: 16px; }
   :is(.modal-header, .game-options-header, .match-scoreboard-header), .custom-room-lobby > header { padding: 10px 12px; }
   .modal-title { font-size: 23px; }
-  .auth-panel { padding: 18px 22px; }
-  .auth-panel .auth-form label { margin-bottom: 14px; }
-  .auth-panel .auth-form h1 { font-size: 30px; margin-bottom: 16px; }
-  .auth-panel .auth-switch { margin-top: 12px; }
   .quick-config { width: min(460px, 94vw); right: 3%; }
   .match-scoreboard-header h2 { font-size: 21px; }
   .match-scoreboard-card footer { font-size: 11px; }

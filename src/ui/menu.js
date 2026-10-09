@@ -11,11 +11,13 @@ import { HATS, SKINS } from '../content/cosmetics.js';
 import { RANKS, getRankProgress, rankSpriteStyle } from '../content/ranks.js';
 import { getLevelBadgeAsset, getLevelProgress } from '../content/levels.js';
 import { listPlayerRankings, submitPlayerRanking } from '../net/ranking.js';
-import { fetchAccountProfile, saveAccountProfile, signOut } from '../net/account.js';
+import { fetchAccountProfile, saveAccountProfile, signOut, applyAccountProfile } from '../net/account.js';
 import { getPlayerDiscipline } from '../net/discipline.js';
 import { openAuthGate } from './auth.js';
 import { applySettings, getSettings, keyLabel, saveSettings } from '../settings.js';
 import { CONFIG } from '../core/config.js';
+import { MAX_TEAM_SIZE, MAX_PLAYERS, clampTeamSize, clampPlayerCount, isRoomWithinCapacity as roomWithinCapacity } from '../game/capacity.js';
+import { flushPlayerMatchHistory } from '../net/profile.js';
 import { claimMission, ensureMissions, missionProgress } from '../game/missions.js';
 import { createCharacterTrade, giftFriendResource, listCharacterTrades, listFriendRequests, listFriends, respondCharacterTrade, respondFriendRequest, searchPlayers, sendFriendRequest } from '../net/social.js';
 import { EMOTES, EMOTE_PRICE } from '../content/emotes.js';
@@ -23,11 +25,12 @@ import { SupabaseRealtimeChannel } from '../net/supabase.js';
 import { promptRoomPassword, showMessageDialog } from './dialog.js';
 import { leaderboardMarkup, leaderboardRowsMarkup } from './leaderboard.js';
 import { createLobbyLoading } from './lobbyLoading.js';
+import { openPlayerProfile } from './playerProfile.js';
+import { AVATARS, isAvatarId, getAvatarUrl } from '../content/avatars.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
 }[char]));
-const AVATARS = Array.from({ length: 10 }, (_, index) => `avatar-${index + 1}.webp`);
 const SHOP_CHARACTERS = [
   ['capivara', 'Capivara'], ['cachorro', 'Cachorro'], ['coala', 'Coala'], ['coelho', 'Coelho'],
   ['crocodilo', 'Crocodilo'], ['furao', 'Furão'], ['gato', 'Gato'], ['jacare', 'Jacaré'],
@@ -35,6 +38,7 @@ const SHOP_CHARACTERS = [
   ['tartaruga', 'Tartaruga'], ['tubarao', 'Tubarão'],
 ].map(([id, name]) => ({ id, name, acquired: id === 'capivara' }));
 const CHARACTER_PRICE = 900;
+
 
 export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepareOnline, onStartPrepared, onPlayLab, onClickSound }) {
   const el = document.createElement('div');
@@ -48,7 +52,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   let accountSyncBusy = false;
   let lastLocalSaveAt = 0;
   let lastRemoteSnapshot = '';
-  const accountSnapshot = (row) => JSON.stringify([row?.nickname, row?.gold, row?.rank_points, row?.matches, row?.wins, row?.losses, row?.avatar, row?.selected_character, row?.owned_characters, row?.owned_emotes, row?.friendly_fire]);
+  const accountSnapshot = (row) => JSON.stringify([row?.nickname, row?.gold, row?.rank_points, row?.matches, row?.wins, row?.losses, row?.avatar, row?.selected_character, row?.owned_characters, row?.owned_emotes, row?.friendly_fire, row?.profile_bio, row?.profile_banner, row?.history_public]);
   applySettings();
 
   // Mobile browsers only allow fullscreen after a user gesture. Entering it on
@@ -95,7 +99,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       id: 'feira_suspensa',
       name: 'Feira Suspensa',
       img: './assets/maps/feira-suspensa.png',
-      desc: 'Feira brasileira flutuante para batalhas 10v10 com cenário interativo.',
+      desc: 'Feira brasileira flutuante para batalhas 3v3 com cenário interativo.',
     },
     procedural: {
       id: 'procedural',
@@ -123,7 +127,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
 
   if (!profile.hat) profile.hat = 'crown';
   if (!profile.skin) profile.skin = REFERENCE_SKINS[6];
-  if (!AVATARS.includes(profile.cos.avatar)) profile.cos.avatar = AVATARS[0];
+  if (!isAvatarId(profile.cos.avatar)) profile.cos.avatar = AVATARS[0];
   profile.cos.characterId = ['crocodilo', 'porco', 'pato', 'gato', 'cachorro', 'macaco'].includes(profile.cos.characterId) ? profile.cos.characterId : 'capivara';
   profile.cos.ownedCharacters = [...new Set(['capivara', ...(profile.cos.ownedCharacters || [])])];
   profile.cos.ownedEmotes = [...new Set(profile.cos.ownedEmotes || [])];
@@ -132,7 +136,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   let selectedLevel = DEFAULT_LEVEL in MAP_DATA ? DEFAULT_LEVEL : 'foundry';
   let confirmedGame = {
     matchType: 'ranked', chosenMap: 'procedural', modeId: 'ctf',
-    teamSize: 5, ffaSize: 6, respawnTime: 5, botType: 'match',
+    teamSize: MAX_TEAM_SIZE, ffaSize: MAX_PLAYERS, respawnTime: 5, botType: 'match',
     matchConfig: null, name: '', code: '', password: undefined,
   };
   const initialRank = getRankProgress(profile.rankXp);
@@ -142,7 +146,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     <video class="lobby-bg-video" muted loop playsinline preload="none" poster="./assets/media/lobby-background-poster.webp" data-src="./assets/media/lobby-background.mp4" aria-hidden="true"></video>
     <div class="home-lobby">
       <section class="player-card" aria-label="Perfil do jogador">
-        <button class="player-avatar" type="button" aria-label="Trocar ícone do perfil"><img src="./assets/ui/avatars/${profile.cos.avatar}" alt="Ícone do perfil" /></button>
+        <button class="player-avatar" type="button" aria-label="Abrir meu perfil"><img src="${getAvatarUrl(profile.cos.avatar)}" alt="Ícone do perfil" /></button>
         <div class="player-summary">
           <input class="name-input player-name" maxlength="12" aria-label="Nome do jogador" value="${profile.name || ''}" />
           <div class="player-progress-row">
@@ -541,7 +545,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     xpText.textContent = levelProgress.isMax ? 'NÍVEL MÁXIMO' : `${levelProgress.xp} / ${levelProgress.required} XP`;
     rankShield.src = `./assets/ui/ranks/${rankProgress.rank.asset}`;
     rankShield.alt = rankProgress.rank.name;
-    playerAvatar.src = `./assets/ui/avatars/${profile.cos.avatar}`;
+    playerAvatar.src = getAvatarUrl(profile.cos.avatar);
     coinText.textContent = Math.max(0, Number(profile.gold) || 0).toLocaleString('pt-BR');
   }
 
@@ -664,7 +668,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     onClickSound?.();
     openShopModal();
   });
-  el.querySelector('.player-avatar').addEventListener('click', () => openAvatarModal());
+  el.querySelector('.player-avatar').addEventListener('click', () => openProfilePage());
   el.querySelector('.rank-badge-wrap').addEventListener('click', () => openRankProgressModal());
   el.querySelector('.btn-ranking').addEventListener('click', () => openLeaderboardModal());
   el.querySelector('.btn-missions').addEventListener('click', () => openMissionsModal());
@@ -680,7 +684,9 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       el.classList.add('lobby-loading');
       await initialAssetsReady;
       const saved = account.profile;
+      applyAccountProfile(profile, {profile_bio:saved.profile_bio||'',profile_banner:saved.profile_banner||'character',history_public:saved.history_public===true});
       profile.playerId = account.user.id;
+      flushPlayerMatchHistory(profile.playerId).catch(error => console.warn('[history] pending sync failed:', error.message));
       profile.name = saved.nickname;
       profile.gold = saved.gold;
       profile.rankXp = saved.rank_points;
@@ -690,7 +696,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       profile.friendlyFire = Boolean(saved.friendly_fire);
       profile.cos = {
         ...profile.cos,
-        avatar: AVATARS.includes(saved.avatar) ? saved.avatar : AVATARS[0],
+        avatar: isAvatarId(saved.avatar) ? saved.avatar : AVATARS[0],
         hat: profile.hat,
         skin: profile.skin,
         characterId: saved.selected_character || profile.cos.characterId || 'capivara',
@@ -704,7 +710,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         localStorage.setItem('blast.profile', JSON.stringify({
           playerId: this.playerId, name: this.name, gold: this.gold, cos: this.cos,
           friendlyFire: this.friendlyFire, rankXp: this.rankXp, rankStats: this.rankStats,
-          missionStats: this.missionStats, missions: this.missions,
+          missionStats: this.missionStats, missions: this.missions, bio: this.bio, banner: this.banner, historyPublic: this.historyPublic,
         }));
         clearTimeout(saveTimer);
         saveTimer = window.setTimeout(() => saveAccountProfile(this).catch((error) => console.warn('[profile] sync failed:', error.message)), 350);
@@ -732,16 +738,17 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
           const snapshot = accountSnapshot(remote);
           if (snapshot === lastRemoteSnapshot) return;
           lastRemoteSnapshot = snapshot;
+          applyAccountProfile(profile, {profile_bio:remote.profile_bio||'',profile_banner:remote.profile_banner||'character',history_public:remote.history_public===true});
           profile.name = remote.nickname || profile.name;
           profile.gold = Math.max(0, Number(remote.gold) || 0);
           profile.rankXp = Math.max(0, Number(remote.rank_points) || 0);
           profile.rankStats = { matches: Number(remote.matches) || 0, wins: Number(remote.wins) || 0, losses: Number(remote.losses) || 0 };
           profile.friendlyFire = Boolean(remote.friendly_fire);
-          profile.cos.avatar = AVATARS.includes(remote.avatar) ? remote.avatar : profile.cos.avatar;
+          profile.cos.avatar = isAvatarId(remote.avatar) ? remote.avatar : profile.cos.avatar;
           profile.cos.characterId = remote.selected_character || profile.cos.characterId;
           profile.cos.ownedCharacters = [...new Set(['capivara', ...(remote.owned_characters || [])])];
           profile.cos.ownedEmotes = [...new Set(remote.owned_emotes || [])];
-          localStorage.setItem('blast.profile', JSON.stringify({ playerId: profile.playerId, name: profile.name, gold: profile.gold, cos: profile.cos, friendlyFire: profile.friendlyFire, rankXp: profile.rankXp, rankStats: profile.rankStats, missionStats: profile.missionStats, missions: profile.missions }));
+          localStorage.setItem('blast.profile', JSON.stringify({ playerId: profile.playerId, name: profile.name, gold: profile.gold, cos: profile.cos, friendlyFire: profile.friendlyFire, rankXp: profile.rankXp, rankStats: profile.rankStats, missionStats: profile.missionStats, missions: profile.missions, bio: profile.bio, banner: profile.banner, historyPublic: profile.historyPublic }));
           syncUI();
           window.dispatchEvent(new CustomEvent('blast:account-sync'));
         } catch (error) { console.warn('[profile] realtime sync failed:', error.message); }
@@ -901,7 +908,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
             <div class="settings-keys">${Object.entries(controlNames).map(([action,label]) => `<button class="settings-key" data-action="${action}"><span>${label}</span><kbd>${keyLabel(settings.controls[action])}</kbd></button>`).join('')}</div>
             <button class="settings-reset-keys" type="button">RESTAURAR TECLAS PADRÃO</button>
           </section></div>
-          ${inGame ? '' : '<div class="settings-page" data-page="account"><section class="settings-section settings-account-section"><h3>CONTA</h3><p>Encerre sua sessão neste dispositivo.</p><button class="settings-disconnect" type="button">DESCONECTAR</button></section></div>'}
+          ${inGame ? '' : '<div class="settings-page" data-page="account"><section class="settings-section settings-account-section"><h3>CONTA</h3><p>Encerre sua sessão neste dispositivo.</p><div class="profile-actions"><button class="settings-profile modal-btn modal-btn-secondary" type="button">MEU PERFIL</button><button class="settings-history modal-btn modal-btn-secondary" type="button">HISTÓRICO</button></div><button class="settings-disconnect" type="button">DESCONECTAR</button></section></div>'}
         </div>
         ${inGame ? '<footer class="in-game-settings-footer"><button class="settings-surrender" type="button">DESISTIR</button><button class="settings-leave-match" type="button">DEIXAR PARTIDA</button></footer>' : ''}
       </div>`;
@@ -1029,6 +1036,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       settings = saveSettings({ ...settings, controls: defaults.controls });
       modal.querySelectorAll('.settings-key').forEach((button) => { button.querySelector('kbd').textContent = keyLabel(settings.controls[button.dataset.action]); });
     });
+    modal.querySelector('.settings-profile')?.addEventListener('click', () => { close(); openProfilePage(); });
+    modal.querySelector('.settings-history')?.addEventListener('click', () => { close(); openProfilePage(profile.playerId, 'history'); });
     if (!inGame) modal.querySelector('.settings-disconnect').addEventListener('click', async () => {
       const button = modal.querySelector('.settings-disconnect');
       button.disabled = true;
@@ -1044,30 +1053,14 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     return { modal, close };
   }
 
-  function openAvatarModal() {
+  function openProfilePage(playerId = profile.playerId, initialTab = 'overview') {
     onClickSound?.();
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay avatar-modal-overlay';
-    modal.innerHTML = `
-      <div class="modal-window avatar-modal-window">
-        <div class="modal-header"><div class="modal-title">ESCOLHA SEU ÍCONE</div><button class="modal-close">✕</button></div>
-        <div class="avatar-grid">
-          ${AVATARS.map((avatar, index) => `<button class="avatar-option ${avatar === profile.cos.avatar ? 'selected' : ''}" data-avatar="${avatar}" aria-label="Selecionar ícone ${index + 1}"><img src="./assets/ui/avatars/${avatar}" alt="Ícone ${index + 1}" /></button>`).join('')}
-        </div>
-      </div>`;
-    uiRoot.appendChild(modal);
-    const close = () => modal.remove();
-    modal.querySelector('.modal-close').addEventListener('click', close);
-    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
-    modal.querySelectorAll('.avatar-option').forEach((button) => {
-      button.addEventListener('click', () => {
-        profile.cos.avatar = button.dataset.avatar;
-        profile.save();
-        submitPlayerRanking(profile).catch((error) => console.warn('[avatar] ranking sync failed:', error.message));
-        playerAvatar.src = `./assets/ui/avatars/${profile.cos.avatar}`;
-        onClickSound?.();
-        close();
-      });
+    return openPlayerProfile(uiRoot, profile, { playerId, initialTab,
+      onChange: () => {
+        nameInput.value=profile.name;
+        const mirror=el.querySelector('.config-name-mirror'); if(mirror)mirror.textContent=profile.name;
+        syncUI(); window.dispatchEvent(new Event('blast:account-sync'));
+      }, onOpenShop:openShopModal, onOpenRank:openLeaderboardModal,
     });
   }
 
@@ -1132,6 +1125,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     modal.querySelector('.modal-close').focus({ preventScroll: true });
 
     const list = modal.querySelector('.leaderboard-list');
+    list.addEventListener('click', event => { const cell=event.target.closest('[data-profile-id]'); if(cell)openProfilePage(cell.dataset.profileId); });
+    list.addEventListener('keydown', event => { if(event.key!=='Enter' && event.key!==' ')return; const cell=event.target.closest('[data-profile-id]'); if(cell) {event.preventDefault();openProfilePage(cell.dataset.profileId);} });
     try {
       await submitPlayerRanking(profile);
       const players = await listPlayerRankings(100);
@@ -1282,14 +1277,14 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
 
   function queueCapacity(selection) {
     return selection.modeId === 'ffa'
-      ? Math.max(2, Number(selection.ffaSize) || 2)
-      : Math.max(2, (Number(selection.teamSize) || 1) * 2);
+      ? clampPlayerCount(selection.ffaSize, 2)
+      : clampTeamSize(selection.teamSize, 1) * 2;
   }
 
   function createMatchmakingOverlay(selection) {
     const capacity = queueCapacity(selection);
     const modeLabel = selection.matchType === 'ranked' ? 'RANQUEADA' : 'NORMAL GAME';
-    const ownAvatar = AVATARS.includes(profile.cos?.avatar) ? profile.cos.avatar : AVATARS[0];
+    const ownAvatar = isAvatarId(profile.cos?.avatar) ? profile.cos.avatar : AVATARS[0];
     const overlay = document.createElement('div');
     overlay.className = 'matchmaking-overlay';
     overlay.innerHTML = `
@@ -1304,7 +1299,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
           ${Array.from({ length: capacity }, (_, index) => `
             <div class="matchmaking-slot${index === 0 ? ' is-accepted' : ''}" aria-label="${index === 0 ? 'Jogador aceito' : 'Aguardando jogador'}">
               ${index === 0
-                ? `<img src="./assets/ui/avatars/${ownAvatar}" alt="${escapeHtml(profile.name || 'Jogador')}" />`
+                ? `<img src="${getAvatarUrl(ownAvatar)}" alt="${escapeHtml(profile.name || 'Jogador')}" />`
                 : '<span>?</span>'}
             </div>
           `).join('')}
@@ -1340,9 +1335,9 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       slots.forEach((slot, index) => {
         slot.classList.toggle('is-accepted', index < accepted);
         const player = players[index];
-        const avatar = AVATARS.includes(player?.cos?.avatar) ? player.cos.avatar : (index === 0 ? (AVATARS.includes(profile.cos?.avatar) ? profile.cos.avatar : AVATARS[0]) : null);
+        const avatar = isAvatarId(player?.cos?.avatar) ? player.cos.avatar : (index === 0 ? (isAvatarId(profile.cos?.avatar) ? profile.cos.avatar : AVATARS[0]) : null);
         slot.innerHTML = index < accepted && avatar
-          ? `<img src="./assets/ui/avatars/${avatar}" alt="${escapeHtml(player?.name || (index === 0 ? profile.name : 'Jogador'))}" />`
+          ? `<img src="${getAvatarUrl(avatar)}" alt="${escapeHtml(player?.name || (index === 0 ? profile.name : 'Jogador'))}" />`
           : '<span>?</span>';
       });
     };
@@ -1410,7 +1405,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
 
     try {
       const prefix = selection.matchType === 'ranked' ? '[RANQUEADA]' : '[NORMAL]';
-      const rooms = await listRooms().catch(() => []);
+      const rooms = (await listRooms().catch(() => [])).filter(roomWithinCapacity);
       const compatible = rooms.find((room) => room.name?.startsWith(prefix)
         && room.modeId === selection.modeId
         && (levelId === 'procedural' ? String(room.levelId).startsWith('procedural') : room.levelId === levelId)
@@ -1522,8 +1517,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     const modal = document.createElement('div');
     modal.className = 'modal-overlay custom-room-lobby-overlay';
     const modeId = selection.modeId;
-    const teamSize = Number(selection.teamSize) || 1;
-    const totalSlots = modeId === 'ffa' ? Number(selection.ffaSize) || 2 : teamSize * 2;
+    const teamSize = clampTeamSize(selection.teamSize, 1);
+    const totalSlots = modeId === 'ffa' ? clampPlayerCount(selection.ffaSize, 2) : teamSize * 2;
     const botTeams = [];
     let starting = false;
     modal.innerHTML = `<section class="custom-room-lobby">
@@ -1543,7 +1538,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         const bots = botTeams.filter((value) => value === team).length;
         const slots = Array.from({ length: count }, (_, index) => {
           const human = humans[index];
-          if (human) return `<div class="room-slot occupied"><img src="./assets/ui/avatars/${AVATARS.includes(human.cos?.avatar) ? human.cos.avatar : AVATARS[0]}"><span><b>${escapeHtml(human.displayName || human.name)}</b><small>PLAYER</small></span></div>`;
+          if (human) return `<div class="room-slot occupied"><img src="${getAvatarUrl(human.cos?.avatar)}"><span><b>${escapeHtml(human.displayName || human.name)}</b><small>PLAYER</small></span></div>`;
           if (index < humans.length + bots) return `<div class="room-slot bot"><span class="room-slot-bot">🤖</span><span><b>BOT</b><small>ADICIONADO</small></span>${isHost ? `<button data-remove-bot="${team}">REMOVER</button>` : ''}</div>`;
           return `<div class="room-slot empty"><span>VAGA LIVRE</span>${isHost ? `<button data-add-bot="${team}">ADICIONAR BOT</button>` : ''}</div>`;
         }).join('');
@@ -1583,7 +1578,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       panel = document.createElement('aside'); panel.className = 'lobby-friends-panel'; panel.innerHTML = '<b>AMIGOS</b><span>Carregando...</span>'; modal.querySelector('.custom-room-lobby').appendChild(panel);
       try {
         const friends = await listFriends();
-        panel.innerHTML = `<b>CONVIDAR AMIGO</b>${friends.length ? friends.map((friend) => `<button data-friend="${friend.id}"><img src="./assets/ui/avatars/${AVATARS.includes(friend.avatar) ? friend.avatar : AVATARS[0]}"><span>${escapeHtml(friend.nickname)}</span><em>CONVIDAR</em></button>`).join('') : '<span>Nenhum amigo encontrado.</span>'}`;
+        panel.innerHTML = `<b>CONVIDAR AMIGO</b>${friends.length ? friends.map((friend) => `<button data-friend="${friend.id}"><img src="${getAvatarUrl(friend.avatar)}"><span>${escapeHtml(friend.nickname)}</span><em>CONVIDAR</em></button>`).join('') : '<span>Nenhum amigo encontrado.</span>'}`;
         panel.onclick = async (event) => {
           const button = event.target.closest('[data-friend]'); if (!button) return;
           const friend = friends.find((item) => item.id === button.dataset.friend); button.disabled = true;
@@ -1600,6 +1595,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
   }
 
   async function launchConfirmedGame(selection) {
+    selection={...selection,teamSize:clampTeamSize(selection.teamSize),ffaSize:clampPlayerCount(selection.ffaSize)};
     onClickSound?.();
     errBox.classList.add('hidden');
     btnPlayBots.disabled = true;
@@ -1696,7 +1692,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
         </nav>
         <div class="game-options-page" data-page-panel="create">
           <div class="match-type-grid">
-            <button type="button" class="match-type active" data-type="ranked"><b>RANQUEADA</b><span>MD3 competitivo • 5v5</span></button>
+            <button type="button" class="match-type active" data-type="ranked"><b>RANQUEADA</b><span>MD3 competitivo • 3v3</span></button>
             <button type="button" class="match-type" data-type="normal"><b>NORMAL</b><span>Sem pontos de rank</span></button>
             <button type="button" class="match-type" data-type="bots"><b>CONTRA BOT</b><span>Jogue imediatamente</span></button>
             <button type="button" class="match-type" data-type="custom"><b>PERSONALIZADA</b><span>Controle todas as regras</span></button>
@@ -1705,8 +1701,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
           <div class="game-option-scroll">
             <section class="ranked-summary game-type-section" data-for-type="ranked">
               <div class="competitive-mark">★</div>
-              <div><h3>CONFIGURAÇÃO COMPETITIVA</h3><p>Melhor de 3 partidas, equipes 5v5, bots completando vagas e mapa à escolha.</p></div>
-              <div class="competitive-pills"><span>MD3</span><span>5v5</span><span>CTF</span><span>MAPA GRANDE</span></div>
+              <div><h3>CONFIGURAÇÃO COMPETITIVA</h3><p>Melhor de 3 partidas, equipes 3v3, bots completando vagas e mapa à escolha.</p></div>
+              <div class="competitive-pills"><span>MD3</span><span>3v3</span><span>CTF</span><span>MAPA GRANDE</span></div>
             </section>
 
             <section class="game-common-fields">
@@ -1726,8 +1722,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
               <h3>MODO E TAMANHO</h3>
               <div class="option-row">
                 <label><span>Modo</span><select class="go-mode"><option value="ctf">Capture the Flag</option><option value="deathmatch">Death Match</option><option value="ffa">Todos contra todos</option></select></label>
-                <label class="go-team-size-wrap"><span>Equipes</span><select class="go-team-size">${[1,2,3,4,5,6,7,8,9,10].map((n) => `<option value="${n}" ${n === 2 ? 'selected' : ''}>${n}v${n}</option>`).join('')}</select></label>
-                <label class="go-ffa-size-wrap hidden"><span>Jogadores</span><select class="go-ffa-size">${[2,3,4,5,6,7,8,9,10].map((n) => `<option value="${n}" ${n === 6 ? 'selected' : ''}>${n} jogadores</option>`).join('')}</select></label>
+                <label class="go-team-size-wrap"><span>Equipes</span><select class="go-team-size">${Array.from({ length: MAX_TEAM_SIZE }, (_, i) => i + 1).map((n) => `<option value="${n}" ${n === 2 ? 'selected' : ''}>${n}v${n}</option>`).join('')}</select></label>
+                <label class="go-ffa-size-wrap hidden"><span>Jogadores</span><select class="go-ffa-size">${Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2).map((n) => `<option value="${n}" ${n === 6 ? 'selected' : ''}>${n} jogadores</option>`).join('')}</select></label>
               </div>
             </section>
 
@@ -1787,8 +1783,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     const mapButtons = [...modal.querySelectorAll('.game-map-option')];
     const modeSelect = modal.querySelector('.go-mode');
     modeSelect.value = confirmedGame.modeId;
-    modal.querySelector('.go-team-size').value = String(confirmedGame.teamSize);
-    modal.querySelector('.go-ffa-size').value = String(confirmedGame.ffaSize);
+    modal.querySelector('.go-team-size').value = String(clampTeamSize(confirmedGame.teamSize));
+    modal.querySelector('.go-ffa-size').value = String(clampPlayerCount(confirmedGame.ffaSize));
     modal.querySelector('.go-bot-type').value = confirmedGame.botType;
     modal.querySelector('.go-bot-difficulty').value = confirmedGame.matchConfig?.rules?.botDifficulty || 'medium';
     const syncCreateForm = () => {
@@ -1826,8 +1822,8 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     modal.querySelector('.game-create-button').addEventListener('click', () => {
       const ranked = matchType === 'ranked';
       const modeId = ranked ? 'ctf' : modeSelect.value;
-      const teamSize = ranked ? 5 : Number(modal.querySelector('.go-team-size').value);
-      const ffaSize = Number(modal.querySelector('.go-ffa-size').value);
+      const teamSize = ranked ? MAX_TEAM_SIZE : clampTeamSize(modal.querySelector('.go-team-size').value);
+      const ffaSize = clampPlayerCount(modal.querySelector('.go-ffa-size').value);
       const enabledPowerups = [...modal.querySelectorAll('.powerup-toggle input:checked')].map((input) => input.value);
       const baseDistribution = CONFIG.powerups?.distribution || [];
       const matchConfig = {
@@ -1876,7 +1872,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       refresh.disabled = true;
       listNode.innerHTML = '<div class="game-room-empty">Carregando salas…</div>';
       try {
-        const rooms = (await listRooms()).filter((room) => !/^\[(RANQUEADA|NORMAL)\]/.test(room.name || ''));
+        const rooms = (await listRooms()).filter(roomWithinCapacity).filter((room) => !/^\[(RANQUEADA|NORMAL)\]/.test(room.name || ''));
         if (!rooms.length) {
           listNode.innerHTML = '<div class="game-room-empty"><b>NENHUMA SALA ABERTA</b><span>Crie uma sala e convide seus amigos.</span></div>';
           return;
@@ -1938,12 +1934,12 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     const names = Object.fromEntries(SHOP_CHARACTERS.map((item) => [item.id, item.name]));
     const setStatus = (text, error = false) => { status.textContent = text; status.classList.toggle('error', error); };
     const closePanel = () => panel.classList.add('hidden');
-    const friendCard = (friend) => `<article class="social-friend-card"><img src="./assets/ui/avatars/${AVATARS.includes(friend.avatar) ? friend.avatar : AVATARS[0]}" alt=""><div><strong>${escapeHtml(friend.nickname)}</strong><small>${friend.rank_points} PONTOS DE RANK</small></div><div class="social-friend-actions"><button data-gift="gold" data-id="${friend.id}" data-name="${escapeHtml(friend.nickname)}">DAR GOLD</button><button data-gift="rank" data-id="${friend.id}" data-name="${escapeHtml(friend.nickname)}">DAR RANK</button><button data-trade="${friend.id}" data-name="${escapeHtml(friend.nickname)}">TROCAR</button></div></article>`;
+    const friendCard = (friend) => `<article class="social-friend-card"><img src="${getAvatarUrl(friend.avatar)}" alt=""><div><strong>${escapeHtml(friend.nickname)}</strong><small>${friend.rank_points} PONTOS DE RANK</small></div><div class="social-friend-actions"><button data-profile-id="${friend.id}">VER PERFIL</button><button data-gift="gold" data-id="${friend.id}" data-name="${escapeHtml(friend.nickname)}">DAR GOLD</button><button data-gift="rank" data-id="${friend.id}" data-name="${escapeHtml(friend.nickname)}">DAR RANK</button><button data-trade="${friend.id}" data-name="${escapeHtml(friend.nickname)}">TROCAR</button></div></article>`;
     const loadTab = async (tab) => {
       closePanel(); list.innerHTML = '<div class="social-empty">CARREGANDO...</div>'; setStatus('');
       try {
         if (tab === 'friends') { friends = await listFriends(); list.innerHTML = friends.length ? friends.map(friendCard).join('') : '<div class="social-empty">ADICIONE AMIGOS PELO ID OU NICKNAME.</div>'; }
-        if (tab === 'requests') { const rows = await listFriendRequests(); list.innerHTML = rows.length ? rows.map((row) => `<article class="social-friend-card"><img src="./assets/ui/avatars/${AVATARS.includes(row.avatar) ? row.avatar : AVATARS[0]}" alt=""><div><strong>${escapeHtml(row.nickname)}</strong><small>QUER SER SEU AMIGO</small></div><div class="social-friend-actions"><button data-request="${row.id}" data-accept="1">ACEITAR</button><button class="danger" data-request="${row.id}" data-accept="0">RECUSAR</button></div></article>`).join('') : '<div class="social-empty">NENHUMA SOLICITAÇÃO PENDENTE.</div>'; }
+        if (tab === 'requests') { const rows = await listFriendRequests(); list.innerHTML = rows.length ? rows.map((row) => `<article class="social-friend-card"><img src="${getAvatarUrl(row.avatar)}" alt=""><div><strong>${escapeHtml(row.nickname)}</strong><small>QUER SER SEU AMIGO</small></div><div class="social-friend-actions"><button data-request="${row.id}" data-accept="1">ACEITAR</button><button class="danger" data-request="${row.id}" data-accept="0">RECUSAR</button></div></article>`).join('') : '<div class="social-empty">NENHUMA SOLICITAÇÃO PENDENTE.</div>'; }
         if (tab === 'trades') { const rows = await listCharacterTrades(); list.innerHTML = rows.length ? rows.map((row) => `<article class="social-friend-card"><div class="social-trade-icon">⇄</div><div><strong>${escapeHtml(row.nickname)}</strong><small>OFERECE ${escapeHtml(names[row.offered_character] || row.offered_character)} POR ${escapeHtml(names[row.requested_character] || row.requested_character)}</small></div><div class="social-friend-actions"><button data-trade-request="${row.id}" data-accept="1">ACEITAR</button><button class="danger" data-trade-request="${row.id}" data-accept="0">RECUSAR</button></div></article>`).join('') : '<div class="social-empty">NENHUMA PROPOSTA DE TROCA.</div>'; }
       } catch (error) { list.innerHTML = ''; setStatus(error.message, true); }
     };
@@ -1955,6 +1951,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
     });
     modal.querySelector('.social-search-results').addEventListener('click', async (event) => { const button = event.target.closest('[data-add]'); if (!button) return; button.disabled = true; try { await sendFriendRequest(button.dataset.add); button.textContent = 'ENVIADO'; } catch (error) { setStatus(error.message, true); button.disabled = false; } });
     list.addEventListener('click', async (event) => {
+      const player=event.target.closest('[data-profile-id]'); if(player) {openProfilePage(player.dataset.profileId);return;}
       const request = event.target.closest('[data-request]'); const tradeRequest = event.target.closest('[data-trade-request]');
       if (request) { await respondFriendRequest(request.dataset.request, request.dataset.accept === '1').catch((error) => setStatus(error.message, true)); return loadTab('requests'); }
       if (tradeRequest) { await respondCharacterTrade(tradeRequest.dataset.tradeRequest, tradeRequest.dataset.accept === '1').catch((error) => setStatus(error.message, true)); return loadTab('trades'); }
@@ -2046,7 +2043,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       refreshBtn.disabled = true;
       refreshBtn.textContent = '⏳ Carregando…';
       try {
-        const list = await listRooms();
+        const list = (await listRooms()).filter(roomWithinCapacity);
         roomsList.innerHTML = '';
         if (list.length === 0) {
           roomsList.innerHTML = `
@@ -2182,9 +2179,9 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
             </div>
           </div>
 
-          <!-- Teams Config (1 to 5 per team, asymmetric support) -->
+          <!-- Teams Config (1 to 3 per team, asymmetric support) -->
           <div class="field team-limits-section">
-            <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Jogadores por Equipe (até 10 em cada lado)</span>
+            <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Jogadores por Equipe (até 3 em cada lado)</span>
             <div class="teams-config-box" style="margin-top:6px;">
               <div class="team-stepper-col">
                 <span style="color:#ff8a6e; font-weight:700; font-size:12px;">🔴 Time Vermelho</span>
@@ -2203,10 +2200,10 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
                 </div>
               </div>
             </div>
-            <div class="hint-text" style="margin-top:4px;">Suporta equipes assimétricas (ex: 3 vs 1, 5 vs 2).</div>
+            <div class="hint-text" style="margin-top:4px;">Suporta equipes assimétricas (ex: 3 vs 1, 3 vs 2).</div>
           </div>
 
-          <!-- FFA Max Players (2 to 10) -->
+          <!-- FFA Max Players (2 to 6) -->
           <div class="field ffa-limits-section" style="display:none;">
             <span style="font-size:12px; color:#bcd0f7; font-weight:700;">Total de Capivaras no Todos contra Todos</span>
             <div class="stepper" style="margin-top:6px;">
@@ -2289,19 +2286,19 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       if (redCount > 1) { redCount--; valRed.textContent = redCount; }
     });
     modal.querySelector('.btn-red-plus').addEventListener('click', () => {
-      if (redCount < 10) { redCount++; valRed.textContent = redCount; }
+      if (redCount < MAX_TEAM_SIZE) { redCount++; valRed.textContent = redCount; }
     });
     modal.querySelector('.btn-blue-minus').addEventListener('click', () => {
       if (blueCount > 1) { blueCount--; valBlue.textContent = blueCount; }
     });
     modal.querySelector('.btn-blue-plus').addEventListener('click', () => {
-      if (blueCount < 10) { blueCount++; valBlue.textContent = blueCount; }
+      if (blueCount < MAX_TEAM_SIZE) { blueCount++; valBlue.textContent = blueCount; }
     });
     modal.querySelector('.btn-ffa-minus').addEventListener('click', () => {
       if (ffaCount > 2) { ffaCount--; valFfa.textContent = ffaCount; }
     });
     modal.querySelector('.btn-ffa-plus').addEventListener('click', () => {
-      if (ffaCount < 10) { ffaCount++; valFfa.textContent = ffaCount; }
+      if (ffaCount < MAX_PLAYERS) { ffaCount++; valFfa.textContent = ffaCount; }
     });
 
     const submitBtn = modal.querySelector('.btn-submit-create');
