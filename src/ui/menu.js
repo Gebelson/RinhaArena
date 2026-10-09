@@ -919,7 +919,7 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
             <div class="settings-keys">${Object.entries(controlNames).map(([action,label]) => `<button class="settings-key" data-action="${action}"><span>${label}</span><kbd>${keyLabel(settings.controls[action])}</kbd></button>`).join('')}</div>
             <button class="settings-reset-keys" type="button">RESTAURAR TECLAS PADRÃO</button>
           </section></div>
-          ${inGame ? '' : '<div class="settings-page" data-page="account"><section class="settings-section settings-account-section"><h3>CONTA</h3><p>Encerre sua sessão neste dispositivo.</p><div class="profile-actions"><button class="settings-profile modal-btn modal-btn-secondary" type="button">MEU PERFIL</button><button class="settings-history modal-btn modal-btn-secondary" type="button">HISTÓRICO</button></div><button class="settings-disconnect" type="button">DESCONECTAR</button></section></div>'}
+          ${inGame ? '' : '<div class="settings-page" data-page="account"><section class="settings-section settings-account-section"><h3>CONTA</h3><p>Encerre sua sessão neste dispositivo.</p><button class="settings-disconnect" type="button">DESCONECTAR</button></section></div>'}
         </div>
         ${inGame ? '<footer class="in-game-settings-footer"><button class="settings-surrender" type="button">DESISTIR</button><button class="settings-leave-match" type="button">DEIXAR PARTIDA</button></footer>' : ''}
       </div>`;
@@ -1047,8 +1047,6 @@ export function createMenu(uiRoot, profile, { onPlayLocal, onPlayOnline, onPrepa
       settings = saveSettings({ ...settings, controls: defaults.controls });
       modal.querySelectorAll('.settings-key').forEach((button) => { button.querySelector('kbd').textContent = keyLabel(settings.controls[button.dataset.action]); });
     });
-    modal.querySelector('.settings-profile')?.addEventListener('click', () => { close(); openProfilePage(); });
-    modal.querySelector('.settings-history')?.addEventListener('click', () => { close(); openProfilePage(profile.playerId, 'history'); });
     if (!inGame) modal.querySelector('.settings-disconnect').addEventListener('click', async () => {
       const button = modal.querySelector('.settings-disconnect');
       button.disabled = true;
