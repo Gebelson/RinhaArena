@@ -368,3 +368,68 @@
 @media (prefers-reduced-motion: reduce) {
   :is(.modal-window, .game-options-window, .custom-room-lobby, .auth-panel, .lab) button { transition: none; }
 }
+
+/* Shared gutters include the frame bevel and phone safe areas. */
+:root {
+  --arena-window-gutter: clamp(12px, 2vw, 24px);
+  --arena-content-gutter: clamp(12px, 1.8vw, 20px);
+  --arena-section-gap: 16px;
+}
+.modal-overlay:not(.auth-overlay) {
+  --arena-edge-top: max(var(--arena-window-gutter), env(safe-area-inset-top, 0px));
+  --arena-edge-right: max(var(--arena-window-gutter), env(safe-area-inset-right, 0px));
+  --arena-edge-bottom: max(var(--arena-window-gutter), env(safe-area-inset-bottom, 0px));
+  --arena-edge-left: max(var(--arena-window-gutter), env(safe-area-inset-left, 0px));
+  padding: var(--arena-edge-top) var(--arena-edge-right) var(--arena-edge-bottom) var(--arena-edge-left);
+}
+.modal-overlay:not(.auth-overlay) > :is(.modal-window, .game-options-window, .custom-room-lobby) {
+  max-width: 100%;
+  max-height: calc(100dvh - var(--arena-edge-top) - var(--arena-edge-bottom));
+  min-height: 0;
+}
+.modal-overlay:not(.auth-overlay) :is(.modal-header, .game-options-header,
+    .modal-footer, .game-options-footer, .custom-room-lobby > header, .custom-room-lobby > footer,
+    .modal-body, .shop-tabs, .shop-character-grid, .game-options-tabs, .match-type-grid,
+    .game-option-scroll, .rooms-toolbar, .game-room-list, .missions-list,
+    .profile-hero, .profile-tabs, .profile-body, .settings-tabs, .settings-body) {
+  padding-inline: var(--arena-content-gutter);
+}
+.modal-footer, .game-options-footer, .match-type-grid, .rooms-toolbar,
+.shop-tabs, .missions-header, .settings-tabs { flex-shrink: 0; }
+.modal-body { flex-shrink: 1; min-height: 0; }
+.modal-header, .game-options-header { gap: 12px; }
+.modal-header > :not(button), .game-options-header > :not(button) { min-width: 0; }
+.modal-close { flex-shrink: 0; }
+.modal-title { overflow-wrap: anywhere; }
+.profile-body > * + * { margin-block-start: var(--arena-section-gap); }
+.profile-form .profile-card > :is(.profile-form-row, label) + label { margin-top: var(--arena-section-gap); }
+.profile-window .profile-form :is(.profile-privacy-toggle, label:has(> input[type="checkbox"])) {
+  display: flex; align-items: center; gap: 10px; line-height: 1.4;
+}
+.profile-window .profile-form input[type="checkbox"] {
+  width: 18px; height: 18px; min-height: 18px; padding: 0; flex: 0 0 18px;
+  accent-color: var(--arena-cyan);
+}
+.leaderboard-window .leaderboard-head { margin-inline: var(--arena-content-gutter); }
+.leaderboard-window .leaderboard-list { padding-inline: var(--arena-content-gutter); }
+.coin-card strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.coin-card .coin-plus { flex-shrink: 0; }
+.auth-window { max-width: 100%; max-height: 100%; min-height: 0; }
+.modal-overlay .settings-modal-window { width: min(760px, 100%); }
+
+@media (max-width: 760px), (max-height: 520px) {
+  :root { --arena-window-gutter: 12px; --arena-content-gutter: 12px; --arena-section-gap: 12px; }
+}
+@media (max-width: 760px) {
+  .leaderboard-window .leaderboard-list { min-width: calc(545px + 2 * var(--arena-content-gutter)); }
+}
+@media (max-width: 600px) and (orientation: portrait) {
+  .auth-window { grid-template-columns: 34% 66%; }
+  .auth-panel { padding: 16px 14px; }
+  .auth-form, .auth-actions { min-width: 0; }
+  .auth-form h1 { font-size: clamp(24px, 7vw, 32px); margin-bottom: 24px; }
+  .auth-form.registering h1 { font-size: clamp(18px, 5.4vw, 24px); }
+  .auth-actions { flex-wrap: wrap; gap: 12px; }
+  .auth-submit { width: 100%; min-width: 0; font-size: 22px; padding-inline: 8px; }
+  .auth-forgot { width: 100%; text-align: left; }
+}

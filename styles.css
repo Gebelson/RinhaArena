@@ -2511,14 +2511,19 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
 }
 .auth-panel {
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(min-content, 1fr) auto;
+  gap: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 7% 14% 3%;
   color: #070707;
   background: #fff;
 }
-.auth-form { display: flex; flex-direction: column; margin-top: 150px; }
+.auth-form { display: flex; flex-direction: column; margin: 0; align-self: center; }
 .auth-form h1 {
   width: 100%;
   max-width: 100%;
@@ -2587,7 +2592,7 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
 .auth-resend:disabled { opacity: .55; cursor: wait; }
 
 /* Login compacto para celulares em modo horizontal. */
-@media (orientation: landscape) and (max-width: 1200px) and (max-height: 700px) {
+@media (orientation: landscape) and (max-height: 700px) {
   .auth-overlay {
     padding: max(7px, env(safe-area-inset-top)) max(9px, env(safe-area-inset-right)) max(7px, env(safe-area-inset-bottom)) max(9px, env(safe-area-inset-left));
     backdrop-filter: blur(10px) brightness(.45);
@@ -2602,9 +2607,7 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
     border-radius: 14px;
   }
   .auth-logo { top: 3%; width: min(55%, 190px); }
-  .auth-panel { justify-content: center; padding: 2.5% 8% 2%; }
-  .auth-form { transform: translateY(clamp(6px, 2vh, 10px)); }
-  .auth-switch { transform: translateY(clamp(-22px, -4vh, -12px)); }
+  .auth-panel { padding: 2.5% 8% 2%; }
   .auth-form { margin-top: 0; }
   .auth-form h1,
   .auth-form.registering h1 {
@@ -2634,7 +2637,7 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
   .auth-message { min-height: 22px; padding-top: 4px; font-size: 10px; }
 }
 .auth-message.error { color: #c72d20; }
-.auth-switch { margin-top: auto; align-self: center; color: #111; }
+.auth-switch { justify-self: center; color: #111; }
 
 .missions-modal-window { width: min(850px, 94vw); height: min(760px, 90dvh); background: linear-gradient(155deg, #142751, #070d20 72%); border: 3px solid #32caff; box-shadow: 0 18px 70px #000c, 0 0 28px #1dbcf955; }
 .missions-header { background: linear-gradient(90deg, #07132f, #132b61); border-bottom: 1px solid #38cfff66; }
@@ -2682,18 +2685,6 @@ body[data-chat="off"] .btn-chat,body[data-chat="off"] .game-chat { display: none
   .mission-rewards span { padding: 3px 5px; font-size: 10px; }
   .mission-rewards img { width: 15px; height: 15px; }
   .mission-claim { padding: 8px 4px; font-size: 10px; }
-}
-
-@media (orientation: landscape) and (max-height: 700px) {
-  .auth-overlay { padding: 4dvh 4vw; }
-  .auth-window { width: min(900px, 92vw); height: 90dvh; min-height: 0; border-width: 3px; border-radius: 13px; box-shadow: 0 12px 45px #000e, 0 0 0 12px #000; }
-  .auth-panel { padding: 4% 10% 2%; }
-  .auth-form h1 { margin-bottom: 4vh; font-size: clamp(28px, 12vh, 52px); }
-  .auth-form label { gap: 3px; margin-bottom: 2.5vh; font-size: 9px; }
-  .auth-form input { height: 9vh; min-height: 30px; border-radius: 6px; font-size: 13px; }
-  .auth-submit { min-width: 112px; padding: 7px 14px; font-size: 18px; }
-  .auth-forgot, .auth-switch { font-size: 8px; }
-  .auth-message { min-height: 22px; padding-top: 5px; font-size: 9px; }
 }
 
 
